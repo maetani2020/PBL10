@@ -103,6 +103,12 @@ router.post('/login', async (req, res) => {
             [user.id, refreshToken, expiresAt]
         );
 
+        // Reset inactivity timer on login
+        await query.run(
+            'UPDATE users SET last_activity_at = ? WHERE id = ?',
+            [new Date().toISOString(), user.id]
+        );
+
         res.json({
             message: 'ログインに成功しました',
             token,
@@ -163,6 +169,12 @@ router.post('/google-login', async (req, res) => {
         await query.run(
             'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
             [user.id, refreshToken, expiresAt]
+        );
+
+        // Reset inactivity timer on Google login
+        await query.run(
+            'UPDATE users SET last_activity_at = ? WHERE id = ?',
+            [new Date().toISOString(), user.id]
         );
 
         res.json({

@@ -92,6 +92,7 @@ async function initDb() {
                 warning_threshold INTEGER DEFAULT 20,
                 role TEXT DEFAULT 'user',
                 notification_settings TEXT DEFAULT '{"events":true,"tasks":true,"game":true,"email":true}',
+                last_activity_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -102,6 +103,7 @@ async function initDb() {
         await addColumnIfNotExists('users', 'warning_threshold', 'INTEGER DEFAULT 20');
         await addColumnIfNotExists('users', 'role', "TEXT DEFAULT 'user'");
         await addColumnIfNotExists('users', 'notification_settings', "TEXT DEFAULT '{\"events\":true,\"tasks\":true,\"game\":true,\"email\":true}'");
+        await addColumnIfNotExists('users', 'last_activity_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
 
         // 2. Create Refresh Tokens Table
         await createTable(`
