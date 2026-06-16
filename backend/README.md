@@ -34,6 +34,15 @@ npm install
 PORT=3000
 JWT_SECRET=任意のシークレットキー
 ANTHROPIC_API_KEY=あなたのClaude_APIキー (任意)
+
+# PostgreSQL接続情報 (必須)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/calendar
+# または個別の接続情報
+# PGUSER=postgres
+# PGHOST=localhost
+# PGPASSWORD=postgres
+# PGDATABASE=calendar
+# PGPORT=5432
 ```
 
 ### 3. サーバーの起動
@@ -44,7 +53,7 @@ npm start
 # 開発用自動リロード起動 (nodemonが必要な場合)
 npm run dev
 ```
-起動すると、データベース `data/calendar.db` が自動生成され、マイグレーションが実行されます。
+起動すると、指定されたPostgreSQLデータベースに自動的に接続され、テーブル作成およびマイグレーションが実行されます。
 ブラウザで `http://localhost:3000` にアクセスすると、フロントエンドのデモ画面でバックエンドの動作確認が可能です。
 
 ---

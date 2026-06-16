@@ -17,4 +17,15 @@ function authenticateToken(req, res, next) {
     });
 }
 
+function isAdmin(req, res, next) {
+    if (!req.user || req.user.role !== 'admin') {
+        return res.status(403).json({ error: '管理者権限が必要です' });
+    }
+    next();
+}
+
+// Attach properties to preserve compatibility
+authenticateToken.authenticateToken = authenticateToken;
+authenticateToken.isAdmin = isAdmin;
+
 module.exports = authenticateToken;
