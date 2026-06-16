@@ -1,0 +1,261 @@
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Shared Calendar</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="calendar.css" />
+
+    <!-- Material Icons -->
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body>
+    <!-- =========================
+     サイドバー
+========================== -->
+
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h2>Shared Calendar</h2>
+      </div>
+
+      <ul>
+        <li>
+          <span class="material-icons"> calendar_month </span>
+          カレンダー
+        </li>
+
+        <li>
+          <span class="material-icons"> groups </span>
+          グループ予定
+        </li>
+
+        <li>
+          <span class="material-icons"> person </span>
+          個人予定
+        </li>
+
+        <li>
+          <span class="material-icons"> settings </span>
+          設定
+        </li>
+      </ul>
+    </aside>
+
+    <!-- =========================
+     オーバーレイ
+========================== -->
+
+    <div id="sidebarOverlay" class="overlay"></div>
+
+    <!-- =========================
+     ヘッダー
+========================== -->
+
+    <header class="header">
+      <div class="header-left">
+        <button id="menuBtn" class="icon-btn">
+          <span class="material-icons"> menu </span>
+        </button>
+
+        <h1>Shared Calendar</h1>
+      </div>
+
+      <div class="header-right">
+        <!-- 今月 -->
+
+        <button id="todayBtn" class="today-btn">今月</button>
+
+        <!-- 予定一覧 -->
+
+        <button id="scheduleListBtn" class="icon-btn">
+          <span class="material-icons"> list </span>
+        </button>
+
+        <!-- ダークモード -->
+
+        <button id="themeBtn" class="icon-btn">
+          <span class="material-icons"> dark_mode </span>
+        </button>
+      </div>
+    </header>
+
+    <!-- =========================
+     ナビゲーション
+========================== -->
+
+    <section class="calendar-nav">
+      <button id="prevBtn" class="nav-btn">
+        <span class="material-icons"> chevron_left </span>
+      </button>
+
+      <h2 id="currentTitle">2026年6月</h2>
+
+      <button id="nextBtn" class="nav-btn">
+        <span class="material-icons"> chevron_right </span>
+      </button>
+    </section>
+
+    <!-- =========================
+     表示切替
+========================== -->
+
+    <section class="view-switch">
+      <button id="monthViewBtn" class="view-btn active">月</button>
+
+      <button id="weekViewBtn" class="view-btn">週</button>
+
+      <button id="dayViewBtn" class="view-btn">日</button>
+    </section>
+
+    <!-- =========================
+     曜日
+========================== -->
+
+    <section id="weekHeader" class="week-header">
+      <div class="sun">日</div>
+      <div>月</div>
+      <div>火</div>
+      <div>水</div>
+      <div>木</div>
+      <div>金</div>
+      <div class="sat">土</div>
+    </section>
+
+    <!-- =========================
+     月表示
+========================== -->
+
+    <main id="monthView" class="month-view">
+      <!-- JS生成 -->
+    </main>
+
+    <!-- =========================
+     週表示
+========================== -->
+
+    <main id="weekView" class="week-view hidden">
+      <!-- JS生成 -->
+    </main>
+
+    <!-- =========================
+     日表示
+========================== -->
+
+    <main id="dayView" class="day-view hidden">
+      <!-- JS生成 -->
+    </main>
+
+    <!-- =========================
+     追加ボタン
+========================== -->
+
+    <button id="addEventBtn" class="fab">
+      <span class="material-icons"> add </span>
+    </button>
+
+    <!-- =========================
+     予定登録モーダル
+========================== -->
+
+    <div id="eventModal" class="modal">
+      <div class="modal-content">
+        <h2>予定登録</h2>
+
+        <!-- タイトル -->
+
+        <input
+          type="text"
+          id="eventTitle"
+          maxlength="100"
+          placeholder="タイトル"
+        />
+
+        <!-- 開始 -->
+
+        <label> 開始日時 </label>
+
+        <input type="datetime-local" id="eventStart" />
+
+        <!-- 終了 -->
+
+        <label> 終了日時 </label>
+
+        <input type="datetime-local" id="eventEnd" />
+
+        <!-- 終日 -->
+
+        <label class="checkbox">
+          <input type="checkbox" id="allDay" />
+
+          終日予定
+        </label>
+
+        <!-- 公開範囲 -->
+
+        <select id="eventVisibility">
+          <option value="public">全体公開</option>
+
+          <option value="group">グループ公開</option>
+
+          <option value="private">自分のみ</option>
+        </select>
+
+        <!-- メモ -->
+
+        <textarea id="eventMemo" rows="5" placeholder="メモ"> </textarea>
+
+        <div class="modal-actions">
+          <button id="saveEventBtn">保存</button>
+
+          <button id="deleteEventBtn">削除</button>
+
+          <button id="closeModalBtn">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================
+     予定一覧モーダル
+========================== -->
+
+    <div id="listModal" class="modal">
+      <div class="modal-content list-modal">
+        <h2>予定一覧</h2>
+
+        <div class="list-mode">
+          <button data-filter="day">日</button>
+
+          <button data-filter="week">週</button>
+
+          <button data-filter="month">月</button>
+        </div>
+
+        <div id="scheduleList">
+          <!-- JS生成 -->
+        </div>
+
+        <button id="closeListBtn">閉じる</button>
+      </div>
+    </div>
+
+    <!-- =========================
+     ローディング
+========================== -->
+
+    <div id="loading" class="loading hidden">読み込み中...</div>
+
+    <!-- JavaScript -->
+
+    <script src="calendar.js"></script>
+  </body>
+</html>
