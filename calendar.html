@@ -65,12 +65,19 @@
             <div class="account-email" id="accountUserEmail">---</div>
           </div>
         </div>
-        <button id="sidebarLogoutBtn">
-          <span class="material-icons" style="vertical-align:middle;font-size:16px;margin-right:4px;">logout</span>
-          ログアウト
-        </button>
+        <div class="account-panel-actions">
+          <button id="openAccountSettingsBtn" class="account-settings-btn">
+            <span class="material-icons">manage_accounts</span>
+            アカウント設定
+          </button>
+          <button id="sidebarLogoutBtn">
+            <span class="material-icons" style="vertical-align:middle;font-size:16px;margin-right:4px;">logout</span>
+            ログアウト
+          </button>
+        </div>
       </div>
     </aside>
+
 
     <!-- =========================
      オーバーレイ
@@ -442,14 +449,105 @@
             <input type="text" id="authDisplayName" class="auth-input-field" placeholder="お名前（表示名）" />
           </div>
           <input type="email" id="authEmail" class="auth-input-field" placeholder="メールアドレス" autocomplete="email" />
-          <input type="password" id="authPassword" class="auth-input-field" placeholder="パスワード" autocomplete="current-password" />
+          <input type="password" id="authPassword" class="auth-input-field" placeholder="パスワード（英字＋数字8文字以上）" autocomplete="current-password" />
         </div>
 
         <!-- Primary Button -->
         <button id="authPrimaryBtn" class="auth-primary-btn">サインイン</button>
 
-        <!-- Toggle Mode -->
-        <button id="authToggleMode" class="auth-toggle-link">新規アカウントを作成する</button>
+        <!-- Google Login Button -->
+        <button id="googleLoginBtn" class="auth-google-btn">
+          <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
+            <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
+          Googleでサインイン
+        </button>
+
+        <!-- Footer Links -->
+        <div class="auth-footer-links">
+          <button id="forgotPasswordLink" class="auth-link-btn">パスワードを忘れた方</button>
+          <button id="authToggleMode" class="auth-toggle-link">新規アカウントを作成する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Password Reset Modal                       -->
+    <!-- ========================================== -->
+    <div id="passwordResetModal" class="auth-sub-modal hidden">
+      <div class="auth-sub-card">
+        <h3 class="auth-sub-title">
+          <span class="material-icons">lock_reset</span>
+          パスワードリセット
+        </h3>
+        <p class="auth-sub-desc">登録済みのメールアドレスを入力してください。<br>リセット用のリンクをサーバーログに出力します（開発環境）。</p>
+        <input type="email" id="resetEmail" class="auth-input-field" placeholder="メールアドレス" />
+        <div class="auth-sub-actions">
+          <button id="cancelResetBtn" class="auth-sub-cancel-btn">キャンセル</button>
+          <button id="sendResetEmailBtn" class="auth-primary-btn" style="flex:1;">送信</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Account Settings Modal                     -->
+    <!-- ========================================== -->
+    <div id="accountSettingsModal" class="auth-sub-modal hidden">
+      <div class="auth-sub-card settings-card">
+        <div class="settings-header">
+          <h3 class="auth-sub-title" style="margin:0;">
+            <span class="material-icons">manage_accounts</span>
+            アカウント設定
+          </h3>
+          <button id="closeAccountSettingsBtn" class="settings-close-btn">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="settings-tabs">
+          <button class="settings-tab-btn active" data-tab="password">パスワード変更</button>
+          <button class="settings-tab-btn" data-tab="email">メール変更</button>
+        </div>
+
+        <!-- Tab: パスワード変更 -->
+        <div id="settingsTab_password" class="settings-tab-panel">
+          <div class="settings-field-group">
+            <label class="settings-label">現在のパスワード</label>
+            <input type="password" id="currentPassword" class="auth-input-field" placeholder="現在のパスワード" />
+          </div>
+          <div class="settings-field-group">
+            <label class="settings-label">新しいパスワード</label>
+            <input type="password" id="newPassword" class="auth-input-field" placeholder="英字＋数字8文字以上" />
+          </div>
+          <div class="settings-field-group">
+            <label class="settings-label">新しいパスワード（確認）</label>
+            <input type="password" id="confirmPassword" class="auth-input-field" placeholder="もう一度入力" />
+          </div>
+          <button id="changePasswordBtn" class="auth-primary-btn">パスワードを変更</button>
+        </div>
+
+        <!-- Tab: メールアドレス変更 -->
+        <div id="settingsTab_email" class="settings-tab-panel hidden">
+          <div class="settings-field-group">
+            <label class="settings-label">新しいメールアドレス</label>
+            <input type="email" id="newEmail" class="auth-input-field" placeholder="新しいメールアドレス" />
+          </div>
+          <button id="requestEmailChangeBtn" class="auth-primary-btn">確認コードを送信</button>
+
+          <!-- 確認コード入力（送信後に表示） -->
+          <div id="emailConfirmSection" class="hidden" style="margin-top:16px;">
+            <div class="settings-field-group">
+              <label class="settings-label">確認コード（6桁）</label>
+              <p style="font-size:11px;color:#9aa0a6;margin-bottom:6px;">サーバーのコンソールログに表示されたコードを入力</p>
+              <input type="text" id="emailConfirmCode" class="auth-input-field" placeholder="123456" maxlength="6" />
+            </div>
+            <button id="confirmEmailChangeBtn" class="auth-primary-btn">確認して変更</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -458,3 +556,4 @@
     <script type="module" src="js/calendar-main.js"></script>
   </body>
 </html>
+

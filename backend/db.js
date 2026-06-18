@@ -280,11 +280,22 @@ async function initDb() {
             )
         `);
 
+        // 14. Create JWT Blacklist Table (for logout token invalidation)
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS blacklisted_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT UNIQUE NOT NULL,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
         console.log('Database schema initialized and migrated successfully.');
     } catch (err) {
         console.error('Error initializing database:', err);
     }
 }
+
 
 module.exports = {
     query,

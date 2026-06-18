@@ -268,3 +268,282 @@ body.dark #sidebarLogoutBtn {
 body.dark #sidebarLogoutBtn:hover {
   background: rgba(234, 67, 53, 0.25);
 }
+
+/* ============================
+  Google Sign-In Button
+============================ */
+.auth-google-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.auth-google-btn:hover {
+  background: var(--bg);
+  border-color: #bdc1c6;
+}
+
+body.dark .auth-google-btn:hover {
+  border-color: #70757a;
+}
+
+.auth-google-btn:active {
+  transform: scale(0.98);
+}
+
+.auth-google-btn svg {
+  flex-shrink: 0;
+}
+
+/* ============================
+  Auth Footer Links
+============================ */
+.auth-footer-links {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.auth-link-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  padding: 4px;
+  text-decoration: underline;
+  transition: opacity 0.15s;
+}
+
+.auth-link-btn:hover {
+  opacity: 0.7;
+}
+
+/* ============================
+  Sub Modal (Password Reset / Account Settings)
+============================ */
+.auth-sub-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(5px);
+  transition: opacity 0.3s ease;
+}
+
+.auth-sub-modal.hidden {
+  display: none !important;
+}
+
+.auth-sub-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 28px 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: modalPopUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPopUp {
+  from {
+    transform: scale(0.92) translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.auth-sub-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-sub-title .material-icons {
+  font-size: 24px;
+  color: var(--primary);
+}
+
+.auth-sub-desc {
+  font-size: 13px;
+  color: #5f6368;
+  line-height: 1.5;
+}
+
+body.dark .auth-sub-desc {
+  color: #9aa0a6;
+}
+
+.auth-sub-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.auth-sub-cancel-btn {
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.auth-sub-cancel-btn:hover {
+  background: var(--primary-light);
+}
+
+/* ============================
+  Account Settings Modal & Tabs
+============================ */
+.settings-card {
+  max-width: 440px;
+  gap: 20px;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.settings-close-btn:hover {
+  background: var(--border);
+}
+
+.settings-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  gap: 4px;
+  padding-bottom: 2px;
+}
+
+.settings-tab-btn {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: #5f6368;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+body.dark .settings-tab-btn {
+  color: #9aa0a6;
+}
+
+.settings-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.settings-tab-btn:hover:not(.active) {
+  color: var(--text);
+}
+
+.settings-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-tab-panel.hidden {
+  display: none !important;
+}
+
+.settings-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5f6368;
+  padding-left: 2px;
+}
+
+body.dark .settings-label {
+  color: #9aa0a6;
+}
+
+/* Account Panel Actions */
+.account-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.account-settings-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.account-settings-btn:hover {
+  background: var(--primary-light);
+}
+
+.account-settings-btn .material-icons {
+  font-size: 18px;
+}

@@ -20,7 +20,9 @@ import {
   initAuthForm,
   initAccountPanel,
   isLoggedIn,
-  logout
+  logout,
+  initPasswordResetModal,
+  initAccountSettings
 } from './calendar-auth.js';
 
 import { 
@@ -408,6 +410,10 @@ document.addEventListener("DOMContentLoaded", () => {
   initAuthForm();
   // Init account panel logout button
   initAccountPanel();
+  // Init password reset modal logic
+  initPasswordResetModal();
+  // Init account settings (password/email change)
+  initAccountSettings();
 
   // Avatar button: click to open sidebar (shows account info)
   const userAvatarBtn = document.getElementById("userAvatarBtn");
