@@ -231,22 +231,41 @@ router.post('/refresh', async (req, res) => {
     }
 });
 
-// POST /api/auth/logout - Invalidate Refresh Token
-router.post('/logout', async (req, res) => {
+// POST /api/auth/logout - Invalidate Refresh Token & Blacklist Access Token
+router.post('/logout', authenticateToken, async (req, res) => {
     const { refreshToken } = req.body;
 
-    if (!refreshToken) {
-        return res.status(400).json({ error: 'リフレッシュトークンが必要です' });
-    }
-
     try {
-        await query.run('DELETE FROM refresh_tokens WHERE token = ?', [refreshToken]);
+        // 1. リフレッシュトークンを削除（提供されている場合）
+        if (refreshToken) {
+            await query.run('DELETE FROM refresh_tokens WHERE token = ?', [refreshToken]);
+        }
+
+        // 2. 現在のアクセストークンをブラックリストに登録
+        const token = req.token;
+        if (token) {
+            // JWTのペイロードから有効期限を取得してブラックリストに記録
+            const decoded = jwt.decode(token);
+            const expiresAt = decoded?.exp
+                ? new Date(decoded.exp * 1000).toISOString()
+                : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+            await query.run(
+                'INSERT INTO blacklisted_tokens (token, expires_at) VALUES (?, ?) ON CONFLICT (token) DO NOTHING',
+                [token, expiresAt]
+            );
+
+            // 3. 古い期限切れブラックリストエントリを定期クリーンアップ
+            await query.run('DELETE FROM blacklisted_tokens WHERE expires_at < ?', [new Date().toISOString()]);
+        }
+
         res.json({ message: 'ログアウトしました' });
     } catch (err) {
         console.error('Logout error:', err);
         res.status(500).json({ error: 'サーバーエラーが発生しました' });
     }
 });
+
 
 // POST /api/auth/password-reset-request - Request Password Reset Link
 router.post('/password-reset-request', async (req, res) => {

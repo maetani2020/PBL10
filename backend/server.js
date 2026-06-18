@@ -22,8 +22,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Serve static files (like the frontend HTML)
-app.use(express.static(path.join(__dirname)));
+// Serve static files from the project root (one level up)
+const projectRoot = path.join(__dirname, '..');
+app.use(express.static(projectRoot));
 
 // Route Routers
 const authRoutes = require('./routes/auth');
@@ -48,9 +49,16 @@ app.use('/api/household', householdRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Fallback to serve the main frontend file
+// Config endpoint to provide credentials to client
+app.get('/api/config', (req, res) => {
+    res.json({
+        googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+    });
+});
+
+// Fallback: serve the main calendar frontend
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'ios_style_calendar_app.html'));
+    res.sendFile(path.join(projectRoot, 'calendar.html'));
 });
 
 // Error handling middleware
