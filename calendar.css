@@ -25,6 +25,16 @@ calendar.css
   --public: #1a73e8;
   --group: #34a853;
   --private: #9aa0a6;
+
+  --header-h: 64px;
+  --nav-h: 60px;
+  --view-switch-h: 45px;
+  --display-options-h: 40px;
+  --week-header-h: 45px;
+  --chrome-h: calc(
+    var(--header-h) + var(--nav-h) + var(--view-switch-h) +
+    var(--display-options-h) + var(--week-header-h)
+  );
 }
 
 /* ==========================
@@ -68,6 +78,8 @@ body {
 
   overflow: hidden;
 }
+
+/* レイアウト高さ用変数は :root に定義 */
 
 /* ==========================
 ヘッダー
@@ -236,6 +248,37 @@ body.dark .icon-btn:hover {
 }
 
 /* ==========================
+表示オプション（チェックリスト）
+========================== */
+
+.display-options {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  min-height: var(--display-options-h);
+}
+
+.display-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.display-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+/* ==========================
 曜日
 ========================== */
 
@@ -276,9 +319,9 @@ body.dark .icon-btn:hover {
 
   grid-auto-rows: 1fr;
 
-  height: calc(100vh - 64px - 60px - 45px - 45px);
+  height: calc(100vh - var(--chrome-h));
 
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .day-cell {
@@ -390,7 +433,7 @@ body.dark .day-cell:hover {
 ========================== */
 
 .week-view {
-  height: calc(100vh - 214px);
+  height: calc(100vh - var(--chrome-h));
 
   overflow-y: auto;
 }
@@ -422,7 +465,7 @@ body.dark .day-cell:hover {
 ========================== */
 
 .day-view {
-  height: calc(100vh - 214px);
+  height: calc(100vh - var(--chrome-h));
 
   overflow-y: auto;
 }
@@ -481,12 +524,18 @@ FAB
   background: rgba(0, 0, 0, 0.5);
 
   z-index: 2000;
+
+  padding: 16px;
+
+  overflow-y: auto;
 }
 
 .modal-content {
   width: 90%;
 
   max-width: 420px;
+
+  max-height: calc(100vh - 32px);
 
   background: var(--surface);
 
@@ -495,10 +544,48 @@ FAB
   border-radius: 12px;
 
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+
+  display: flex;
+
+  flex-direction: column;
+
+  overflow: hidden;
+
+  margin: auto;
 }
 
 .modal-content h2 {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
+
+  flex-shrink: 0;
+}
+
+.modal-body {
+  flex: 1;
+
+  overflow-y: auto;
+
+  min-height: 0;
+
+  padding-right: 4px;
+}
+
+.modal-body input,
+.modal-body textarea,
+.modal-body select {
+  width: 100%;
+
+  padding: 10px;
+
+  margin-bottom: 10px;
+
+  border: 1px solid var(--border);
+
+  border-radius: 8px;
+
+  background: var(--bg);
+
+  color: var(--text);
 }
 
 .modal-content input,
@@ -533,6 +620,28 @@ FAB
   display: flex;
 
   gap: 10px;
+
+  flex-shrink: 0;
+
+  padding-top: 12px;
+
+  margin-top: 8px;
+
+  border-top: 1px solid var(--border);
+}
+
+.modal-footer-btn {
+  flex-shrink: 0;
+
+  width: 100%;
+
+  padding: 10px;
+
+  margin-top: 12px;
+
+  border-radius: 8px;
+
+  background: var(--border);
 }
 
 .modal-actions button {
@@ -580,9 +689,9 @@ FAB
 }
 
 #scheduleList {
-  max-height: 400px;
+  max-height: none;
 
-  overflow: auto;
+  overflow: visible;
 }
 
 /* ==========================
@@ -728,5 +837,387 @@ body.dark .sidebar li:hover {
 
   .event {
     font-size: 10px;
+  }
+}
+/* ==========================
+やる気
+========================== */
+.hp-info,
+.motivation-info {
+  font-size: 10px;
+  margin-top: 2px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.hp-green,
+.motivation-green {
+  background: #34a853;
+  color: white;
+}
+
+.hp-yellow,
+.motivation-yellow {
+  background: #fbbc04;
+  color: black;
+}
+
+.hp-red,
+.motivation-red {
+  background: #ea4335;
+  color: white;
+}
+
+/* ==========================
+ヘッダーゲージ
+========================== */
+
+.header-gauges {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  justify-content: center;
+  max-width: 400px;
+}
+
+.gauge-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.gauge-label {
+  font-weight: bold;
+  min-width: 32px;
+}
+
+.gauge-bar {
+  width: 80px;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s, background 0.3s;
+}
+
+.gauge-value {
+  min-width: 36px;
+  font-weight: 600;
+}
+
+/* ==========================
+警告・通知
+========================== */
+
+.alert-box {
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.alert-warning {
+  background: #fef7e0;
+  color: #b06000;
+  border: 1px solid #fbbc04;
+}
+
+.alert-danger {
+  background: #fce8e6;
+  color: #c5221f;
+  border: 1px solid #ea4335;
+}
+
+.alert-info {
+  background: #e8f0fe;
+  color: #174ea6;
+  border: 1px solid #1a73e8;
+}
+
+.capacity-warning {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 12px;
+  color: #ea4335;
+}
+
+/* ==========================
+フィルタバナー
+========================== */
+
+.filter-banner {
+  padding: 8px 16px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ==========================
+サイドバー拡張
+========================== */
+
+.sidebar-user {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.sidebar-item.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ==========================
+統計パネル
+========================== */
+
+.stats-panel {
+  height: calc(100vh - var(--header-h) - var(--nav-h) - var(--view-switch-h));
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.stats-panel h3 {
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.stats-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 200px;
+  padding: 10px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.stat-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.stat-bars {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 160px;
+  width: 100%;
+  justify-content: center;
+}
+
+.stat-bar {
+  width: 12px;
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+}
+
+.stat-bar.hp {
+  background: #34a853;
+}
+
+.stat-bar.motivation {
+  background: #1a73e8;
+}
+
+.stat-date {
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.history-panel {
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 16px;
+}
+
+.history-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+/* ==========================
+休息提案
+========================== */
+
+.rest-suggestions {
+  margin-bottom: 10px;
+}
+
+.rest-item {
+  padding: 8px;
+  background: #e8f0fe;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.rest-item:hover {
+  background: #d2e3fc;
+}
+
+/* ==========================
+グループ管理
+========================== */
+
+.group-modal {
+  max-width: 480px;
+}
+
+.group-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.group-section h3 {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.group-card {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.group-card:hover,
+.group-card.selected {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.member-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.member-row select {
+  width: auto;
+  margin: 0;
+  padding: 4px 8px;
+}
+
+.group-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.group-actions input {
+  flex: 1;
+}
+
+.primary-btn {
+  padding: 10px 16px;
+  background: var(--primary);
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.danger-btn {
+  padding: 8px 12px;
+  background: #ea4335;
+  color: white;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+/* ==========================
+日表示 HPゲージ
+========================== */
+
+.day-status-panel {
+  padding: 16px;
+  margin: 10px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.day-gauge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.day-gauge-row .gauge-bar {
+  flex: 1;
+  height: 12px;
+}
+
+.next-day-alert {
+  margin-top: 10px;
+  padding: 10px;
+  background: #fef7e0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #b06000;
+}
+
+/* ==========================
+モーダル拡張
+========================== */
+
+.modal-content label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  margin-top: 4px;
+}
+
+#closeGroupBtn,
+#closeSettingsBtn,
+#closeListBtn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--border);
+}
+
+.display-options.hidden {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .header-gauges {
+    display: none;
   }
 }
