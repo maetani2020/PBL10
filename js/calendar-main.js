@@ -16,6 +16,14 @@ import {
 } from './calendar-state.js';
 
 import { 
+  checkAuth,
+  initAuthForm,
+  initAccountPanel,
+  isLoggedIn,
+  logout
+} from './calendar-auth.js';
+
+import { 
   eventModal, 
   listModal, 
   closeModal, 
@@ -394,6 +402,26 @@ document.addEventListener("DOMContentLoaded", () => {
       if (aiSummaryContainer) aiSummaryContainer.classList.add("hidden");
     });
   }
+
+  // -- Auth integration --
+  // Init auth form (login/register toggle logic)
+  initAuthForm();
+  // Init account panel logout button
+  initAccountPanel();
+
+  // Avatar button: click to open sidebar (shows account info)
+  const userAvatarBtn = document.getElementById("userAvatarBtn");
+  if (userAvatarBtn) {
+    userAvatarBtn.addEventListener("click", () => {
+      sidebar.classList.add("open");
+      sidebarOverlay.classList.add("show");
+    });
+  }
+
+  // Listen for successful login -> refresh calendar
+  document.addEventListener("auth:loggedin", () => {
+    refreshCalendar();
+  });
 });
 
 // Re-write todayBtn listener with setter compatibility
@@ -413,5 +441,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Run Init
+// Run Init (with auth check)
+checkAuth();
 init();

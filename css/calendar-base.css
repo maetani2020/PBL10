@@ -355,6 +355,9 @@ FAB
   z-index: 3000;
 
   border-right: 1px solid var(--border);
+
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar.open {
@@ -369,6 +372,8 @@ FAB
 
 .sidebar ul {
   list-style: none;
+  flex-grow: 1;
+  overflow-y: auto;
 }
 
 .sidebar li {

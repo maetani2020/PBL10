@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="css/calendar-base.css" />
     <link rel="stylesheet" href="css/calendar-views.css" />
     <link rel="stylesheet" href="css/calendar-ai.css" />
+    <link rel="stylesheet" href="css/calendar-auth.css" />
 
     <!-- Material Icons -->
     <link
@@ -54,6 +55,21 @@
           設定
         </li>
       </ul>
+
+      <!-- アカウントパネル -->
+      <div class="account-panel">
+        <div class="account-user-card">
+          <div class="account-avatar" id="accountUserAvatar">U</div>
+          <div class="account-info">
+            <div class="account-name" id="accountUserName">---</div>
+            <div class="account-email" id="accountUserEmail">---</div>
+          </div>
+        </div>
+        <button id="sidebarLogoutBtn">
+          <span class="material-icons" style="vertical-align:middle;font-size:16px;margin-right:4px;">logout</span>
+          ログアウト
+        </button>
+      </div>
     </aside>
 
     <!-- =========================
@@ -97,6 +113,9 @@
         <button id="themeBtn" class="icon-btn">
           <span class="material-icons"> dark_mode </span>
         </button>
+
+        <!-- ユーザーアバター -->
+        <button id="userAvatarBtn" class="hidden" title="アカウント">U</button>
       </div>
     </header>
 
@@ -401,6 +420,37 @@
     <!-- Alert / Toast Modal -->
     <div id="toastBox" class="toast-box hidden">
         メッセージ
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Auth Overlay (Login / Register Screen)    -->
+    <!-- ========================================== -->
+    <div id="authOverlay" class="auth-fade-in">
+      <div class="auth-card">
+        <!-- Logo -->
+        <div class="auth-logo-wrap">
+          <div class="auth-logo-icon">
+            <span class="material-icons">calendar_month</span>
+          </div>
+          <div class="auth-logo-title">Shared Calendar</div>
+          <div class="auth-logo-sub">グループ共有 ＆ AIスケジュール</div>
+        </div>
+
+        <!-- Inputs -->
+        <div class="auth-inputs">
+          <div id="authDisplayNameContainer" class="hidden">
+            <input type="text" id="authDisplayName" class="auth-input-field" placeholder="お名前（表示名）" />
+          </div>
+          <input type="email" id="authEmail" class="auth-input-field" placeholder="メールアドレス" autocomplete="email" />
+          <input type="password" id="authPassword" class="auth-input-field" placeholder="パスワード" autocomplete="current-password" />
+        </div>
+
+        <!-- Primary Button -->
+        <button id="authPrimaryBtn" class="auth-primary-btn">サインイン</button>
+
+        <!-- Toggle Mode -->
+        <button id="authToggleMode" class="auth-toggle-link">新規アカウントを作成する</button>
+      </div>
     </div>
 
     <!-- JavaScript -->
