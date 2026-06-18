@@ -1,0 +1,450 @@
+/* =====================================
+Shared Calendar v2
+calendar-base.css
+===================================== */
+
+/* ==========================
+カラーテーマ
+========================== */
+
+:root {
+  --primary: #1a73e8;
+  --primary-light: #e8f0fe;
+
+  --bg: #ffffff;
+  --surface: #ffffff;
+
+  --text: #202124;
+  --border: #dadce0;
+
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+
+  --sunday: #ea4335;
+  --saturday: #4285f4;
+
+  --public: #1a73e8;
+  --group: #34a853;
+  --private: #9aa0a6;
+}
+
+/* ==========================
+ダークモード
+========================== */
+
+body.dark {
+  --bg: #202124;
+
+  --surface: #303134;
+
+  --text: #e8eaed;
+
+  --border: #5f6368;
+
+  --primary-light: #174ea6;
+}
+
+/* ==========================
+リセット
+========================== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+
+  color: var(--text);
+
+  font-family: "Segoe UI", sans-serif;
+
+  overflow: hidden;
+}
+
+/* ==========================
+ヘッダー
+========================== */
+
+.header {
+  height: 64px;
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  padding: 0 12px;
+
+  background: var(--surface);
+
+  border-bottom: 1px solid var(--border);
+
+  box-shadow: var(--shadow);
+
+  position: relative;
+
+  z-index: 100;
+}
+
+.header-left {
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+}
+
+.header-left h1 {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+/* ==========================
+ボタン
+========================== */
+
+button {
+  cursor: pointer;
+  border: none;
+}
+
+.icon-btn {
+  width: 40px;
+
+  height: 40px;
+
+  border-radius: 50%;
+
+  background: transparent;
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+}
+
+.icon-btn:hover {
+  background: #f1f3f4;
+}
+
+body.dark .icon-btn:hover {
+  background: #3c4043;
+}
+
+.today-btn {
+  padding: 8px 16px;
+
+  border-radius: 20px;
+
+  background: var(--primary-light);
+
+  color: var(--primary);
+
+  font-weight: bold;
+}
+
+/* ==========================
+ナビゲーション
+========================== */
+
+.calendar-nav {
+  height: 60px;
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  gap: 20px;
+
+  background: var(--surface);
+
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-btn {
+  width: 40px;
+
+  height: 40px;
+
+  border-radius: 50%;
+
+  background: transparent;
+}
+
+.nav-btn:hover {
+  background: #f1f3f4;
+}
+
+#currentTitle {
+  min-width: 180px;
+
+  text-align: center;
+
+  font-size: 22px;
+
+  font-weight: 500;
+}
+
+/* ==========================
+FAB
+========================== */
+
+.fab {
+  position: fixed;
+
+  bottom: 20px;
+
+  right: 20px;
+
+  width: 60px;
+
+  height: 60px;
+
+  border-radius: 50%;
+
+  background: var(--primary);
+
+  color: white;
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  z-index: 999;
+}
+
+.fab .material-icons {
+  font-size: 32px;
+}
+
+/* ==========================
+モーダル枠
+========================== */
+
+.modal {
+  position: fixed;
+
+  inset: 0;
+
+  display: none;
+
+  justify-content: center;
+
+  align-items: center;
+
+  background: rgba(0, 0, 0, 0.5);
+
+  z-index: 2000;
+}
+
+.modal-content {
+  width: 90%;
+
+  max-width: 420px;
+
+  background: var(--surface);
+
+  padding: 20px;
+
+  border-radius: 12px;
+
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.modal-content h2 {
+  margin-bottom: 15px;
+}
+
+.modal-content input,
+.modal-content textarea,
+.modal-content select {
+  width: 100%;
+
+  padding: 10px;
+
+  margin-bottom: 10px;
+
+  border: 1px solid var(--border);
+
+  border-radius: 8px;
+
+  background: var(--bg);
+
+  color: var(--text);
+}
+
+.checkbox {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  margin-bottom: 10px;
+}
+
+.modal-actions {
+  display: flex;
+
+  gap: 10px;
+}
+
+.modal-actions button {
+  flex: 1;
+
+  padding: 10px;
+
+  border-radius: 8px;
+}
+
+#saveEventBtn {
+  background: var(--primary);
+
+  color: white;
+}
+
+#deleteEventBtn {
+  background: #ea4335;
+
+  color: white;
+}
+
+/* ==========================
+サイドバー
+========================== */
+
+.sidebar {
+  position: fixed;
+
+  top: 0;
+
+  left: -280px;
+
+  width: 280px;
+
+  height: 100%;
+
+  background: var(--surface);
+
+  transition: 0.3s;
+
+  z-index: 3000;
+
+  border-right: 1px solid var(--border);
+}
+
+.sidebar.open {
+  left: 0;
+}
+
+.sidebar-header {
+  padding: 20px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar ul {
+  list-style: none;
+}
+
+.sidebar li {
+  padding: 15px 20px;
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+
+  cursor: pointer;
+}
+
+.sidebar li:hover {
+  background: #f1f3f4;
+}
+
+body.dark .sidebar li:hover {
+  background: #3c4043;
+}
+
+/* ==========================
+オーバーレイ
+========================== */
+
+.overlay {
+  position: fixed;
+
+  inset: 0;
+
+  background: rgba(0, 0, 0, 0.4);
+
+  display: none;
+
+  z-index: 2500;
+}
+
+.overlay.show {
+  display: block;
+}
+
+/* ==========================
+ローディング
+========================== */
+
+.loading {
+  position: fixed;
+
+  inset: 0;
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  background: rgba(255, 255, 255, 0.8);
+
+  z-index: 5000;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ==========================
+スマホ最適化
+========================== */
+
+@media (max-width: 768px) {
+  .header-left h1 {
+    font-size: 16px;
+  }
+
+  #currentTitle {
+    font-size: 18px;
+  }
+}
