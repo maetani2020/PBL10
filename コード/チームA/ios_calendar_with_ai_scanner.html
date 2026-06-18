@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="ja" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>iOS Calendar with AI Assistant</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        ios: {
+                            blue: '#007AFF',
+                            red: '#FF3B30',
+                            green: '#34C759',
+                            orange: '#FF9500',
+                            purple: '#AF52DE',
+                            yellow: '#FFCC00',
+                            teal: '#5AC8FA',
+                            gray: {
+                                100: '#F2F2F7',
+                                200: '#E5E5EA',
+                                300: '#D1D1D6',
+                                400: '#C7C7CC',
+                                500: '#8E8E93',
+                                600: '#3A3A3C',
+                                700: '#2C2C2E',
+                                800: '#1C1C1E',
+                                900: '#000000'
+                            }
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* iOS特有のスクロールバウンスとスムーズスクロール */
+        .ios-scroll {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .ios-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        /* 選択・長押しの無効化（アプリ感を出すため） */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        /* ハーフモーダルのアニメーション */
+        .sheet-transition {
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .sheet-hidden {
+            transform: translateY(100%);
+        }
+        .sheet-visible {
+            transform: translateY(0);
+        }
+        /* iPhoneのノッチ・ベゼルをPC表示時のみ適用するメディアクエリ */
+        @media (min-width: 480px) {
+            .iphone-frame {
+                width: 393px;
+                height: 852px;
+                border-radius: 55px;
+                box-shadow: 0 0 0 12px #1c1c1e, 0 20px 50px rgba(0,0,0,0.3);
+                position: relative;
+                overflow: hidden;
+            }
+            .iphone-notch {
+                display: block !important;
+            }
+            .iphone-home-indicator {
+                display: block !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-black h-full flex items-center justify-center overflow-hidden font-sans antialiased text-black dark:text-white transition-colors duration-300">
+
+    <!-- iPhone Mockup Container -->
+    <div class="iphone-frame w-full h-full bg-white dark:bg-ios-gray-900 flex flex-col transition-colors duration-300">
+        
+        <!-- Dynamic Island / Notch (PCのみ表示) -->
+        <div class="iphone-notch hidden absolute top-3 left-1/2 -translate-x-1/2 w-[110px] h-[30px] bg-black rounded-3xl z-50 flex items-center justify-between px-3">
+            <div class="w-3.5 h-3.5 bg-neutral-900 rounded-full border border-neutral-800"></div>
+            <div class="w-2.5 h-2.5 bg-blue-950 rounded-full"></div>
+        </div>
+
+        <!-- iOS Status Bar -->
+        <div class="px-6 pt-3 pb-2 flex justify-between items-center text-xs font-semibold select-none z-40 bg-white dark:bg-ios-gray-900 transition-colors duration-300">
+            <div id="status-time">9:41</div>
+            <div class="flex items-center space-x-1.5">
+                <i data-lucide="signal" class="w-3.5 h-3.5"></i>
+                <span class="text-[10px]">5G</span>
+                <i data-lucide="battery" class="w-4 h-4 fill-current"></i>
+            </div>
+        </div>
+
+        <!-- Main App Container -->
+        <div class="flex-1 flex flex-col overflow-hidden relative">
+            
+            <!-- App Header -->
+            <header class="px-4 py-2 flex items-center justify-between bg-white dark:bg-ios-gray-900 border-b border-ios-gray-200 dark:border-ios-gray-800 transition-colors duration-300">
+                <div class="flex items-center space-x-1">
+                    <button id="prev-month-btn" class="p-2 text-ios-blue active:opacity-50">
+                        <i data-lucide="chevron-left" class="w-6 h-6"></i>
+                    </button>
+                    <span id="current-month-label" class="text-lg font-bold min-w-[110px] text-center">2026年6月</span>
+                    <button id="next-month-btn" class="p-2 text-ios-blue active:opacity-50">
+                        <i data-lucide="chevron-right" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="toggle-theme" class="p-2 text-ios-blue active:opacity-50">
+                        <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                        <i data-lucide="moon" class="w-5 h-5 block dark:hidden"></i>
+                    </button>
+                    <!-- AI Assistant Trigger Button -->
+                    <button id="ai-scanner-trigger" class="p-2 text-ios-purple active:opacity-50 flex items-center justify-center relative group" title="予定追加太郎を開く">
+                        <i data-lucide="sparkles" class="w-5 h-5"></i>
+                        <span class="absolute -bottom-1 -right-1 flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-ios-purple opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-ios-purple"></span></span>
+                    </button>
+                    <button id="today-btn" class="px-3 py-1 bg-ios-gray-100 dark:bg-ios-gray-800 text-ios-blue text-sm font-semibold rounded-full active:opacity-50">
+                        今日
+                    </button>
+                    <button id="add-event-trigger" class="p-2 text-ios-blue active:opacity-50">
+                        <i data-lucide="plus" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Weekday Header -->
+            <div class="grid grid-cols-7 text-center py-2 text-[11px] font-bold text-ios-gray-500 bg-white dark:bg-ios-gray-900 border-b border-ios-gray-100 dark:border-ios-gray-800">
+                <div class="text-ios-red">日</div>
+                <div>月</div>
+                <div>火</div>
+                <div>水</div>
+                <div>木</div>
+                <div>金</div>
+                <div class="text-ios-blue">土</div>
+            </div>
+
+            <!-- Calendar Grid Space (Swipe Area) -->
+            <div id="swipe-area" class="bg-white dark:bg-ios-gray-900 transition-all duration-300 relative overflow-hidden">
+                <div id="calendar-grid" class="grid grid-cols-7 text-center text-sm py-1 transition-transform duration-300 ease-out">
+                    <!-- Dynamic Days go here -->
+                </div>
+            </div>
+
+            <!-- AI Day Summary Banner Container -->
+            <div id="ai-summary-container" class="hidden bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 dark:from-purple-950/20 dark:to-blue-950/20 border-y border-purple-500/20 px-4 py-3 flex flex-col space-y-2 transition-all duration-300">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-ios-purple flex items-center gap-1">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-ios-purple fill-current"></i> AIによる一日アドバイス
+                    </span>
+                    <button id="close-ai-summary" class="text-ios-gray-400 hover:text-ios-gray-600 dark:hover:text-ios-gray-200">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div id="ai-summary-text" class="text-xs text-ios-gray-700 dark:text-ios-gray-300 leading-relaxed max-h-[120px] overflow-y-auto ios-scroll">
+                    計画作成中...
+                </div>
+            </div>
+
+            <!-- Event List Header / Divider -->
+            <div class="px-4 py-2 bg-ios-gray-100 dark:bg-ios-gray-800 text-xs font-bold text-ios-gray-500 flex justify-between items-center">
+                <div class="flex items-center space-x-1">
+                    <span id="selected-date-label">選択日のイベント</span>
+                    <span id="event-count" class="bg-ios-gray-300 dark:bg-ios-gray-700 text-ios-gray-800 dark:text-ios-gray-200 px-2 py-0.5 rounded-full text-[10px]">0件</span>
+                </div>
+                <!-- AI Daily Planner trigger -->
+                <button id="ai-daily-planner-btn" class="hidden text-ios-purple active:opacity-50 text-[11px] font-bold flex items-center gap-1 bg-white dark:bg-ios-gray-700 px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-900/40">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 fill-current text-ios-purple"></i> ✨ AIに今日の相談をする
+                </button>
+            </div>
+
+            <!-- Event List Container -->
+            <div class="flex-1 overflow-y-auto ios-scroll bg-ios-gray-100 dark:bg-ios-gray-800 p-3 space-y-3" id="event-list-container">
+                <!-- Dynamic Events go here -->
+            </div>
+
+        </div>
+
+        <!-- iPhone Home Indicator (PCのみ表示) -->
+        <div class="iphone-home-indicator hidden absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[140px] h-[5px] bg-black dark:bg-white rounded-full z-50"></div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- iOS Style Half-Modal: EVENT ADD / EDIT -->
+    <!-- ========================================== -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden transition-opacity duration-300 opacity-0"></div>
+    
+    <div id="event-sheet" class="fixed bottom-0 left-0 right-0 max-w-[393px] mx-auto bg-white dark:bg-ios-gray-800 rounded-t-[20px] z-50 sheet-transition sheet-hidden flex flex-col max-h-[85%] shadow-2xl">
+        <!-- Drag Handle Indicator -->
+        <div class="w-full flex justify-center py-2">
+            <div class="w-9 h-1 bg-ios-gray-300 dark:bg-ios-gray-600 rounded-full"></div>
+        </div>
+
+        <!-- Sheet Header -->
+        <div class="px-4 pb-3 flex justify-between items-center border-b border-ios-gray-100 dark:border-ios-gray-700">
+            <button id="close-sheet-btn" class="text-ios-blue text-base font-normal active:opacity-50">キャンセル</button>
+            <span id="sheet-title" class="text-lg font-semibold">新規イベント</span>
+            <button id="save-event-btn" class="text-ios-blue text-base font-semibold active:opacity-50">追加</button>
+        </div>
+
+        <!-- Sheet Content -->
+        <div class="overflow-y-auto ios-scroll p-4 space-y-4">
+            <!-- Hidden ID Input for Editing -->
+            <input type="hidden" id="event-id">
+
+            <!-- Title & Location Input Group -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl overflow-hidden px-4 py-1">
+                <input type="text" id="event-title" placeholder="タイトル" class="w-full py-3 bg-transparent border-b border-ios-gray-200 dark:border-ios-gray-600 focus:outline-none placeholder-ios-gray-400">
+                <input type="text" id="event-location" placeholder="場所またはビデオ通話" class="w-full py-3 bg-transparent focus:outline-none placeholder-ios-gray-400">
+            </div>
+
+            <!-- Date & Time Group -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl px-4 py-2 space-y-3">
+                <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium">終日</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="event-allday" class="sr-only peer">
+                        <div class="w-11 h-6 bg-ios-gray-300 rounded-full peer peer-focus:ring-0 dark:bg-ios-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-ios-green"></div>
+                    </label>
+                </div>
+                <div class="flex justify-between items-center py-1 border-t border-ios-gray-200 dark:border-ios-gray-600">
+                    <span class="text-sm font-medium">開始</span>
+                    <input type="datetime-local" id="event-start" class="bg-transparent text-sm text-ios-blue font-medium focus:outline-none">
+                </div>
+                <div class="flex justify-between items-center py-1 border-t border-ios-gray-200 dark:border-ios-gray-600">
+                    <span class="text-sm font-medium">終了</span>
+                    <input type="datetime-local" id="event-end" class="bg-transparent text-sm text-ios-blue font-medium focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Color Tag -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl px-4 py-3">
+                <div class="text-sm font-medium mb-3">カラー</div>
+                <div class="flex items-center space-x-3 justify-between">
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#007AFF" checked class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-blue border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#FF3B30" class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-red border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#34C759" class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-green border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#FF9500" class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-orange border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#AF52DE" class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-purple border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Memo Field -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl px-4 py-2">
+                <textarea id="event-memo" rows="3" placeholder="メモ" class="w-full py-2 bg-transparent focus:outline-none resize-none placeholder-ios-gray-400 text-sm"></textarea>
+            </div>
+
+            <!-- Delete Button (Only visible on Edit) -->
+            <button id="delete-event-btn" class="w-full py-4 bg-ios-gray-100 dark:bg-ios-gray-700/50 text-ios-red font-semibold rounded-xl text-center active:bg-red-100 dark:active:bg-red-950/20 hidden">
+                イベントを削除
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- iOS Style AI ASSISTANT SHEET (REBUILT) -->
+    <!-- ========================================== -->
+    <div id="scanner-sheet" class="fixed bottom-0 left-0 right-0 max-w-[393px] mx-auto bg-white dark:bg-ios-gray-950 rounded-t-[30px] z-50 sheet-transition sheet-hidden flex flex-col h-[90%] shadow-2xl overflow-hidden">
+        <!-- Drag Handle Indicator -->
+        <div class="w-full flex justify-center py-2.5 flex-shrink-0 bg-white dark:bg-ios-gray-950">
+            <div class="w-10 h-1 bg-ios-gray-300 dark:bg-ios-gray-700 rounded-full"></div>
+        </div>
+
+        <!-- Sheet Header -->
+        <div class="px-5 pb-3 flex justify-between items-center border-b border-ios-gray-100 dark:border-ios-gray-800 flex-shrink-0 bg-white dark:bg-ios-gray-950">
+            <button id="close-scanner-btn" class="text-ios-blue text-base active:opacity-50">閉じる</button>
+            <span class="text-md font-bold flex items-center gap-1 text-purple-600 dark:text-purple-400">
+                <i data-lucide="sparkles" class="w-4 h-4 fill-current"></i> 予定追加太郎
+            </span>
+            <button id="clear-chat-btn" class="text-ios-gray-400 dark:text-ios-gray-500 text-xs active:opacity-50">クリア</button>
+        </div>
+
+        <!-- Chat Logs Area (Gemini Style) -->
+        <div id="ai-chat-history" class="flex-1 overflow-y-auto ios-scroll p-4 space-y-4 bg-ios-gray-100/50 dark:bg-black/40">
+            <!-- Welcome Bot Message -->
+            <div class="flex items-start space-x-3">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                    <i data-lucide="sparkles" class="w-4 h-4 fill-current"></i>
+                </div>
+                <div class="max-w-[80%] bg-white dark:bg-ios-gray-800 p-3.5 rounded-2xl rounded-tl-none shadow-sm border border-ios-gray-100 dark:border-ios-gray-700/60">
+                    <p class="text-xs font-bold text-purple-600 dark:text-purple-400 mb-1">予定追加太郎</p>
+                    <p class="text-xs leading-relaxed text-ios-gray-800 dark:text-ios-gray-200">
+                        こんにちは！スケジュールアシスタントの「予定追加太郎」です。
+                        <br><br>
+                        写真や文章からスケジュールを<strong>「追加」</strong>するだけでなく、登録済みの予定を<strong>「確認（検索）」</strong>したり、不要な予定を<strong>「削除」</strong>したりすることもできるようになりました！
+                        <br><br>
+                        <span class="text-xs text-ios-gray-500 dark:text-ios-gray-400 font-semibold block bg-ios-gray-100 dark:bg-ios-gray-900 p-2 rounded-xl border border-ios-gray-200 dark:border-ios-gray-700">
+                            💡 例えばこう言ってみてね：<br>
+                            ・「来週の予定を教えて」<br>
+                            ・「明日のミーティングの予定を削除して」<br>
+                            ・「15日の予定はある？」
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Dynamic Chat Bubbles (User inputs and AI responses / Event proposals) will insert here -->
+            <div id="chat-messages-container" class="space-y-4"></div>
+
+        </div>
+
+        <!-- Input Area Container (Gemini Style Sticky Input) -->
+        <div class="p-3 bg-white dark:bg-ios-gray-950 border-t border-ios-gray-100 dark:border-ios-gray-800/80 flex-shrink-0">
+            
+            <!-- Attachment Files Carousel (Horizontal scroll) -->
+            <div id="attachment-carousel" class="hidden flex overflow-x-auto gap-3 pb-3 mb-2 pt-1 scroll-smooth snap-x">
+                <!-- Attachment Cards will insert here -->
+            </div>
+
+            <!-- Chat Main Row -->
+            <div class="relative flex items-end bg-ios-gray-100 dark:bg-ios-gray-800/80 rounded-[28px] p-1.5 px-3 border border-ios-gray-200/50 dark:border-ios-gray-700/50 transition-all focus-within:ring-2 focus-within:ring-purple-500/20">
+                
+                <!-- Plus Button (Attachments Menu) -->
+                <button id="ai-plus-btn" class="w-9 h-9 flex items-center justify-center rounded-full text-ios-purple bg-white dark:bg-ios-gray-700 shadow-sm active:scale-90 transition-transform flex-shrink-0">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                </button>
+
+                <!-- Gemini Text Input -->
+                <textarea id="ai-chat-input" rows="1" placeholder="予定の詳細、確認、削除などを入力" class="flex-1 max-h-[100px] min-h-[36px] bg-transparent border-none py-2 px-3 focus:outline-none focus:ring-0 text-xs text-black dark:text-white resize-none ios-scroll font-medium placeholder-ios-gray-400"></textarea>
+
+                <!-- Send Button -->
+                <button id="ai-send-btn" class="w-9 h-9 flex items-center justify-center rounded-full bg-purple-600 text-white shadow-sm hover:bg-purple-700 active:scale-90 transition-transform flex-shrink-0 disabled:opacity-40 disabled:scale-100" disabled>
+                    <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Context Hint -->
+            <p class="text-[10px] text-ios-gray-400 dark:text-ios-gray-500 text-center mt-2">
+                予定追加太郎（Gemini 2.5 Flash）はカレンダーとの高度な連携に対応しています
+            </p>
+        </div>
+
+        <!-- Add Attachments Action Sheet Dialog (IOS Style) -->
+        <div id="action-sheet-backdrop" class="fixed inset-0 bg-black/30 backdrop-blur-xs z-50 hidden transition-opacity duration-300 opacity-0"></div>
+        <div id="action-sheet" class="fixed bottom-0 left-0 right-0 max-w-[370px] mx-auto mb-5 bg-transparent z-50 sheet-transition sheet-hidden flex flex-col space-y-2 px-4">
+            
+            <!-- Actions list -->
+            <!-- Label-based input method bypasses iOS file selection blocking perfectly! -->
+            <div class="bg-white/90 dark:bg-ios-gray-800/95 backdrop-blur-lg rounded-2xl overflow-hidden flex flex-col border border-white/20">
+                <label class="w-full py-4 text-center text-ios-blue font-semibold border-b border-ios-gray-100 dark:border-ios-gray-700 active:bg-ios-gray-100 dark:active:bg-ios-gray-700/50 text-sm flex items-center justify-center gap-2 cursor-pointer">
+                    <i data-lucide="camera" class="w-4 h-4"></i> カメラで撮影する
+                    <input type="file" id="camera-input" accept="image/*" capture="environment" class="sr-only">
+                </label>
+                <label class="w-full py-4 text-center text-ios-blue font-semibold active:bg-ios-gray-100 dark:active:bg-ios-gray-700/50 text-sm flex items-center justify-center gap-2 cursor-pointer">
+                    <i data-lucide="image" class="w-4 h-4"></i> 写真ライブラリから選択
+                    <input type="file" id="gallery-input" accept="image/*" class="sr-only">
+                </label>
+            </div>
+
+            <!-- Cancel Button -->
+            <button id="action-cancel-btn" class="w-full py-3.5 bg-white dark:bg-ios-gray-800 rounded-2xl text-center text-ios-blue font-bold text-sm shadow-md active:opacity-80">
+                キャンセル
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Alert / Toast Modal -->
+    <div id="toast-box" class="fixed top-12 left-1/2 -translate-x-1/2 px-4 py-2.5 bg-black/80 dark:bg-white/95 text-white dark:text-black rounded-full text-xs font-semibold shadow-lg z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
+        メッセージ
+    </div>
+
+    <!-- Script Block -->
+    <script>
+        // ----------------------------------------------------
+        // State & Initialization
+        // ----------------------------------------------------
+        let currentDate = new Date(); // 現在表示中の月
+        let selectedDate = new Date(); // 現在選択中の日
+        let events = JSON.parse(localStorage.getItem('ios_calendar_events')) || [];
+        
+        // AI Attachment List
+        let currentAttachments = [];
+
+        // DOM elements
+        const calendarGrid = document.getElementById('calendar-grid');
+        const currentMonthLabel = document.getElementById('current-month-label');
+        const selectedDateLabel = document.getElementById('selected-date-label');
+        const eventCountLabel = document.getElementById('event-count');
+        const eventListContainer = document.getElementById('event-list-container');
+        
+        // Modal elements
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        const eventSheet = document.getElementById('event-sheet');
+        const sheetTitle = document.getElementById('sheet-title');
+        const saveEventBtn = document.getElementById('save-event-btn');
+        const deleteEventBtn = document.getElementById('delete-event-btn');
+        
+        // Input elements
+        const inputId = document.getElementById('event-id');
+        const inputTitle = document.getElementById('event-title');
+        const inputLocation = document.getElementById('event-location');
+        const inputAllday = document.getElementById('event-allday');
+        const inputStart = document.getElementById('event-start');
+        const inputEnd = document.getElementById('event-end');
+        const inputMemo = document.getElementById('event-memo');
+
+        // AI Assistant Sheet DOM elements
+        const aiScannerTrigger = document.getElementById('ai-scanner-trigger');
+        const scannerSheet = document.getElementById('scanner-sheet');
+        const closeScannerBtn = document.getElementById('close-scanner-btn');
+        const clearChatBtn = document.getElementById('clear-chat-btn');
+        
+        const aiPlusBtn = document.getElementById('ai-plus-btn');
+        const aiChatInput = document.getElementById('ai-chat-input');
+        const aiSendBtn = document.getElementById('ai-send-btn');
+        
+        const cameraInput = document.getElementById('camera-input');
+        const galleryInput = document.getElementById('gallery-input');
+        const attachmentCarousel = document.getElementById('attachment-carousel');
+        const chatMessagesContainer = document.getElementById('chat-messages-container');
+        const aiChatHistory = document.getElementById('ai-chat-history');
+
+        // Actionsheet Elements
+        const actionSheetBackdrop = document.getElementById('action-sheet-backdrop');
+        const actionSheet = document.getElementById('action-sheet');
+        const actionCancelBtn = document.getElementById('action-cancel-btn');
+
+        // AI Daily Banner Elements
+        const aiSummaryContainer = document.getElementById('ai-summary-container');
+        const aiSummaryText = document.getElementById('ai-summary-text');
+        const closeAiSummary = document.getElementById('close-ai-summary');
+        const aiDailyPlannerBtn = document.getElementById('ai-daily-planner-btn');
+
+        // ----------------------------------------------------
+        // Status Bar Time Updater
+        // ----------------------------------------------------
+        function updateStatusTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('status-time').innerText = `${hours}:${minutes}`;
+        }
+        setInterval(updateStatusTime, 1000);
+        updateStatusTime();
+
+        // ----------------------------------------------------
+        // Theme / Darkmode Toggle
+        // ----------------------------------------------------
+        const toggleThemeBtn = document.getElementById('toggle-theme');
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        toggleThemeBtn.addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+
+        // ----------------------------------------------------
+        // Core Calendar Logic
+        // ----------------------------------------------------
+        function renderCalendar() {
+            calendarGrid.innerHTML = '';
+            
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            currentMonthLabel.innerText = `${year}年${month + 1}月`;
+
+            // Display Calendar Matrix (6 weeks)
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+            const prevMonthTotalDays = new Date(year, month, 0).getDate();
+
+            // Previous Month Overflow Days
+            for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+                const day = prevMonthTotalDays - i;
+                const dateObj = new Date(year, month - 1, day);
+                createDayElement(day, dateObj, true);
+            }
+
+            // Current Month Days
+            for (let day = 1; day <= totalDaysInMonth; day++) {
+                const dateObj = new Date(year, month, day);
+                createDayElement(day, dateObj, false);
+            }
+
+            // Next Month Overflow Days (padding to complete grid)
+            const totalCells = firstDayOfMonth + totalDaysInMonth;
+            const nextMonthPadding = totalCells <= 35 ? 35 - totalCells : 42 - totalCells;
+            for (let day = 1; day <= nextMonthPadding; day++) {
+                const dateObj = new Date(year, month + 1, day);
+                createDayElement(day, dateObj, true);
+            }
+
+            renderEventsForSelectedDate();
+            lucide.createIcons();
+        }
+
+        function createDayElement(day, dateObj, isOverflow) {
+            const dayEl = document.createElement('div');
+            dayEl.className = 'aspect-square flex flex-col items-center justify-start py-1 relative cursor-pointer active:scale-95 transition-transform';
+
+            const numEl = document.createElement('div');
+            numEl.className = 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all relative';
+            numEl.innerText = day;
+
+            // Date Flags
+            const isToday = isSameDate(dateObj, new Date());
+            const isSelected = isSameDate(dateObj, selectedDate);
+            const isSunday = dateObj.getDay() === 0;
+            const isSaturday = dateObj.getDay() === 6;
+
+            // Apply Classes
+            if (isOverflow) {
+                numEl.classList.add('text-ios-gray-400');
+            } else {
+                if (isSunday) numEl.classList.add('text-ios-red');
+                else if (isSaturday) numEl.classList.add('text-ios-blue');
+                else numEl.classList.add('text-black', 'dark:text-white');
+            }
+
+            if (isToday) {
+                if (isSelected) {
+                    numEl.className = 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-ios-red text-white';
+                } else {
+                    numEl.classList.add('text-ios-red', 'font-black');
+                }
+            } else if (isSelected) {
+                numEl.className = 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-ios-blue text-white';
+            }
+
+            dayEl.appendChild(numEl);
+
+            // Dot Indicator for Events
+            const dayEvents = getEventsForDate(dateObj);
+            if (dayEvents.length > 0) {
+                const dot = document.createElement('div');
+                dot.className = `w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-white' : 'bg-ios-gray-500'}`;
+                // Use first event's color
+                if (!isSelected) {
+                    dot.style.backgroundColor = dayEvents[0].color || '#8E8E93';
+                }
+                dayEl.appendChild(dot);
+            }
+
+            // Click Handler
+            dayEl.addEventListener('click', () => {
+                selectedDate = dateObj;
+                aiSummaryContainer.classList.add('hidden');
+                renderCalendar();
+            });
+
+            calendarGrid.appendChild(dayEl);
+        }
+
+        function isSameDate(d1, d2) {
+            return d1.getFullYear() === d2.getFullYear() &&
+                   d1.getMonth() === d2.getMonth() &&
+                   d1.getDate() === d2.getDate();
+        }
+
+        function getEventsForDate(date) {
+            return events.filter(e => {
+                const startDate = new Date(e.start);
+                return isSameDate(startDate, date);
+            });
+        }
+
+        // ----------------------------------------------------
+        // Events Rendering UI
+        // ----------------------------------------------------
+        function renderEventsForSelectedDate() {
+            const formattedDateStr = `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日`;
+            selectedDateLabel.innerText = formattedDateStr;
+
+            const dayEvents = getEventsForDate(selectedDate);
+            eventCountLabel.innerText = `${dayEvents.length}件`;
+
+            eventListContainer.innerHTML = '';
+
+            if (dayEvents.length === 0) {
+                aiDailyPlannerBtn.classList.add('hidden');
+                eventListContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-16 text-ios-gray-500 space-y-2.5">
+                        <i data-lucide="calendar-check" class="w-12 h-12 stroke-1 text-ios-gray-400"></i>
+                        <span class="text-sm">本日の予定はありません</span>
+                    </div>
+                `;
+                return;
+            }
+
+            // Show AI Daily Planner option if events exist
+            aiDailyPlannerBtn.classList.remove('hidden');
+
+            // Sort by start time
+            dayEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+
+            dayEvents.forEach((e, idx) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white dark:bg-ios-gray-800 p-4 rounded-2xl shadow-sm border border-ios-gray-200/60 dark:border-ios-gray-700/60 active:scale-[0.98] transition-all duration-100 relative overflow-hidden flex flex-col space-y-3';
+                
+                // Left accent bar
+                const borderLeftColor = e.color || '#007AFF';
+                
+                // Construct beautiful timeline format
+                const startObj = new Date(e.start);
+                const endObj = new Date(e.end);
+                
+                const startTime = e.allday ? '終日' : `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`;
+                const endTime = e.allday ? '' : `${String(endObj.getHours()).padStart(2, '0')}:${String(endObj.getMinutes()).padStart(2, '0')}`;
+
+                card.innerHTML = `
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5" style="background-color: ${borderLeftColor}"></div>
+                    
+                    <div class="pl-2.5 flex justify-between items-start">
+                        <div class="space-y-1.5 flex-1 min-w-0 pr-4" onclick="openEditSheetById('${e.id}')">
+                            <h4 class="font-bold text-base text-ios-gray-900 dark:text-white leading-tight break-words">${escapeHTML(e.title)}</h4>
+                            
+                            <div class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-semibold" style="background-color: ${borderLeftColor}15; color: ${borderLeftColor}">
+                                <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                                <span>${startTime}${endTime ? ' - ' + endTime : ''}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center space-x-1.5 flex-shrink-0">
+                            <span class="text-[11px] text-ios-gray-400 font-medium" onclick="openEditSheetById('${e.id}')">編集</span>
+                            <i data-lucide="chevron-right" class="w-4 h-4 text-ios-gray-400" onclick="openEditSheetById('${e.id}')"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="pl-2.5 space-y-2.5 pt-1.5 border-t border-ios-gray-100 dark:border-ios-gray-700/50 text-xs">
+                        ${e.location ? `
+                        <div class="flex items-start text-ios-gray-600 dark:text-ios-gray-300">
+                            <i data-lucide="map-pin" class="w-4 h-4 text-ios-gray-400 mr-2 flex-shrink-0 mt-0.5"></i>
+                            <span class="leading-relaxed font-medium">${escapeHTML(e.location)}</span>
+                        </div>` : ''}
+                        
+                        <div class="flex items-start text-ios-gray-500 dark:text-ios-gray-400">
+                            <i data-lucide="align-left" class="w-4 h-4 text-ios-gray-400 mr-2 flex-shrink-0 mt-0.5"></i>
+                            <div class="leading-relaxed whitespace-pre-line flex-1 bg-ios-gray-100/50 dark:bg-ios-gray-700/30 p-2 rounded-lg text-xs">
+                                ${e.memo ? escapeHTML(e.memo) : '<span class="italic text-ios-gray-400">メモはありません</span>'}
+                            </div>
+                        </div>
+
+                        <!-- ✨ AI Support Advice Block -->
+                        <div class="pt-2 border-t border-dotted border-ios-gray-200 dark:border-ios-gray-700/80">
+                            <button onclick="getAIAdvice('${e.id}', this)" class="text-xs font-bold text-ios-purple active:opacity-50 flex items-center gap-1 bg-purple-500/5 dark:bg-purple-500/10 hover:bg-purple-500/10 px-2.5 py-1.5 rounded-lg border border-purple-500/20 w-full justify-center transition-colors">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 fill-current text-ios-purple"></i>
+                                <span>✨ AI準備アドバイスを生成</span>
+                            </button>
+                            <div id="ai-advice-display-${e.id}" class="hidden mt-2 p-2.5 bg-gradient-to-br from-purple-500/5 to-indigo-500/5 dark:from-purple-950/20 dark:to-indigo-950/20 border border-purple-500/15 rounded-xl text-[11px] text-ios-gray-700 dark:text-ios-gray-300 leading-relaxed space-y-1.5 max-h-[180px] overflow-y-auto ios-scroll">
+                                <!-- AI generated content inside -->
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                eventListContainer.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        window.openEditSheetById = function(eventId) {
+            const event = events.find(e => e.id === eventId);
+            if (event) {
+                openEditSheet(event);
+            }
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // ----------------------------------------------------
+        // Month Navigation Buttons
+        // ----------------------------------------------------
+        document.getElementById('prev-month-btn').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar();
+        });
+
+        document.getElementById('next-month-btn').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar();
+        });
+
+        document.getElementById('today-btn').addEventListener('click', () => {
+            currentDate = new Date();
+            selectedDate = new Date();
+            renderCalendar();
+            showToast('今日に戻りました 📅');
+        });
+
+        // Swipe handler
+        let touchstartX = 0;
+        let touchendX = 0;
+        const swipeArea = document.getElementById('swipe-area');
+
+        swipeArea.addEventListener('touchstart', e => {
+            touchstartX = e.changedTouches[0].screenX;
+        }, {passive: true});
+
+        swipeArea.addEventListener('touchend', e => {
+            touchendX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, {passive: true});
+
+        function handleSwipe() {
+            const threshold = 50;
+            if (touchendX < touchstartX - threshold) {
+                currentDate.setMonth(currentDate.getMonth() + 1);
+                renderCalendar();
+            }
+            if (touchendX > touchstartX + threshold) {
+                currentDate.setMonth(currentDate.getMonth() - 1);
+                renderCalendar();
+            }
+        }
+
+        // ----------------------------------------------------
+        // Modal Sheet Control (Add / Edit)
+        // ----------------------------------------------------
+        const addEventTrigger = document.getElementById('add-event-trigger');
+        const closeSheetBtn = document.getElementById('close-sheet-btn');
+
+        addEventTrigger.addEventListener('click', () => {
+            openAddSheet();
+        });
+
+        closeSheetBtn.addEventListener('click', () => {
+            closeSheet();
+        });
+
+        modalBackdrop.addEventListener('click', () => {
+            closeSheet();
+            closeScannerSheet();
+        });
+
+        function openAddSheet() {
+            inputId.value = '';
+            inputTitle.value = '';
+            inputLocation.value = '';
+            inputAllday.checked = false;
+            inputMemo.value = '';
+
+            const baseDate = new Date(selectedDate);
+            const now = new Date();
+            baseDate.setHours(now.getHours(), 0, 0, 0);
+            
+            const startDateStr = formatToDatetimeLocal(baseDate);
+            const endDateStr = formatToDatetimeLocal(new Date(baseDate.getTime() + 60 * 60 * 1000));
+
+            inputStart.value = startDateStr;
+            inputEnd.value = endDateStr;
+
+            sheetTitle.innerText = '新規イベント';
+            saveEventBtn.innerText = '追加';
+            deleteEventBtn.classList.add('hidden');
+
+            document.querySelector('input[name="event-color"][value="#007AFF"]').checked = true;
+            showSheet();
+        }
+
+        function openEditSheet(event) {
+            inputId.value = event.id;
+            inputTitle.value = event.title;
+            inputLocation.value = event.location || '';
+            inputAllday.checked = event.allday || false;
+            inputStart.value = formatToDatetimeLocal(new Date(event.start));
+            inputEnd.value = formatToDatetimeLocal(new Date(event.end));
+            inputMemo.value = event.memo || '';
+
+            const colorRadio = document.querySelector(`input[name="event-color"][value="${event.color}"]`);
+            if (colorRadio) colorRadio.checked = true;
+
+            sheetTitle.innerText = 'イベントの編集';
+            saveEventBtn.innerText = '保存';
+            deleteEventBtn.classList.remove('hidden');
+
+            showSheet();
+        }
+
+        function showSheet() {
+            modalBackdrop.classList.remove('hidden');
+            setTimeout(() => {
+                modalBackdrop.classList.add('opacity-100');
+                eventSheet.classList.remove('sheet-hidden');
+                eventSheet.classList.add('sheet-visible');
+            }, 10);
+        }
+
+        function closeSheet() {
+            modalBackdrop.classList.remove('opacity-100');
+            eventSheet.classList.remove('sheet-visible');
+            eventSheet.classList.add('sheet-hidden');
+            setTimeout(() => {
+                modalBackdrop.classList.add('hidden');
+            }, 300);
+        }
+
+        function formatToDatetimeLocal(date) {
+            const tzOffset = date.getTimezoneOffset() * 60000;
+            const localISOTime = (new Date(date - tzOffset)).toISOString().slice(0, 16);
+            return localISOTime;
+        }
+
+        // Save Event
+        saveEventBtn.addEventListener('click', () => {
+            const title = inputTitle.value.trim();
+            if (!title) {
+                showToast('タイトルを入力してください ⚠️');
+                return;
+            }
+
+            const id = inputId.value;
+            const location = inputLocation.value.trim();
+            const allday = inputAllday.checked;
+            const start = inputStart.value;
+            const end = inputEnd.value;
+            const color = document.querySelector('input[name="event-color"]:checked').value;
+            const memo = inputMemo.value.trim();
+
+            if (new Date(start) > new Date(end)) {
+                showToast('開始時刻が終了時刻より後になっています ⚠️');
+                return;
+            }
+
+            const eventData = {
+                id: id || 'event_' + Date.now(),
+                title,
+                location,
+                allday,
+                start,
+                end,
+                color,
+                memo
+            };
+
+            if (id) {
+                const index = events.findIndex(e => e.id === id);
+                if (index !== -1) events[index] = eventData;
+                showToast('予定を更新しました ✅');
+            } else {
+                events.push(eventData);
+                showToast('新しい予定を追加しました ✨');
+            }
+
+            saveAndSync();
+            closeSheet();
+        });
+
+        // Delete Event
+        deleteEventBtn.addEventListener('click', () => {
+            const id = inputId.value;
+            if (id) {
+                events = events.filter(e => e.id !== id);
+                saveAndSync();
+                closeSheet();
+                showToast('予定を削除しました 🗑️');
+            }
+        });
+
+        function saveAndSync() {
+            localStorage.setItem('ios_calendar_events', JSON.stringify(events));
+            renderCalendar();
+        }
+
+        let toastTimeout;
+        function showToast(msg) {
+            const toast = document.getElementById('toast-box');
+            toast.innerText = msg;
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 2500);
+        }
+
+        // ----------------------------------------------------
+        // 🔄 Exponential Backoff Fetch Helper (APIリクエスト用)
+        // ----------------------------------------------------
+        async function fetchWithRetry(url, options, retries = 5, backoff = 1000) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    throw new Error(`HTTP Error Status: ${response.status}`);
+                }
+                return response;
+            } catch (error) {
+                if (retries > 0) {
+                    await new Promise(resolve => setTimeout(resolve, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+                throw error;
+            }
+        }
+
+        // ----------------------------------------------------
+        // 🆕 AI CHAT ASSISTANT & SCANNER (Gemini style)
+        // ----------------------------------------------------
+        aiScannerTrigger.addEventListener('click', () => {
+            openScannerSheet();
+        });
+
+        closeScannerBtn.addEventListener('click', () => {
+            closeScannerSheet();
+        });
+
+        function openScannerSheet() {
+            modalBackdrop.classList.remove('hidden');
+            setTimeout(() => {
+                modalBackdrop.classList.add('opacity-100');
+                scannerSheet.classList.remove('sheet-hidden');
+                scannerSheet.classList.add('sheet-visible');
+            }, 10);
+        }
+
+        function closeScannerSheet() {
+            modalBackdrop.classList.remove('opacity-100');
+            scannerSheet.classList.remove('sheet-visible');
+            scannerSheet.classList.add('sheet-hidden');
+            setTimeout(() => {
+                modalBackdrop.classList.add('hidden');
+            }, 300);
+        }
+
+        // Auto growing textarea logic
+        aiChatInput.addEventListener('input', () => {
+            aiChatInput.style.height = 'auto';
+            aiChatInput.style.height = (aiChatInput.scrollHeight) + 'px';
+            validateSendButton();
+        });
+
+        // Validate Send Button Status
+        function validateSendButton() {
+            const textLength = aiChatInput.value.trim().length;
+            const hasFiles = currentAttachments.length > 0;
+            
+            if (textLength > 0 || hasFiles) {
+                aiSendBtn.disabled = false;
+            } else {
+                aiSendBtn.disabled = true;
+            }
+        }
+
+        // Trigger Menu (Plus Button)
+        aiPlusBtn.addEventListener('click', () => {
+            showActionSheet();
+        });
+
+        // Clear Chat Log
+        clearChatBtn.addEventListener('click', () => {
+            chatMessagesContainer.innerHTML = '';
+            currentAttachments = [];
+            renderAttachmentsCarousel();
+            aiChatInput.value = '';
+            aiChatInput.style.height = 'auto';
+            validateSendButton();
+            showToast("会話履歴をクリアしました 🧹");
+        });
+
+        // ----------------------------------------------------
+        // Action Sheet (iOS Native Menu Simulation)
+        // ----------------------------------------------------
+        function showActionSheet() {
+            actionSheetBackdrop.classList.remove('hidden');
+            setTimeout(() => {
+                actionSheetBackdrop.classList.add('opacity-100');
+                actionSheet.classList.remove('sheet-hidden');
+                actionSheet.classList.add('sheet-visible');
+            }, 10);
+        }
+
+        function hideActionSheet() {
+            actionSheetBackdrop.classList.remove('opacity-100');
+            actionSheet.classList.remove('sheet-visible');
+            actionSheet.classList.add('sheet-hidden');
+            setTimeout(() => {
+                actionSheetBackdrop.classList.add('hidden');
+            }, 300);
+        }
+
+        actionSheetBackdrop.addEventListener('click', hideActionSheet);
+        actionCancelBtn.addEventListener('click', hideActionSheet);
+
+        // ----------------------------------------------------
+        // IOS File Attachment Processes with Auto Resizer & Compressor
+        // ----------------------------------------------------
+        cameraInput.addEventListener('change', (e) => {
+            hideActionSheet();
+            handleFileAttachment(e);
+        });
+        galleryInput.addEventListener('change', (e) => {
+            hideActionSheet();
+            handleFileAttachment(e);
+        });
+
+        function handleFileAttachment(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) {
+                    showToast("画像のみ添付可能です 🖼️");
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // Max dimensions for browser stability and Gemini optimization (1024px)
+                        const maxDim = 1024;
+                        let width = img.width;
+                        let height = img.height;
+                        
+                        if (width > maxDim || height > maxDim) {
+                            if (width > height) {
+                                height = Math.round((height * maxDim) / width);
+                                width = maxDim;
+                            } else {
+                                width = Math.round((width * maxDim) / height);
+                                height = maxDim;
+                            }
+                        }
+
+                        // Resize using HTML5 Canvas
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Compress quality to 0.75 (dramatically reduces file size from 5MB to ~150KB)
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+                        const id = 'attach_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                        
+                        currentAttachments.push({
+                            id: id,
+                            name: file.name,
+                            base64Payload: compressedBase64.split(',')[1],
+                            fullBase64: compressedBase64,
+                            description: "" // Individual description goes here
+                        });
+
+                        renderAttachmentsCarousel();
+                        validateSendButton();
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // Reset file inputs so same file can be triggered again
+            cameraInput.value = '';
+            galleryInput.value = '';
+        }
+
+        // Render Carousel list of attachments
+        function renderAttachmentsCarousel() {
+            if (currentAttachments.length === 0) {
+                attachmentCarousel.classList.add('hidden');
+                attachmentCarousel.innerHTML = '';
+                return;
+            }
+
+            attachmentCarousel.classList.remove('hidden');
+            attachmentCarousel.innerHTML = '';
+
+            currentAttachments.forEach((attach, index) => {
+                const card = document.createElement('div');
+                card.className = 'w-44 bg-ios-gray-100 dark:bg-ios-gray-800 rounded-2xl p-2 pb-2.5 flex flex-col border border-ios-gray-200 dark:border-ios-gray-700 shadow-sm relative flex-shrink-0 snap-start';
+                
+                card.innerHTML = `
+                    <!-- Preview Image -->
+                    <div class="relative w-full h-24 bg-black rounded-xl overflow-hidden">
+                        <img src="${attach.fullBase64}" class="w-full h-full object-cover">
+                        <!-- Delete btn -->
+                        <button class="absolute top-1 right-1 w-6 h-6 bg-black/60 backdrop-blur-md rounded-full flex items-center justify-center text-white active:scale-90" onclick="removeAttachment('${attach.id}')">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                    <!-- Description textfield -->
+                    <input type="text" 
+                        placeholder="この画像の説明を追加..." 
+                        value="${escapeHTML(attach.description)}"
+                        class="text-[10px] w-full p-1.5 mt-2 bg-white dark:bg-ios-gray-900 border border-ios-gray-200 dark:border-ios-gray-700 rounded-lg focus:outline-none focus:border-purple-500 text-black dark:text-white" 
+                        oninput="updateAttachmentDesc('${attach.id}', this.value)">
+                `;
+
+                attachmentCarousel.appendChild(card);
+            });
+
+            lucide.createIcons();
+            // Scroll to the latest attachment
+            attachmentCarousel.scrollLeft = attachmentCarousel.scrollWidth;
+        }
+
+        window.removeAttachment = function(id) {
+            currentAttachments = currentAttachments.filter(item => item.id !== id);
+            renderAttachmentsCarousel();
+            validateSendButton();
+        };
+
+        window.updateAttachmentDesc = function(id, text) {
+            const item = currentAttachments.find(attach => attach.id === id);
+            if (item) {
+                item.description = text;
+            }
+        };
+
+        // ----------------------------------------------------
+        // Sending To Gemini API & Chat Render UI
+        // ----------------------------------------------------
+        aiSendBtn.addEventListener('click', async () => {
+            const userPromptText = aiChatInput.value.trim();
+            const attachedImages = [...currentAttachments]; // Copy current list
+
+            if (!userPromptText && attachedImages.length === 0) return;
+
+            // Clear Input Area Immediately (UI Snappiness)
+            aiChatInput.value = '';
+            aiChatInput.style.height = 'auto';
+            currentAttachments = [];
+            renderAttachmentsCarousel();
+            validateSendButton();
+
+            // Render User Chat Bubble
+            renderUserMessage(userPromptText, attachedImages);
+
+            // Render Bot Generating Loader Bubble
+            const botBubbleId = 'bot_' + Date.now();
+            renderBotLoader(botBubbleId);
+
+            // Create context payload representing currently registered calendar events.
+            // This is critically important so the AI knows what events currently exist.
+            const serializedCurrentEvents = events.map(e => ({
+                id: e.id,
+                title: e.title,
+                start: e.start,
+                end: e.end,
+                allday: e.allday,
+                location: e.location || "",
+                memo: e.memo || ""
+            }));
+
+            // --------------------------------------------------
+            // Build Prompt payload
+            // --------------------------------------------------
+            let promptText = `
+あなたはカレンダーアプリの極めて優秀なスケジュール管理AIアシスタント「予定追加太郎」です。
+ユーザーから届いた要望（テキスト、あるいは添付された画像）を解析し、次の4つのアクションのうち「最も適切なもの」を判別して、適切なデータ構造で回答してください。
+
+【実行アクション (action) の判別基準】
+1. "ADD_EVENTS":
+   - 新しい予定をカレンダーに登録（作成）しようとしている場合。
+   - 例: 「明日の14時に打合せを入れて」「シフトの画像から予定を登録して」
+
+2. "DELETE_EVENTS":
+   - 既存の予定をカレンダーから削除（取り消し、キャンセル、消去）しようとしている場合。
+   - 例: 「明日の打合せの予定を消して」「美容院の予約をキャンセルしたい」
+
+3. "LIST_EVENTS":
+   - 登録されている予定を確認、照会、一覧表示、検索しようとしている場合。
+   - 例: 「今週の予定を教えて」「明日は何時に予定がある？」「美容室っていつだっけ？」
+
+4. "CHAT":
+   - 単なる雑談、予定の立て方の相談、カレンダーに関係ない質問などの場合。
+   - 例: 「ありがとう！」「こんにちは！」「忙しい日の過ごし方のコツは？」
+
+---
+
+【現在のカレンダー上の登録予定データ】
+以下は、現時点でユーザーのカレンダーに登録されているすべての予定の一覧です。削除や確認、変更は、必ずこのデータに基づいて判断してください。
+${JSON.stringify(serializedCurrentEvents, null, 2)}
+
+【前提基準日付】
+- 現在時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+- 相対的な日時指定（例：「明日」「今週水曜」「来週」など）は、上記の現在時刻から正確な日付(YYYY-MM-DD)に読み替えてください。
+
+---
+
+【出力フォーマット】
+必ず以下のJSONスキーマに従ってJSONオブジェクトを出力してください。追加の文章や、マークダウン等の装飾をJSONの外側に書くのは絶対にやめてください（パースエラーの原因になります）。
+
+- action: "ADD_EVENTS" | "DELETE_EVENTS" | "LIST_EVENTS" | "CHAT"
+- aiMessage: 予定追加太郎としてのユーザーへのフレンドリーで親切な返答メッセージ（敬体）。予定の確認や削除の実行前に、ユーザーへ意図を確認したり案内したりする文章。
+- events: 作成、あるいは確認・削除の対象に合致する予定データの配列。
+  ※ ADD_EVENTS の場合は、新しく生成した予定データの配列を設定します（idは不要）。
+- targetEventIds:
+  ※ DELETE_EVENTS または LIST_EVENTS の場合、対象となる「既存の予定データ」の "id" の配列を正確に設定してください（複数ある場合は複数指定）。カレンダーの予定データとマッチさせるために必要です。
+`;
+
+            if (userPromptText) {
+                promptText += `\n\n【ユーザーからのメッセージ】\n${userPromptText}`;
+            }
+
+            if (attachedImages.length > 0) {
+                promptText += `\n\n【添付された画像についての追加情報】\n`;
+                attachedImages.forEach((img, index) => {
+                    promptText += `画像 ${index + 1} (${img.name}):\n`;
+                    promptText += `- 画像の説明: "${img.description || '特になし'}"\n`;
+                });
+            }
+
+            // Construct parts payload
+            const parts = [];
+            
+            // 1. Add prompt text
+            parts.push({ text: promptText });
+
+            // 2. Add raw images
+            attachedImages.forEach(img => {
+                parts.push({
+                    inlineData: {
+                        mimeType: "image/jpeg",
+                        data: img.base64Payload
+                    }
+                });
+            });
+
+            const payload = {
+                contents: [{ parts: parts }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            action: { type: "STRING" }, // "ADD_EVENTS", "DELETE_EVENTS", "LIST_EVENTS", "CHAT"
+                            aiMessage: { type: "STRING" }, // AI's chat message
+                            events: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        title: { type: "STRING" },
+                                        start: { type: "STRING" },
+                                        end: { type: "STRING" },
+                                        allday: { type: "BOOLEAN" },
+                                        location: { type: "STRING" },
+                                        memo: { type: "STRING" },
+                                        color: { type: "STRING" }
+                                    },
+                                    required: ["title", "start", "end", "allday", "color"]
+                                }
+                            },
+                            targetEventIds: {
+                                type: "ARRAY",
+                                items: { type: "STRING" }
+                            }
+                        },
+                        required: ["action", "aiMessage"]
+                    }
+                }
+            };
+
+            try {
+                const apiKey = "";
+                const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!textResult) {
+                    throw new Error("応答データが異常です");
+                }
+
+                const resultJson = JSON.parse(textResult);
+                
+                // Process Action-Based Output
+                handleAIResponseAction(botBubbleId, resultJson);
+
+            } catch (err) {
+                console.error("Gemini API Call Error: ", err);
+                renderBotError(botBubbleId);
+            }
+        });
+
+        // Render User message
+        function renderUserMessage(text, attachments) {
+            const userMsg = document.createElement('div');
+            userMsg.className = 'flex items-start space-x-2.5 justify-end';
+
+            let attachmentsHTML = '';
+            if (attachments.length > 0) {
+                attachmentsHTML = `<div class="flex flex-wrap gap-1.5 mb-2 justify-end">`;
+                attachments.forEach(att => {
+                    attachmentsHTML += `
+                        <div class="relative w-16 h-16 rounded-xl overflow-hidden border border-white/20 shadow-sm flex-shrink-0">
+                            <img src="${att.fullBase64}" class="w-full h-full object-cover">
+                            ${att.description ? `
+                            <span class="absolute bottom-0 inset-x-0 bg-black/70 text-[8px] text-white py-0.5 px-1 truncate text-center" title="${escapeHTML(att.description)}">
+                                ${escapeHTML(att.description)}
+                            </span>` : ''}
+                        </div>
+                    `;
+                });
+                attachmentsHTML += `</div>`;
+            }
+
+            userMsg.innerHTML = `
+                <div class="max-w-[80%] flex flex-col items-end">
+                    ${attachmentsHTML}
+                    ${text ? `
+                    <div class="bg-purple-600 dark:bg-purple-700 text-white p-3 rounded-2xl rounded-tr-none shadow-sm text-xs leading-relaxed font-medium">
+                        ${escapeHTML(text).replace(/\n/g, '<br>')}
+                    </div>` : ''}
+                </div>
+            `;
+
+            chatMessagesContainer.appendChild(userMsg);
+            scrollToBottom();
+        }
+
+        // Render Loading status
+        function renderBotLoader(id) {
+            const botMsg = document.createElement('div');
+            botMsg.className = 'flex items-start space-x-3';
+            botMsg.id = id;
+
+            botMsg.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                    <i data-lucide="sparkles" class="w-4 h-4 fill-current"></i>
+                </div>
+                <div class="max-w-[80%] bg-white dark:bg-ios-gray-800 p-4 rounded-2xl rounded-tl-none shadow-sm border border-ios-gray-100 dark:border-ios-gray-700/60">
+                    <div class="flex items-center gap-2 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                        <span class="animate-pulse">リクエストを解析中...</span>
+                        <div class="flex space-x-1">
+                            <span class="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce" style="animation-delay: 0.1s"></span>
+                            <span class="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
+                            <span class="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce" style="animation-delay: 0.3s"></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            chatMessagesContainer.appendChild(botMsg);
+            lucide.createIcons();
+            scrollToBottom();
+        }
+
+        function renderBotError(id) {
+            const botMsg = document.getElementById(id);
+            if (!botMsg) return;
+
+            botMsg.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                    <i data-lucide="sparkles" class="w-4 h-4 fill-current"></i>
+                </div>
+                <div class="max-w-[80%] bg-white dark:bg-ios-gray-800 p-4 rounded-2xl rounded-tl-none shadow-sm border border-ios-gray-100 dark:border-ios-gray-700/60">
+                    <p class="text-xs font-bold text-ios-red mb-1">通信エラー</p>
+                    <p class="text-xs leading-relaxed text-ios-gray-700 dark:text-ios-gray-300">
+                        大変申し訳ありません。サーバーとの通信で一時的なエラーが発生しました。時間をおいてもう一度お試しいただくか、入力内容を簡潔にしてお試しください。
+                    </p>
+                </div>
+            `;
+            lucide.createIcons();
+            scrollToBottom();
+        }
+
+        // ----------------------------------------------------
+        // 🔄 Action Handler for AI Response (ADD / DELETE / LIST / CHAT)
+        // ----------------------------------------------------
+        function handleAIResponseAction(botBubbleId, aiResponse) {
+            const botMsg = document.getElementById(botBubbleId);
+            if (!botMsg) return;
+
+            const action = aiResponse.action || 'CHAT';
+            const aiMessage = escapeHTML(aiResponse.aiMessage || '').replace(/\n/g, '<br>');
+            const responseEvents = aiResponse.events || [];
+            const targetIds = aiResponse.targetEventIds || [];
+
+            let interactiveHTML = `
+                <p class="text-xs font-bold text-purple-600 dark:text-purple-400 mb-1">予定追加太郎</p>
+                <p class="text-xs leading-relaxed text-ios-gray-800 dark:text-ios-gray-200 mb-1">${aiMessage}</p>
+            `;
+
+            // 1. ADD_EVENTS (Create new proposals)
+            if (action === 'ADD_EVENTS' && responseEvents.length > 0) {
+                interactiveHTML += `
+                    <div class="mt-3 pt-3 border-t border-ios-gray-100 dark:border-ios-gray-700/50 space-y-2.5">
+                        <p class="text-[10px] font-bold text-ios-purple">✨ 提案予定 (${responseEvents.length}件)</p>
+                `;
+
+                responseEvents.forEach((p, idx) => {
+                    const uniquePropId = `add_${botBubbleId}_${idx}`;
+                    const startObj = new Date(p.start);
+                    const displayDate = isNaN(startObj.getTime()) ? '不明な日付' : `${startObj.getFullYear()}年${startObj.getMonth() + 1}月${startObj.getDate()}日`;
+                    const displayTime = isNaN(startObj.getTime()) ? '' : (p.allday ? '終日' : `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`);
+
+                    interactiveHTML += `
+                        <div class="bg-ios-gray-100 dark:bg-ios-gray-900/80 p-2.5 rounded-xl border border-ios-gray-200 dark:border-ios-gray-700/60 relative flex flex-col space-y-2 text-xs" id="${uniquePropId}-card">
+                            <div class="flex items-start gap-2">
+                                <div class="w-1.5 h-6 rounded-full flex-shrink-0 mt-0.5" style="background-color: ${p.color || '#AF52DE'}"></div>
+                                <div class="flex-1 min-w-0">
+                                    <span class="font-bold text-black dark:text-white block truncate text-xs">${escapeHTML(p.title)}</span>
+                                    <span class="text-[10px] text-ios-gray-500 dark:text-ios-gray-400 block mt-0.5">${displayDate} ${displayTime}</span>
+                                </div>
+                            </div>
+                            <button onclick="registerProposalEvent('${encodeURIComponent(JSON.stringify(p))}', '${uniquePropId}')" 
+                                    id="${uniquePropId}-btn"
+                                    class="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 transition-all">
+                                <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> カレンダーに追加
+                            </button>
+                        </div>
+                    `;
+                });
+                interactiveHTML += `</div>`;
+
+            // 2. DELETE_EVENTS (Remove existing local events match)
+            } else if (action === 'DELETE_EVENTS' && targetIds.length > 0) {
+                const matchedLocalEvents = events.filter(e => targetIds.includes(e.id));
+                if (matchedLocalEvents.length > 0) {
+                    interactiveHTML += `
+                        <div class="mt-3 pt-3 border-t border-ios-gray-100 dark:border-ios-gray-700/50 space-y-2.5">
+                            <p class="text-[10px] font-bold text-ios-red">🗑️ 削除予定の一致リスト (${matchedLocalEvents.length}件)</p>
+                    `;
+
+                    matchedLocalEvents.forEach((e, idx) => {
+                        const uniquePropId = `del_${botBubbleId}_${idx}`;
+                        const startObj = new Date(e.start);
+                        const displayDate = isNaN(startObj.getTime()) ? '不明な日付' : `${startObj.getFullYear()}年${startObj.getMonth() + 1}月${startObj.getDate()}日`;
+                        const displayTime = isNaN(startObj.getTime()) ? '' : (e.allday ? '終日' : `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`);
+
+                        interactiveHTML += `
+                            <div class="bg-ios-gray-100 dark:bg-ios-gray-900/80 p-2.5 rounded-xl border border-ios-gray-200 dark:border-ios-gray-700/60 relative flex flex-col space-y-2 text-xs" id="${uniquePropId}-card">
+                                <div class="flex items-start gap-2">
+                                    <div class="w-1.5 h-6 rounded-full flex-shrink-0 mt-0.5" style="background-color: ${e.color || '#FF3B30'}"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <span class="font-bold text-black dark:text-white block truncate text-xs">${escapeHTML(e.title)}</span>
+                                        <span class="text-[10px] text-ios-gray-500 dark:text-ios-gray-400 block mt-0.5">${displayDate} ${displayTime}</span>
+                                    </div>
+                                </div>
+                                <button onclick="deleteLocalEventFromProposal('${e.id}', '${uniquePropId}')" 
+                                        id="${uniquePropId}-btn"
+                                        class="w-full py-1.5 bg-ios-red hover:bg-red-600 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 transition-all">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> カレンダーから削除
+                                </button>
+                            </div>
+                        `;
+                    });
+                    interactiveHTML += `</div>`;
+                }
+
+            // 3. LIST_EVENTS (Confirmation view list of matching events)
+            } else if (action === 'LIST_EVENTS' && targetIds.length > 0) {
+                const matchedLocalEvents = events.filter(e => targetIds.includes(e.id));
+                if (matchedLocalEvents.length > 0) {
+                    interactiveHTML += `
+                        <div class="mt-3 pt-3 border-t border-ios-gray-100 dark:border-ios-gray-700/50 space-y-2.5">
+                            <p class="text-[10px] font-bold text-ios-blue">🔍 検索ヒット (${matchedLocalEvents.length}件)</p>
+                    `;
+
+                    matchedLocalEvents.forEach((e, idx) => {
+                        const uniquePropId = `list_${botBubbleId}_${idx}`;
+                        const startObj = new Date(e.start);
+                        const displayDate = isNaN(startObj.getTime()) ? '不明な日付' : `${startObj.getFullYear()}年${startObj.getMonth() + 1}月${startObj.getDate()}日`;
+                        const displayTime = isNaN(startObj.getTime()) ? '' : (e.allday ? '終日' : `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`);
+
+                        interactiveHTML += `
+                            <div class="bg-ios-gray-100 dark:bg-ios-gray-900/80 p-2.5 rounded-xl border border-ios-gray-200 dark:border-ios-gray-700/60 relative flex flex-col space-y-2 text-xs" id="${uniquePropId}-card">
+                                <div class="flex items-start gap-2">
+                                    <div class="w-1.5 h-6 rounded-full flex-shrink-0 mt-0.5" style="background-color: ${e.color || '#007AFF'}"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <span class="font-bold text-black dark:text-white block truncate text-xs">${escapeHTML(e.title)}</span>
+                                        <span class="text-[10px] text-ios-gray-500 dark:text-ios-gray-400 block mt-0.5">${displayDate} ${displayTime}</span>
+                                    </div>
+                                </div>
+                                <button onclick="focusOnCalendarDate('${e.start}', '${uniquePropId}')" 
+                                        id="${uniquePropId}-btn"
+                                        class="w-full py-1.5 bg-ios-blue hover:bg-blue-600 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 transition-all">
+                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i> カレンダーで確認
+                                </button>
+                            </div>
+                        `;
+                    });
+                    interactiveHTML += `</div>`;
+                }
+            }
+
+            botMsg.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                    <i data-lucide="sparkles" class="w-4 h-4 fill-current"></i>
+                </div>
+                <div class="max-w-[80%] bg-white dark:bg-ios-gray-800 p-4 rounded-2xl rounded-tl-none shadow-sm border border-ios-gray-100 dark:border-ios-gray-700/60 flex-1 min-w-0">
+                    ${interactiveHTML}
+                </div>
+            `;
+
+            lucide.createIcons();
+            scrollToBottom();
+        }
+
+        // Global callback functions triggered by Proposal Actions Card
+        window.registerProposalEvent = function(encodedEvent, uniquePropId) {
+            try {
+                const eventData = JSON.parse(decodeURIComponent(encodedEvent));
+                eventData.id = 'event_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+                events.push(eventData);
+                saveAndSync();
+
+                const btn = document.getElementById(`${uniquePropId}-btn`);
+                const card = document.getElementById(`${uniquePropId}-card`);
+
+                if (btn) {
+                    btn.disabled = true;
+                    btn.className = "w-full py-1.5 bg-ios-green text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 mt-1 opacity-90 scale-100";
+                    btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> 登録しました`;
+                }
+                
+                if (card) {
+                    card.classList.add("border-ios-green/40", "bg-ios-green/5");
+                }
+
+                showToast("予定を追加しました ✨");
+                
+                // Refresh view date
+                selectedDate = new Date(eventData.start);
+                currentDate = new Date(selectedDate);
+                renderCalendar();
+                lucide.createIcons();
+
+            } catch (err) {
+                console.error("Failed to add proposal event", err);
+                showToast("追加に失敗しました ⚠️");
+            }
+        };
+
+        window.deleteLocalEventFromProposal = function(eventId, uniquePropId) {
+            events = events.filter(e => e.id !== eventId);
+            saveAndSync();
+
+            const btn = document.getElementById(`${uniquePropId}-btn`);
+            const card = document.getElementById(`${uniquePropId}-card`);
+
+            if (btn) {
+                btn.disabled = true;
+                btn.className = "w-full py-1.5 bg-ios-gray-400 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 mt-1 opacity-90 scale-100 cursor-default";
+                btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> 削除しました`;
+            }
+
+            if (card) {
+                card.classList.add("opacity-50");
+            }
+
+            showToast("カレンダーから予定を削除しました 🗑️");
+            renderCalendar();
+        };
+
+        window.focusOnCalendarDate = function(dateStr, uniquePropId) {
+            const targetDate = new Date(dateStr);
+            if (!isNaN(targetDate.getTime())) {
+                selectedDate = targetDate;
+                currentDate = new Date(targetDate);
+                renderCalendar();
+                closeScannerSheet();
+                showToast(`${targetDate.getFullYear()}年${targetDate.getMonth()+1}月${targetDate.getDate()}日を表示しました 📅`);
+            }
+        };
+
+        function scrollToBottom() {
+            setTimeout(() => {
+                aiChatHistory.scrollTo({
+                    top: aiChatHistory.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 50);
+        }
+
+        // ----------------------------------------------------
+        // ✨ NEW FEATURE 1: AI DAILY PLANNER
+        // ----------------------------------------------------
+        aiDailyPlannerBtn.addEventListener('click', async () => {
+            const dayEvents = getEventsForDate(selectedDate);
+            if (dayEvents.length === 0) {
+                showToast("本日の予定がありません ⚠️");
+                return;
+            }
+
+            aiSummaryContainer.classList.remove('hidden');
+            aiSummaryText.innerHTML = `
+                <div class="flex items-center gap-2 text-ios-purple">
+                    <span class="animate-pulse">✨ スケジュールを分析中...</span>
+                </div>
+            `;
+
+            const eventDetailsText = dayEvents.map((e, index) => {
+                const start = new Date(e.start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                const end = new Date(e.end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+                return `[予定 ${index + 1}]
+・タイトル: ${e.title}
+・時間: ${e.allday ? '終日' : start + '〜' + end}
+・場所: ${e.location || '指定なし'}
+・メモ: ${e.memo || 'なし'}`;
+            }).join('\n\n');
+
+            const prompt = `
+あなたは優秀なコンシェルジュです。ユーザーの「${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日」の一日のスケジュールをもとに、過ごし方や移動、持ち物のチェック、リラックスするための素晴らしいデイリーアドバイスプランを親しみやすく端的に作成してください。
+
+【本日のスケジュール】
+${eventDetailsText}
+
+【出力要件】
+- 日本語で最大200〜250文字程度で、分かりやすく弾丸リストや絵文字を交えてまとめてください。
+- スマホ画面にフィットするよう、簡潔さを極めてください。
+`;
+
+            try {
+                const apiKey = "";
+                const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!text) throw new Error("応答なし");
+
+                aiSummaryText.innerText = text;
+            } catch (err) {
+                console.error("AI Daily Planner failed: ", err);
+                aiSummaryText.innerText = "アドバイスの生成に失敗しました。時間をおいてもう一度お試しください。";
+            }
+        });
+
+        closeAiSummary.addEventListener('click', () => {
+            aiSummaryContainer.classList.add('hidden');
+        });
+
+        // ----------------------------------------------------
+        // ✨ NEW FEATURE 2: AI ADVICE FOR EVENT
+        // ----------------------------------------------------
+        window.getAIAdvice = async function(eventId, buttonElement) {
+            const event = events.find(e => e.id === eventId);
+            if (!event) return;
+
+            const displayDiv = document.getElementById(`ai-advice-display-${eventId}`);
+            displayDiv.classList.remove('hidden');
+            displayDiv.innerHTML = `
+                <div class="flex items-center gap-1.5 text-ios-purple animate-pulse">
+                    <i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i>
+                    <span>準備リストを作成中...</span>
+                </div>
+            `;
+            lucide.createIcons();
+
+            buttonElement.disabled = true;
+
+            const prompt = `
+イベント予定「${event.title}」について、パーソナルアシスタントとして、事前にどのような準備（持ち物、ToDo、心構えなど）をしておけば完璧か、実用的で気の利いたアドバイスを提供してください。
+
+【予定の詳細】
+・日時: ${new Date(event.start).toLocaleString('ja-JP')}
+・場所: ${event.location || '登録なし'}
+・メモ: ${event.memo || '登録なし'}
+
+【出力要件】
+- 日本語で簡潔に以下のフォーマット（絵文字つき）でまとめてください。
+🎒 **持ち物:** (1〜2点)
+✅ **事前ToDo:** (1〜2点)
+💡 **ワンポイント:** (1言)
+- 全体で150文字以内の非常に短いテキストにしてください。
+`;
+
+            try {
+                const apiKey = "";
+                const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!text) throw new Error("空レスポンス");
+
+                const formattedText = text
+                    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-ios-purple">$1</strong>')
+                    .replace(/\n/g, '<br>');
+
+                displayDiv.innerHTML = formattedText;
+            } catch (err) {
+                console.error("AI Advice generation failed: ", err);
+                displayDiv.innerHTML = `<span class="text-ios-red">アドバイスが読み込めませんでした。もう一度お試しください。</span>`;
+            } finally {
+                buttonElement.disabled = false;
+            }
+        };
+
+        // Initial render
+        renderCalendar();
+    </script>
+</body>
+</html>
