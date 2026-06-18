@@ -1,0 +1,150 @@
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Shared Calendar</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="calendar.css" />
+
+    <!-- Material Icons -->
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body>
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h2>Shared Calendar</h2>
+      </div>
+
+      <ul>
+        <li><span class="material-icons"> calendar_month </span>カレンダー</li>
+        <li><span class="material-icons"> groups </span>グループ予定</li>
+        <li><span class="material-icons"> person </span>個人予定</li>
+        <li><span class="material-icons"> settings </span>設定</li>
+      </ul>
+    </aside>
+
+    <div id="sidebarOverlay" class="overlay"></div>
+
+    <header class="header">
+      <div class="header-left">
+        <button id="menuBtn" class="icon-btn">
+          <span class="material-icons"> menu </span>
+        </button>
+        <h1>Shared Calendar</h1>
+      </div>
+
+      <div class="header-right">
+        <button id="todayBtn" class="today-btn">今月</button>
+        <button id="scheduleListBtn" class="icon-btn">
+          <span class="material-icons"> list </span>
+        </button>
+        <button id="themeBtn" class="icon-btn">
+          <span class="material-icons"> dark_mode </span>
+        </button>
+      </div>
+    </header>
+
+    <section class="calendar-nav">
+      <button id="prevBtn" class="nav-btn">
+        <span class="material-icons"> chevron_left </span>
+      </button>
+
+      <h2 id="currentTitle">2026年6月</h2>
+
+      <button id="nextBtn" class="nav-btn">
+        <span class="material-icons"> chevron_right </span>
+      </button>
+    </section>
+
+    <section class="view-switch">
+      <button id="monthViewBtn" class="view-btn active">月</button>
+      <button id="weekViewBtn" class="view-btn">週</button>
+      <button id="dayViewBtn" class="view-btn">日</button>
+    </section>
+
+    <section id="weekHeader" class="week-header">
+      <div class="sun">日</div>
+      <div>月</div>
+      <div>火</div>
+      <div>水</div>
+      <div>木</div>
+      <div>金</div>
+      <div class="sat">土</div>
+    </section>
+
+    <main id="monthView" class="month-view"></main>
+    <main id="weekView" class="week-view hidden"></main>
+    <main id="dayView" class="day-view hidden"></main>
+
+    <button id="addEventBtn" class="fab">
+      <span class="material-icons"> add </span>
+    </button>
+
+    <div id="eventModal" class="modal">
+      <div class="modal-content">
+        <h2>予定登録</h2>
+
+        <input
+          type="text"
+          id="eventTitle"
+          maxlength="100"
+          placeholder="タイトル"
+        />
+
+        <label>開始日時</label>
+        <input type="datetime-local" id="eventStart" />
+
+        <label>終了日時</label>
+        <input type="datetime-local" id="eventEnd" />
+
+        <label class="checkbox">
+          <input type="checkbox" id="allDay" />
+          終日予定
+        </label>
+
+        <select id="eventVisibility">
+          <option value="public">全体公開</option>
+          <option value="group">グループ公開</option>
+          <option value="private">自分のみ</option>
+        </select>
+
+        <textarea id="eventMemo" rows="5" placeholder="メモ"></textarea>
+
+        <div class="modal-actions">
+          <button id="saveEventBtn">保存</button>
+          <button id="deleteEventBtn">削除</button>
+          <button id="closeModalBtn">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="listModal" class="modal">
+      <div class="modal-content list-modal">
+        <h2>予定一覧</h2>
+
+        <div class="list-mode">
+          <button data-filter="day">日</button>
+          <button data-filter="week">週</button>
+          <button data-filter="month">月</button>
+        </div>
+
+        <div id="scheduleList"></div>
+
+        <button id="closeListBtn">閉じる</button>
+      </div>
+    </div>
+
+    <div id="loading" class="loading hidden">読み込み中...</div>
+
+    <script src="calendar.js"></script>
+  </body>
+</html>
