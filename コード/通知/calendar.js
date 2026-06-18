@@ -156,14 +156,16 @@ function resetForm() {
 // 新規予定登録
 // 要件:
 // - 開始日時 = 現在の年月日時分
-// - 終了日時 = 開始日時より後（+1時間）
+// - 終了日時 = 開始日時の日付 +1日（同時刻）
 // ==========================================
 function openCreateEvent() {
   resetForm();
 
   const now = new Date();
   const start = ceilToNext5Minutes(now);
-  const end = new Date(start.getTime() + 60 * 60 * 1000); // +1時間
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1); // 日 + 1
 
   document.getElementById("eventStart").value = formatDateTimeLocal(start);
   document.getElementById("eventEnd").value = formatDateTimeLocal(end);
@@ -211,7 +213,6 @@ function showWindowsNotification(title, body, tag) {
   });
 
   n.onclick = () => {
-    // ここを明示遷移にしてルート飛びを防止
     window.location.href = CURRENT_PAGE_URL;
     window.focus();
     n.close();
@@ -796,6 +797,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 // 開始/終了の整合を入力中にも補正
+// 要件: 終了日時は開始日時の日付 +1日（同時刻）を最低値にする
 document.getElementById("eventStart").addEventListener("change", (e) => {
   const startVal = e.target.value;
   const endInput = document.getElementById("eventEnd");
@@ -803,12 +805,14 @@ document.getElementById("eventStart").addEventListener("change", (e) => {
   if (!startVal) return;
 
   const startDate = new Date(startVal);
+  const minEnd = new Date(startDate);
+  minEnd.setDate(minEnd.getDate() + 1);
+
   const endDate = new Date(endInput.value);
 
-  // 終了が未入力 or 開始以下なら +1時間に補正
-  if (!endInput.value || isNaN(endDate.getTime()) || endDate <= startDate) {
-    const fixedEnd = new Date(startDate.getTime() + 60 * 60 * 1000);
-    endInput.value = formatDateTimeLocal(fixedEnd);
+  // 終了未入力 or 開始+1日より前なら補正
+  if (!endInput.value || isNaN(endDate.getTime()) || endDate < minEnd) {
+    endInput.value = formatDateTimeLocal(minEnd);
   }
 });
 
