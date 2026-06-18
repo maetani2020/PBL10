@@ -296,8 +296,7 @@ export function initAuthForm() {
 // Google Login (Google Identity Services)
 // -------------------------------------------------------
 async function handleGoogleLogin() {
-  // Google Identity Services を使用したモック実装
-  // 本番環境ではGoogle Cloud ConsoleのクライアントIDが必要
+  // Google Identity Services を使用した実装
   const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || '';
 
   if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
@@ -326,8 +325,27 @@ async function handleGoogleLogin() {
     });
     window.google.accounts.id.prompt();
   } else {
-    // デモ用モックフロー（Google Client ID未設定時）
-    showToast('Google Client IDが設定されていません（backend/.env に GOOGLE_CLIENT_ID を追加）');
+    // デモ用モックフロー（Google Client ID未設定時：自動的にダミーGoogleアカウントで登録・ログインする）
+    showToast('Google Client ID未設定のため、デモGoogleアカウントで自動サインインします ⚙️');
+    
+    try {
+      const data = await apiRequest('/api/auth/google-login', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          email: 'demo-google-user@example.com', 
+          display_name: 'デモGoogleユーザー' 
+        }),
+      });
+      setAuthToken(data.token);
+      if (data.refreshToken) setRefreshToken(data.refreshToken);
+      setCurrentUser(data.user);
+      hideAuthOverlay();
+      updateUserDisplay();
+      showToast(`【デモ】Googleアカウントでサインインしました！ようこそ、${data.user.display_name}さん`);
+      document.dispatchEvent(new CustomEvent('auth:loggedin'));
+    } catch (err) {
+      console.error('Demo Google login error:', err);
+    }
   }
 }
 
@@ -505,7 +523,16 @@ export function initAccountPanel() {
 // -------------------------------------------------------
 // checkAuth: called on page load
 // -------------------------------------------------------
-export function checkAuth() {
+export async function checkAuth() {
+  // バックエンドから設定情報（Google Client ID）を取得
+  try {
+    const res = await fetch('/api/config');
+    const data = await res.json();
+    window.GOOGLE_CLIENT_ID = data.googleClientId;
+  } catch (err) {
+    console.error('Failed to load config:', err);
+  }
+
   if (isLoggedIn()) {
     hideAuthOverlay();
     updateUserDisplay();

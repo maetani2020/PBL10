@@ -657,7 +657,7 @@ body.dark .action-sheet-buttons {
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
-  z-index: 3000;
+  z-index: 10000;
   transition: opacity 0.3s ease;
   pointer-events: none;
 }

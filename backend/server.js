@@ -49,6 +49,13 @@ app.use('/api/household', householdRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Config endpoint to provide credentials to client
+app.get('/api/config', (req, res) => {
+    res.json({
+        googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+    });
+});
+
 // Fallback: serve the main calendar frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(projectRoot, 'calendar.html'));
