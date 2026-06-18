@@ -32,6 +32,9 @@ const currentTitle = document.getElementById("currentTitle");
 const eventModal = document.getElementById("eventModal");
 const listModal = document.getElementById("listModal");
 
+// 現在ページURL（通知クリック復帰先）
+const CURRENT_PAGE_URL = window.location.href;
+
 // ==========================================
 // イベント取得
 // ==========================================
@@ -65,6 +68,26 @@ function formatDate(date) {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+// datetime-local用 YYYY-MM-DDTHH:mm
+function formatDateTimeLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d}T${hh}:${mm}`;
+}
+
+// 分を5分単位で切り上げ
+function ceilToNext5Minutes(date) {
+  const d = new Date(date);
+  d.setSeconds(0, 0);
+  const m = d.getMinutes();
+  const add = (5 - (m % 5)) % 5;
+  d.setMinutes(m + add);
+  return d;
 }
 
 // ==========================================
@@ -131,11 +154,20 @@ function resetForm() {
 
 // ==========================================
 // 新規予定登録
+// 要件:
+// - 開始日時 = 現在の年月日時分
+// - 終了日時 = 開始日時より後（+1時間）
 // ==========================================
-function openCreateEvent(dateStr) {
+function openCreateEvent() {
   resetForm();
-  document.getElementById("eventStart").value = dateStr + "T09:00";
-  document.getElementById("eventEnd").value = dateStr + "T10:00";
+
+  const now = new Date();
+  const start = ceilToNext5Minutes(now);
+  const end = new Date(start.getTime() + 60 * 60 * 1000); // +1時間
+
+  document.getElementById("eventStart").value = formatDateTimeLocal(start);
+  document.getElementById("eventEnd").value = formatDateTimeLocal(end);
+
   openModal();
 }
 
@@ -179,6 +211,8 @@ function showWindowsNotification(title, body, tag) {
   });
 
   n.onclick = () => {
+    // ここを明示遷移にしてルート飛びを防止
+    window.location.href = CURRENT_PAGE_URL;
     window.focus();
     n.close();
   };
@@ -189,7 +223,6 @@ function showWindowsNotification(title, body, tag) {
 // ==========================================
 // 予定通知チェック
 // 30分前 / 5分前 / 開始時刻
-// ※ Windows本体時刻（new Date）に同期
 // ==========================================
 function checkEventNotifications() {
   const events = getEvents();
@@ -212,38 +245,22 @@ function checkEventNotifications() {
     const key5 = `${baseKey}_5`;
     const keyStart = `${baseKey}_start`;
 
-    // 30分前通知
     if (diffMin <= 30 && diffMin > 29 && !flags[key30]) {
-      showWindowsNotification(
-        "予定通知",
-        `「${event.title}」の30分前です`,
-        key30
-      );
+      showWindowsNotification("予定通知", `「${event.title}」の30分前です`, key30);
       flags[key30] = true;
     }
 
-    // 5分前通知
     if (diffMin <= 5 && diffMin > 4 && !flags[key5]) {
-      showWindowsNotification(
-        "予定通知",
-        `「${event.title}」の5分前です`,
-        key5
-      );
+      showWindowsNotification("予定通知", `「${event.title}」の5分前です`, key5);
       flags[key5] = true;
     }
 
-    // 開始時刻通知（前回チェック〜今回チェックでまたいだら通知）
     if (!flags[keyStart] && startTime > prev && startTime <= now) {
-      showWindowsNotification(
-        "予定通知",
-        `「${event.title}」の開始時刻になりました`,
-        keyStart
-      );
+      showWindowsNotification("予定通知", `「${event.title}」の開始時刻になりました`, keyStart);
       flags[keyStart] = true;
     }
   });
 
-  // 不要フラグ掃除
   const eventKeys = new Set(events.map((e) => `${e.id}_${e.start}`));
   Object.keys(flags).forEach((k) => {
     const prefix = k.replace(/_(30|5|start)$/, "");
@@ -325,7 +342,7 @@ function renderMonthView() {
     });
 
     cell.addEventListener("click", () => {
-      openCreateEvent(dateStr);
+      openCreateEvent();
     });
 
     monthView.appendChild(cell);
@@ -560,8 +577,8 @@ function saveEvent() {
     return;
   }
 
-  if (start > end) {
-    alert("終了日時が開始日時より前です");
+  if (start >= end) {
+    alert("終了日時は開始日時より後にしてください");
     return;
   }
 
@@ -767,8 +784,7 @@ document.getElementById("menuBtn").addEventListener("click", () => {
 sidebarOverlay.addEventListener("click", closeSidebar);
 
 document.getElementById("addEventBtn").addEventListener("click", () => {
-  const today = formatDate(currentDate);
-  openCreateEvent(today);
+  openCreateEvent();
 });
 
 document.addEventListener("keydown", (e) => {
@@ -776,6 +792,23 @@ document.addEventListener("keydown", (e) => {
     closeModal();
     closeListModal();
     closeSidebar();
+  }
+});
+
+// 開始/終了の整合を入力中にも補正
+document.getElementById("eventStart").addEventListener("change", (e) => {
+  const startVal = e.target.value;
+  const endInput = document.getElementById("eventEnd");
+
+  if (!startVal) return;
+
+  const startDate = new Date(startVal);
+  const endDate = new Date(endInput.value);
+
+  // 終了が未入力 or 開始以下なら +1時間に補正
+  if (!endInput.value || isNaN(endDate.getTime()) || endDate <= startDate) {
+    const fixedEnd = new Date(startDate.getTime() + 60 * 60 * 1000);
+    endInput.value = formatDateTimeLocal(fixedEnd);
   }
 });
 
