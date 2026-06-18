@@ -17,6 +17,10 @@ let lastCheckTime = new Date(); // 前回チェック時刻（取りこぼし防
 // 通知済み管理キー
 const NOTIFIED_KEY = "shared_calendar_notified_flags";
 const NOTIFICATION_ENABLED_KEY = "shared_calendar_notification_enabled";
+const NOTIFICATION_HISTORY_KEY = "shared_calendar_notification_history";
+
+// 30日（ミリ秒）
+const NOTIFICATION_HISTORY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 // ==========================================
 // LocalStorageキー
@@ -34,6 +38,13 @@ const eventModal = document.getElementById("eventModal");
 const listModal = document.getElementById("listModal");
 const notifyToggleBtn = document.getElementById("notifyToggleBtn");
 const notifyToggleIcon = document.getElementById("notifyToggleIcon");
+
+// 通知履歴
+const notificationHistoryBtn = document.getElementById("notificationHistoryBtn");
+const notificationHistoryModal = document.getElementById("notificationHistoryModal");
+const notificationHistoryList = document.getElementById("notificationHistoryList");
+const closeNotificationHistoryBtn = document.getElementById("closeNotificationHistoryBtn");
+const clearNotificationHistoryBtn = document.getElementById("clearNotificationHistoryBtn");
 
 // 現在ページURL（通知クリック復帰先）
 const CURRENT_PAGE_URL = window.location.href;
@@ -57,7 +68,6 @@ function saveEvents(events) {
 // ==========================================
 function isNotificationEnabled() {
   const raw = localStorage.getItem(NOTIFICATION_ENABLED_KEY);
-  // 未設定ならON扱い
   if (raw === null) return true;
   return raw === "true";
 }
@@ -76,6 +86,88 @@ function updateNotificationToggleUI() {
     notifyToggleIcon.textContent = "notifications_off";
     notifyToggleBtn.title = "通知OFF（クリックでON）";
   }
+}
+
+// ==========================================
+// 通知履歴管理（30日保持）
+// ==========================================
+function getNotificationHistory() {
+  return JSON.parse(localStorage.getItem(NOTIFICATION_HISTORY_KEY)) || [];
+}
+
+function saveNotificationHistory(items) {
+  localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(items));
+}
+
+function pruneOldNotificationHistory() {
+  const now = Date.now();
+  const items = getNotificationHistory();
+  const pruned = items.filter((item) => {
+    return now - item.timestamp <= NOTIFICATION_HISTORY_RETENTION_MS;
+  });
+  saveNotificationHistory(pruned);
+}
+
+function addNotificationHistory({ title, body, tag }) {
+  pruneOldNotificationHistory();
+
+  const items = getNotificationHistory();
+  items.unshift({
+    id: Date.now() + "_" + Math.floor(Math.random() * 100000),
+    title,
+    body,
+    tag: tag || "",
+    timestamp: Date.now(),
+  });
+
+  saveNotificationHistory(items);
+}
+
+function formatDateTimeForHistory(ts) {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${y}/${m}/${day} ${hh}:${mm}:${ss}`;
+}
+
+function renderNotificationHistory() {
+  pruneOldNotificationHistory();
+
+  const items = getNotificationHistory();
+  notificationHistoryList.innerHTML = "";
+
+  if (items.length === 0) {
+    notificationHistoryList.innerHTML = `
+      <p style="padding:20px; text-align:center;">通知履歴はありません</p>
+    `;
+    return;
+  }
+
+  items.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "event-card";
+    card.innerHTML = `
+      <div style="padding:12px; border-bottom:1px solid #ddd;">
+        <h4>${item.title}</h4>
+        <p>${item.body}</p>
+        <p style="opacity:0.8;">${formatDateTimeForHistory(item.timestamp)}</p>
+      </div>
+    `;
+    notificationHistoryList.appendChild(card);
+  });
+}
+
+function openNotificationHistoryModal() {
+  renderNotificationHistory();
+  notificationHistoryModal.style.display = "flex";
+}
+
+function closeNotificationHistoryModal() {
+  notificationHistoryModal.style.display = "none";
 }
 
 // ==========================================
@@ -183,7 +275,6 @@ function resetForm() {
 
 // ==========================================
 // 新規予定登録
-// 要件:
 // - 開始日時 = 現在の年月日時分
 // - 終了日時 = 開始日時の日付 +1日（同時刻）
 // ==========================================
@@ -194,7 +285,7 @@ function openCreateEvent() {
   const start = ceilToNext5Minutes(now);
 
   const end = new Date(start);
-  end.setDate(end.getDate() + 1); // 日 + 1
+  end.setDate(end.getDate() + 1);
 
   document.getElementById("eventStart").value = formatDateTimeLocal(start);
   document.getElementById("eventEnd").value = formatDateTimeLocal(end);
@@ -241,6 +332,9 @@ function showWindowsNotification(title, body, tag) {
     tag: tag || "shared-calendar",
     icon: "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4c5.png",
   });
+
+  // 通知履歴に保存（30日保持）
+  addNotificationHistory({ title, body, tag });
 
   n.onclick = () => {
     window.location.href = CURRENT_PAGE_URL;
@@ -318,6 +412,7 @@ function startNotificationWatcher() {
 
   notificationTimer = setInterval(() => {
     checkEventNotifications();
+    pruneOldNotificationHistory(); // 自動削除
   }, 5000);
 }
 
@@ -761,6 +856,10 @@ function initializeStorage() {
   if (!localStorage.getItem(NOTIFICATION_ENABLED_KEY)) {
     setNotificationEnabled(true);
   }
+  if (!localStorage.getItem(NOTIFICATION_HISTORY_KEY)) {
+    saveNotificationHistory([]);
+  }
+  pruneOldNotificationHistory();
 }
 
 function clearAllEvents() {
@@ -831,11 +930,11 @@ document.addEventListener("keydown", (e) => {
     closeModal();
     closeListModal();
     closeSidebar();
+    closeNotificationHistoryModal();
   }
 });
 
-// 開始/終了の整合を入力中にも補正
-// 要件: 終了日時は開始日時の日付 +1日（同時刻）を最低値にする
+// 開始/終了の整合補正（終了は開始+1日が最低）
 document.getElementById("eventStart").addEventListener("change", (e) => {
   const startVal = e.target.value;
   const endInput = document.getElementById("eventEnd");
@@ -864,7 +963,6 @@ notifyToggleBtn.addEventListener("click", async () => {
     return;
   }
 
-  // OFF -> ON
   const granted = await ensureNotificationPermission();
   if (!granted) {
     alert("通知をONにできませんでした（ブラウザ通知が許可されていません）");
@@ -875,6 +973,28 @@ notifyToggleBtn.addEventListener("click", async () => {
   updateNotificationToggleUI();
   alert("通知をONにしました");
   checkEventNotifications();
+});
+
+// 通知履歴ボタン
+notificationHistoryBtn.addEventListener("click", () => {
+  openNotificationHistoryModal();
+});
+
+closeNotificationHistoryBtn.addEventListener("click", () => {
+  closeNotificationHistoryModal();
+});
+
+clearNotificationHistoryBtn.addEventListener("click", () => {
+  const ok = confirm("通知履歴をすべて削除しますか？");
+  if (!ok) return;
+  saveNotificationHistory([]);
+  renderNotificationHistory();
+});
+
+notificationHistoryModal.addEventListener("click", (e) => {
+  if (e.target === notificationHistoryModal) {
+    closeNotificationHistoryModal();
+  }
 });
 
 // ==========================================

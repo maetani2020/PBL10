@@ -48,9 +48,14 @@
           <span class="material-icons"> list </span>
         </button>
 
-        <!-- 通知ON/OFF（ダークモードの左に追加） -->
+        <!-- 通知ON/OFF -->
         <button id="notifyToggleBtn" class="icon-btn" title="通知ON/OFF">
           <span id="notifyToggleIcon" class="material-icons"> notifications </span>
+        </button>
+
+        <!-- 通知履歴（ON/OFFの横） -->
+        <button id="notificationHistoryBtn" class="icon-btn" title="通知履歴">
+          <span class="material-icons"> history </span>
         </button>
 
         <button id="themeBtn" class="icon-btn" title="ダークモード">
@@ -146,6 +151,20 @@
         <div id="scheduleList"></div>
 
         <button id="closeListBtn">閉じる</button>
+      </div>
+    </div>
+
+    <!-- 通知履歴モーダル -->
+    <div id="notificationHistoryModal" class="modal">
+      <div class="modal-content list-modal">
+        <h2>通知履歴（30日間）</h2>
+
+        <div id="notificationHistoryList" style="max-height: 400px; overflow: auto;"></div>
+
+        <div class="modal-actions" style="margin-top: 10px;">
+          <button id="clearNotificationHistoryBtn">履歴を全削除</button>
+          <button id="closeNotificationHistoryBtn">閉じる</button>
+        </div>
       </div>
     </div>
 
