@@ -12,6 +12,7 @@ let selectedEventId = null;
 
 // 通知監視タイマー
 let notificationTimer = null;
+let lastCheckTime = new Date(); // 前回チェック時刻（取りこぼし防止）
 
 // 通知済み管理キー
 const NOTIFIED_KEY = "shared_calendar_notified_flags";
@@ -193,6 +194,7 @@ function showWindowsNotification(title, body, tag) {
 function checkEventNotifications() {
   const events = getEvents();
   const now = new Date();
+  const prev = lastCheckTime || new Date(now.getTime() - 5000);
   const flags = getNotifiedFlags();
 
   events.forEach((event) => {
@@ -203,14 +205,14 @@ function checkEventNotifications() {
     if (isNaN(startTime.getTime())) return;
 
     const diffMs = startTime.getTime() - now.getTime();
-    const diffMin = diffMs / 60000; // 小数ありで扱う
+    const diffMin = diffMs / 60000;
 
     const baseKey = `${event.id}_${event.start}`;
     const key30 = `${baseKey}_30`;
     const key5 = `${baseKey}_5`;
-    const key0 = `${baseKey}_0`;
+    const keyStart = `${baseKey}_start`;
 
-    // 30分前: 30分をまたいだら通知（取りこぼしに強い）
+    // 30分前通知
     if (diffMin <= 30 && diffMin > 29 && !flags[key30]) {
       showWindowsNotification(
         "予定通知",
@@ -220,7 +222,7 @@ function checkEventNotifications() {
       flags[key30] = true;
     }
 
-    // 5分前
+    // 5分前通知
     if (diffMin <= 5 && diffMin > 4 && !flags[key5]) {
       showWindowsNotification(
         "予定通知",
@@ -230,42 +232,40 @@ function checkEventNotifications() {
       flags[key5] = true;
     }
 
-    // 開始時刻（=0分前）
-    if (diffMs <= 60000 && diffMs >= 0 && !flags[key0]) {
+    // 開始時刻通知（前回チェック〜今回チェックでまたいだら通知）
+    if (!flags[keyStart] && startTime > prev && startTime <= now) {
       showWindowsNotification(
         "予定通知",
-        `「${event.title}」の0分前です（開始時刻）`,
-        key0
+        `「${event.title}」の開始時刻になりました`,
+        keyStart
       );
-      flags[key0] = true;
+      flags[keyStart] = true;
     }
   });
 
   // 不要フラグ掃除
   const eventKeys = new Set(events.map((e) => `${e.id}_${e.start}`));
   Object.keys(flags).forEach((k) => {
-    const prefix = k.replace(/_(30|5|0)$/, "");
+    const prefix = k.replace(/_(30|5|start)$/, "");
     if (!eventKeys.has(prefix)) delete flags[k];
   });
 
   saveNotifiedFlags(flags);
+  lastCheckTime = now;
 }
 
 // ==========================================
-// 通知監視開始（30秒ごと）
+// 通知監視開始（5秒ごと）
 // ==========================================
 function startNotificationWatcher() {
-  if (notificationTimer) {
-    clearInterval(notificationTimer);
-  }
+  if (notificationTimer) clearInterval(notificationTimer);
 
-  // 起動時に即1回
+  lastCheckTime = new Date();
   checkEventNotifications();
 
-  // 30秒ごとに判定
   notificationTimer = setInterval(() => {
     checkEventNotifications();
-  }, 30000);
+  }, 5000);
 }
 
 // ==========================================
@@ -594,12 +594,10 @@ function saveEvent() {
   closeModal();
   refreshCurrentView();
 
-  // 作成時のみWebダイアログ
   if (!isEdit) {
     alert(`予定を作成しました：${title}`);
   }
 
-  // 新規・編集ともに通知判定を即再評価
   checkEventNotifications();
 }
 
@@ -616,7 +614,6 @@ function deleteEvent() {
   events = events.filter((event) => event.id !== selectedEventId);
   saveEvents(events);
 
-  // 通知フラグから削除イベント分を掃除
   const flags = getNotifiedFlags();
   Object.keys(flags).forEach((k) => {
     if (String(k).startsWith(String(selectedEventId) + "_")) {
@@ -628,7 +625,6 @@ function deleteEvent() {
   closeModal();
   refreshCurrentView();
 
-  // 削除時Webダイアログ
   alert(`予定を削除しました：${deletedTitle}`);
 }
 
@@ -796,7 +792,6 @@ async function init() {
   renderDayView();
   switchView("month");
 
-  // 通知許可（初回）
   const asked = localStorage.getItem("notificationAsked");
   if (!asked) {
     const ok = confirm("Windows通知（30分前/5分前/開始時刻）を有効にしますか？");
