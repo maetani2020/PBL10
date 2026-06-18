@@ -16,6 +16,7 @@ let lastCheckTime = new Date(); // 前回チェック時刻（取りこぼし防
 
 // 通知済み管理キー
 const NOTIFIED_KEY = "shared_calendar_notified_flags";
+const NOTIFICATION_ENABLED_KEY = "shared_calendar_notification_enabled";
 
 // ==========================================
 // LocalStorageキー
@@ -31,6 +32,8 @@ const dayView = document.getElementById("dayView");
 const currentTitle = document.getElementById("currentTitle");
 const eventModal = document.getElementById("eventModal");
 const listModal = document.getElementById("listModal");
+const notifyToggleBtn = document.getElementById("notifyToggleBtn");
+const notifyToggleIcon = document.getElementById("notifyToggleIcon");
 
 // 現在ページURL（通知クリック復帰先）
 const CURRENT_PAGE_URL = window.location.href;
@@ -47,6 +50,32 @@ function getEvents() {
 // ==========================================
 function saveEvents(events) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+}
+
+// ==========================================
+// 通知ON/OFF状態
+// ==========================================
+function isNotificationEnabled() {
+  const raw = localStorage.getItem(NOTIFICATION_ENABLED_KEY);
+  // 未設定ならON扱い
+  if (raw === null) return true;
+  return raw === "true";
+}
+
+function setNotificationEnabled(enabled) {
+  localStorage.setItem(NOTIFICATION_ENABLED_KEY, String(enabled));
+}
+
+function updateNotificationToggleUI() {
+  const enabled = isNotificationEnabled();
+
+  if (enabled) {
+    notifyToggleIcon.textContent = "notifications";
+    notifyToggleBtn.title = "通知ON（クリックでOFF）";
+  } else {
+    notifyToggleIcon.textContent = "notifications_off";
+    notifyToggleBtn.title = "通知OFF（クリックでON）";
+  }
 }
 
 // ==========================================
@@ -203,6 +232,7 @@ async function ensureNotificationPermission() {
 // Windows通知表示
 // ==========================================
 function showWindowsNotification(title, body, tag) {
+  if (!isNotificationEnabled()) return;
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
 
@@ -226,6 +256,11 @@ function showWindowsNotification(title, body, tag) {
 // 30分前 / 5分前 / 開始時刻
 // ==========================================
 function checkEventNotifications() {
+  if (!isNotificationEnabled()) {
+    lastCheckTime = new Date();
+    return;
+  }
+
   const events = getEvents();
   const now = new Date();
   const prev = lastCheckTime || new Date(now.getTime() - 5000);
@@ -723,6 +758,9 @@ function initializeStorage() {
   const data = localStorage.getItem(STORAGE_KEY);
   if (!data) saveEvents([]);
   if (!localStorage.getItem(NOTIFIED_KEY)) saveNotifiedFlags({});
+  if (!localStorage.getItem(NOTIFICATION_ENABLED_KEY)) {
+    setNotificationEnabled(true);
+  }
 }
 
 function clearAllEvents() {
@@ -810,10 +848,33 @@ document.getElementById("eventStart").addEventListener("change", (e) => {
 
   const endDate = new Date(endInput.value);
 
-  // 終了未入力 or 開始+1日より前なら補正
   if (!endInput.value || isNaN(endDate.getTime()) || endDate < minEnd) {
     endInput.value = formatDateTimeLocal(minEnd);
   }
+});
+
+// 通知ON/OFFボタン
+notifyToggleBtn.addEventListener("click", async () => {
+  const current = isNotificationEnabled();
+
+  if (current) {
+    setNotificationEnabled(false);
+    updateNotificationToggleUI();
+    alert("通知をOFFにしました");
+    return;
+  }
+
+  // OFF -> ON
+  const granted = await ensureNotificationPermission();
+  if (!granted) {
+    alert("通知をONにできませんでした（ブラウザ通知が許可されていません）");
+    return;
+  }
+
+  setNotificationEnabled(true);
+  updateNotificationToggleUI();
+  alert("通知をONにしました");
+  checkEventNotifications();
 });
 
 // ==========================================
@@ -829,13 +890,19 @@ async function init() {
   renderDayView();
   switchView("month");
 
+  updateNotificationToggleUI();
+
   const asked = localStorage.getItem("notificationAsked");
   if (!asked) {
     const ok = confirm("Windows通知（30分前/5分前/開始時刻）を有効にしますか？");
     if (ok) {
-      await ensureNotificationPermission();
+      const granted = await ensureNotificationPermission();
+      setNotificationEnabled(granted);
+    } else {
+      setNotificationEnabled(false);
     }
     localStorage.setItem("notificationAsked", "true");
+    updateNotificationToggleUI();
   }
 
   startNotificationWatcher();
