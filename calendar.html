@@ -16,6 +16,9 @@
       href="https://fonts.googleapis.com/icon?family=Material+Icons"
       rel="stylesheet"
     />
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
   </head>
 
   <body>
@@ -81,6 +84,12 @@
           <span class="material-icons"> list </span>
         </button>
 
+        <!-- AIアシスタント -->
+
+        <button id="aiScannerTrigger" class="icon-btn ai-sparkles-btn" title="AIアシスタント">
+          <span class="material-icons">auto_awesome</span>
+        </button>
+
         <!-- ダークモード -->
 
         <button id="themeBtn" class="icon-btn">
@@ -130,6 +139,24 @@
       <div>金</div>
       <div class="sat">土</div>
     </section>
+
+    <!-- =========================
+     AIによる一日アドバイス
+========================== -->
+
+    <div id="aiSummaryContainer" class="ai-summary-container hidden">
+      <div class="ai-summary-header">
+        <span class="ai-summary-title">
+          <span class="material-icons">auto_awesome</span> AIによる一日アドバイス
+        </span>
+        <button id="closeAiSummary" class="ai-summary-close-btn">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div id="aiSummaryText" class="ai-summary-text">
+        計画作成中...
+      </div>
+    </div>
 
     <!-- =========================
      月表示
@@ -253,6 +280,126 @@
 ========================== -->
 
     <div id="loading" class="loading hidden">読み込み中...</div>
+
+    <!-- ========================================== -->
+    <!-- AI ASSISTANT SHEET & BACKDROPS -->
+    <!-- ========================================== -->
+    <div id="scannerBackdrop" class="scanner-backdrop hidden"></div>
+
+    <div id="scannerSheet" class="scanner-sheet sheet-hidden">
+        <!-- Drag Handle Indicator -->
+        <div class="scanner-drag-handle">
+            <div class="drag-handle-bar"></div>
+        </div>
+
+        <!-- Sheet Header -->
+        <div class="scanner-header">
+            <button id="closeScannerBtn" class="scanner-close-btn">閉じる</button>
+            <span class="scanner-title">
+                <i data-lucide="sparkles" class="sparkles-icon"></i> 予定追加太郎
+            </span>
+            <button id="clearChatBtn" class="scanner-clear-btn">クリア</button>
+        </div>
+
+        <!-- Chat Logs Area -->
+        <div id="aiChatHistory" class="ai-chat-history">
+            <!-- Welcome Bot Message -->
+            <div class="chat-bubble-wrapper bot">
+                <div class="bot-avatar">
+                    <i data-lucide="sparkles"></i>
+                </div>
+                <div class="chat-bubble">
+                    <p class="bot-name">予定追加太郎</p>
+                    <div class="bubble-content">
+                        こんにちは！スケジュールアシスタントの「予定追加太郎」です。<br><br>
+                        写真や文章からスケジュールを<strong>「追加」</strong>するだけでなく、登録済みの予定を<strong>「確認（検索）」</strong>したり、不要な予定を<strong>「削除」</strong>したりすることもできるようになりました。<br><br>
+                        <span class="example-box">
+                            💡 例えばこう言ってみてね：<br>
+                            ・「来週の予定を教えて」<br>
+                            ・「明日のミーティングの予定を削除して」<br>
+                            ・「25日の予定はある？」
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Chat Bubbles -->
+            <div id="chatMessagesContainer" class="chat-messages-container"></div>
+        </div>
+
+        <!-- Input Area Container -->
+        <div class="chat-input-area">
+            <!-- Attachment Files Carousel -->
+            <div id="attachmentCarousel" class="attachment-carousel hidden"></div>
+
+            <!-- Chat Main Row -->
+            <div class="chat-input-row">
+                <!-- Plus Button -->
+                <button id="aiPlusBtn" class="chat-plus-btn">
+                    <span class="material-icons">add</span>
+                </button>
+
+                <!-- Text Input -->
+                <textarea id="aiChatInput" rows="1" placeholder="予定の詳細、確認、削除などを入力"></textarea>
+
+                <!-- Send Button -->
+                <button id="aiSendBtn" class="chat-send-btn" disabled>
+                    <span class="material-icons">arrow_upward</span>
+                </button>
+            </div>
+
+            <!-- Context Hint -->
+            <p class="chat-context-hint">
+                予定追加太郎（Gemini 2.5 Flash）はカレンダーとの高度な連携に対応しています
+            </p>
+        </div>
+
+        <!-- Add Attachments Action Sheet Dialog -->
+        <div id="actionSheetBackdrop" class="action-sheet-backdrop hidden"></div>
+        <div id="actionSheet" class="action-sheet sheet-hidden">
+            <!-- Actions list -->
+            <div class="action-sheet-buttons">
+                <div class="action-sheet-label" id="cameraTriggerBtn" style="cursor: pointer;">
+                    <span class="material-icons">photo_camera</span> カメラで撮影する
+                </div>
+
+                <label class="action-sheet-label" for="galleryInput">
+                    <span class="material-icons">image</span> 写真ライブラリから選択
+                </label>
+                <input type="file" id="galleryInput" accept="image/*" class="sr-only">
+            </div>
+
+            <!-- Cancel Button -->
+            <button id="actionCancelBtn" class="action-sheet-cancel-btn">
+                キャンセル
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Camera Modal -->
+    <div id="cameraModal" class="modal" style="z-index: 3100; display: none;">
+      <div class="modal-content" style="max-width: 500px; display: flex; flex-direction: column; gap: 12px; position: relative; background: var(--surface); color: var(--text);">
+        <h2 style="font-size: 18px; font-weight: bold; text-align: center; color: var(--text);">カメラ撮影</h2>
+        <!-- Video Stream Container -->
+        <div id="cameraVideoContainer" style="position: relative; width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+          <video id="cameraVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+        </div>
+        <!-- Shutter & Controls -->
+        <div class="modal-actions" style="display: flex; gap: 12px; margin-top: 8px;">
+          <button id="shutterBtn" style="flex: 2; padding: 12px; border-radius: 8px; background: #af52de; color: white; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span class="material-icons">photo_camera</span> 撮影する
+          </button>
+          <button id="closeCameraModalBtn" style="flex: 1; padding: 12px; border-radius: 8px; background: var(--border); color: var(--text); font-weight: bold; cursor: pointer;">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert / Toast Modal -->
+    <div id="toastBox" class="toast-box hidden">
+        メッセージ
+    </div>
 
     <!-- JavaScript -->
 
