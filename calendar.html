@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="css/calendar-views.css" />
     <link rel="stylesheet" href="css/calendar-ai.css" />
     <link rel="stylesheet" href="css/calendar-auth.css" />
+    <link rel="stylesheet" href="css/calendar-hp-motivation.css" />
+    <link rel="stylesheet" href="css/calendar-notification.css" />
 
     <!-- Material Icons -->
     <link
@@ -35,22 +37,27 @@
       </div>
 
       <ul>
-        <li>
+        <li class="sidebar-item active" data-nav="calendar">
           <span class="material-icons"> calendar_month </span>
           カレンダー
         </li>
 
-        <li>
+        <li class="sidebar-item" data-nav="group">
           <span class="material-icons"> groups </span>
           グループ予定
         </li>
 
-        <li>
+        <li class="sidebar-item" data-nav="private">
           <span class="material-icons"> person </span>
           個人予定
         </li>
 
-        <li>
+        <li class="sidebar-item" data-nav="stats">
+          <span class="material-icons"> show_chart </span>
+          HP統計
+        </li>
+
+        <li class="sidebar-item" data-nav="settings">
           <span class="material-icons"> settings </span>
           設定
         </li>
@@ -98,6 +105,24 @@
         <h1>Shared Calendar</h1>
       </div>
 
+      <!-- HP・やる気ゲージ -->
+      <div id="headerGauges" class="header-gauges hidden">
+        <div class="gauge-item">
+          <span class="gauge-label">HP</span>
+          <div class="gauge-bar">
+            <div id="headerHpBar" class="gauge-fill hp-green" style="width:100%"></div>
+          </div>
+          <span id="headerHpText" class="gauge-value">100%</span>
+        </div>
+        <div class="gauge-item">
+          <span class="gauge-label">やる気</span>
+          <div class="gauge-bar">
+            <div id="headerMotivationBar" class="gauge-fill motivation-green" style="width:100%"></div>
+          </div>
+          <span id="headerMotivationText" class="gauge-value">100%</span>
+        </div>
+      </div>
+
       <div class="header-right">
         <!-- 今月 -->
 
@@ -105,8 +130,23 @@
 
         <!-- 予定一覧 -->
 
-        <button id="scheduleListBtn" class="icon-btn">
+        <button id="scheduleListBtn" class="icon-btn" title="予定一覧">
           <span class="material-icons"> list </span>
+        </button>
+
+        <!-- グループ管理 -->
+        <button id="groupManageBtn" class="icon-btn" title="グループ管理">
+          <span class="material-icons"> group_add </span>
+        </button>
+
+        <!-- 通知履歴 -->
+        <button id="notificationHistoryBtn" class="icon-btn" title="通知履歴">
+          <span class="material-icons"> history </span>
+        </button>
+
+        <!-- 通知設定 -->
+        <button id="notificationSettingsBtn" class="icon-btn" title="通知設定">
+          <span class="material-icons"> tune </span>
         </button>
 
         <!-- AIアシスタント -->
@@ -117,7 +157,7 @@
 
         <!-- ダークモード -->
 
-        <button id="themeBtn" class="icon-btn">
+        <button id="themeBtn" class="icon-btn" title="ダークモード">
           <span class="material-icons"> dark_mode </span>
         </button>
 
@@ -153,6 +193,17 @@
 
       <button id="dayViewBtn" class="view-btn">日</button>
     </section>
+
+    <!-- 表示オプション -->
+    <section class="display-options">
+      <label class="display-option checkbox">
+        <input type="checkbox" id="showHpMotivation" />
+        HP・やる気を表示
+      </label>
+    </section>
+
+    <!-- フィルターバナー -->
+    <div id="filterBanner" class="filter-banner hidden"></div>
 
     <!-- =========================
      曜日
@@ -211,6 +262,16 @@
     </main>
 
     <!-- =========================
+     統計パネル
+========================== -->
+    <section id="statsPanel" class="stats-panel hidden">
+      <h3>HP・やる気 週間推移</h3>
+      <div id="statsChart" class="stats-chart"></div>
+      <h3>消費履歴（選択日）</h3>
+      <div id="historyPanel" class="history-panel"></div>
+    </section>
+
+    <!-- =========================
      追加ボタン
 ========================== -->
 
@@ -223,57 +284,127 @@
 ========================== -->
 
     <div id="eventModal" class="modal">
-      <div class="modal-content">
+      <div class="modal-content event-modal">
         <h2>予定登録</h2>
 
-        <!-- タイトル -->
+        <div class="modal-body">
+          <div id="preSaveWarning" class="alert-box hidden"></div>
 
-        <input
-          type="text"
-          id="eventTitle"
-          maxlength="100"
-          placeholder="タイトル"
-        />
+          <input
+            type="text"
+            id="eventTitle"
+            maxlength="100"
+            placeholder="タイトル"
+          />
 
-        <!-- 開始 -->
+          <label>開始日時</label>
+          <input type="datetime-local" id="eventStart" />
 
-        <label> 開始日時 </label>
+          <label>終了日時</label>
+          <input type="datetime-local" id="eventEnd" />
 
-        <input type="datetime-local" id="eventStart" />
+          <label class="checkbox">
+            <input type="checkbox" id="allDay" />
+            終日予定
+          </label>
 
-        <!-- 終了 -->
+          <label>予定の種類</label>
+          <select id="eventType">
+            <option value="event">通常予定</option>
+            <option value="task">タスク</option>
+            <option value="mail">メール送信リマインド</option>
+          </select>
 
-        <label> 終了日時 </label>
+          <!-- 予定のオプション：通知タイミング -->
+          <div class="event-extra-options">
+            <label>通知タイミング</label>
+            <div class="inline-checks">
+              <label class="checkbox compact-checkbox">
+                <input type="checkbox" id="remind30" />
+                30分前
+              </label>
+              <label class="checkbox compact-checkbox">
+                <input type="checkbox" id="remind5" />
+                5分前
+              </label>
+              <label class="checkbox compact-checkbox">
+                <input type="checkbox" id="remindStart" />
+                開始/期限時刻
+              </label>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <input
+                type="number"
+                id="customReminderMinutes"
+                min="1"
+                max="10080"
+                placeholder="カスタム通知（分前）"
+                style="margin-bottom:0;"
+              />
+              <button id="addCustomReminderBtn" class="small-btn" style="flex:0 0 60px;">追加</button>
+            </div>
+            <div id="eventReminderList" class="reminder-chip-list"></div>
+          </div>
 
-        <input type="datetime-local" id="eventEnd" />
+          <!-- タスクオプション -->
+          <div id="taskOptions" class="event-extra-options hidden">
+            <label class="checkbox">
+              <input type="checkbox" id="taskDeadlineNotify" />
+              タスク期限通知を行う
+            </label>
+          </div>
 
-        <!-- 終日 -->
+          <!-- メールオプション -->
+          <div id="mailOptions" class="event-extra-options hidden">
+            <label class="checkbox">
+              <input type="checkbox" id="mailReminderEnabled" />
+              メール送信リマインドを行う
+            </label>
+            <input type="text" id="mailTo" maxlength="100" placeholder="宛先メモ" />
+            <input type="text" id="mailSubject" maxlength="100" placeholder="件名" />
+            <label>通知日時</label>
+            <input type="datetime-local" id="mailRemindAt" />
+            <label class="checkbox">
+              <input type="checkbox" id="mailSent" />
+              送信済み
+            </label>
+          </div>
 
-        <label class="checkbox">
-          <input type="checkbox" id="allDay" />
+          <!-- 公開範囲 -->
+          <label>公開範囲</label>
+          <select id="eventVisibility">
+            <option value="public">全体公開</option>
+            <option value="group">グループ公開</option>
+            <option value="private">自分のみ</option>
+          </select>
 
-          終日予定
-        </label>
+          <!-- グループ選択 -->
+          <div id="groupSelectWrap" class="hidden">
+            <label>グループ</label>
+            <select id="eventGroupId"></select>
+          </div>
 
-        <!-- 公開範囲 -->
+          <!-- HP消費率・やる気消費率 -->
+          <div class="hp-motivation-inputs" style="display: flex; gap: 12px; margin-bottom: 10px;">
+            <div style="flex: 1;">
+              <label>HP消費率 (%)</label>
+              <input type="number" id="hpCost" min="0" max="100" value="0" />
+            </div>
+            <div style="flex: 1;">
+              <label>やる気消費率 (%)</label>
+              <input type="number" id="motivationCost" min="0" max="100" value="0" />
+            </div>
+          </div>
 
-        <select id="eventVisibility">
-          <option value="public">全体公開</option>
+          <!-- 休憩提案の表示エリア -->
+          <div id="restSuggestions" class="rest-suggestions hidden"></div>
 
-          <option value="group">グループ公開</option>
-
-          <option value="private">自分のみ</option>
-        </select>
-
-        <!-- メモ -->
-
-        <textarea id="eventMemo" rows="5" placeholder="メモ"> </textarea>
+          <textarea id="eventMemo" rows="3" placeholder="メモ"></textarea>
+        </div>
 
         <div class="modal-actions">
           <button id="saveEventBtn">保存</button>
-
           <button id="deleteEventBtn">削除</button>
-
           <button id="closeModalBtn">閉じる</button>
         </div>
       </div>
@@ -547,6 +678,158 @@
             </div>
             <button id="confirmEmailChangeBtn" class="auth-primary-btn">確認して変更</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Calendar Settings Modal                     -->
+    <!-- ========================================== -->
+    <div id="calendarSettingsModal" class="modal">
+      <div class="modal-content list-modal">
+        <h2>カレンダー設定</h2>
+
+        <div class="modal-body">
+          <div class="settings-field-group">
+            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">最大HP (%)</label>
+            <input type="number" id="calendarSettingsMaxHp" min="1" max="1000" placeholder="100" />
+          </div>
+          <div class="settings-field-group" style="margin-top:10px;">
+            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">最大やる気 (%)</label>
+            <input type="number" id="calendarSettingsMaxMotivation" min="1" max="1000" placeholder="100" />
+          </div>
+          <div class="settings-field-group" style="margin-top:10px;">
+            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">翌日HP回復力 (0.0 〜 2.0)</label>
+            <input type="number" id="calendarSettingsRecoveryRate" min="0" max="2" step="0.1" placeholder="1.0" />
+          </div>
+          <div class="settings-field-group" style="margin-top:10px;">
+            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">HP警告閾値 (残%)</label>
+            <input type="number" id="calendarSettingsWarningThreshold" min="0" max="100" placeholder="20" />
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top:12px;">
+          <button id="saveCalendarSettingsBtn" class="primary-btn" style="flex:1; background:var(--primary); color:white;">保存</button>
+          <button id="closeCalendarSettingsBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- グループ管理モーダル                        -->
+    <!-- ========================================== -->
+    <div id="groupModal" class="modal">
+      <div class="modal-content group-modal">
+        <h2>グループ管理</h2>
+
+        <div class="modal-body">
+          <div class="group-section" style="margin-bottom: 16px;">
+            <h3>グループ作成</h3>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="newGroupName" placeholder="グループ名" style="margin-bottom:0;" />
+              <button id="createGroupBtn" class="primary-btn" style="flex:0 0 80px;">作成</button>
+            </div>
+          </div>
+
+          <div class="group-section" style="margin-bottom: 16px;">
+            <h3>所属グループ</h3>
+            <div id="groupList" class="group-list-container"></div>
+          </div>
+
+          <div id="groupDetail" class="group-section hidden">
+            <h3 id="groupDetailTitle">グループ詳細</h3>
+            <div id="memberList" class="member-list-container"></div>
+            <div class="group-actions" style="margin-top:10px; display:flex; gap:8px; margin-bottom:8px;">
+              <input type="number" id="inviteUserId" placeholder="招待するユーザーID" style="margin-bottom:0;" />
+              <button id="inviteMemberBtn" class="primary-btn" style="flex:0 0 80px;">招待</button>
+            </div>
+            <div class="group-actions" style="display:flex; gap:8px;">
+              <button id="dissolveGroupBtn" class="danger-btn" style="flex:1;">グループ解散</button>
+              <button id="leaveGroupBtn" class="danger-btn" style="flex:1;">グループ脱退</button>
+            </div>
+          </div>
+        </div>
+
+        <button id="closeGroupBtn" class="modal-footer-btn" style="width:100%; margin-top:12px;">閉じる</button>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 通知履歴モーダル                           -->
+    <!-- ========================================== -->
+    <div id="notificationHistoryModal" class="modal">
+      <div class="modal-content list-modal">
+        <h2>通知履歴</h2>
+
+        <div class="modal-body">
+          <div id="notificationHistoryList" class="history-list-container"></div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 10px;">
+          <button id="clearNotificationHistoryBtn" class="danger-btn" style="flex:1;">履歴を全削除</button>
+          <button id="closeNotificationHistoryBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 通知設定モーダル                           -->
+    <!-- ========================================== -->
+    <div id="notificationSettingsModal" class="modal">
+      <div class="modal-content list-modal wide-modal">
+        <h2>通知設定</h2>
+
+        <div class="modal-body">
+          <label class="checkbox">
+            <input type="checkbox" id="settingsNotificationEnabled" />
+            通知を有効にする
+          </label>
+
+          <label class="checkbox">
+            <input type="checkbox" id="settingsTaskDeadlineEnabled" />
+            タスク期限通知を有効にする
+          </label>
+
+          <label class="checkbox">
+            <input type="checkbox" id="settingsMailReminderEnabled" />
+            メール送信リマインドを有効にする
+          </label>
+
+          <label>既定の通知タイミング</label>
+          <div class="inline-checks settings-checks">
+            <label class="checkbox compact-checkbox">
+              <input type="checkbox" id="settingsRemind30" />
+              30分前
+            </label>
+            <label class="checkbox compact-checkbox">
+              <input type="checkbox" id="settingsRemind5" />
+              5分前
+            </label>
+            <label class="checkbox compact-checkbox">
+              <input type="checkbox" id="settingsRemindStart" />
+              開始/期限時刻
+            </label>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <input
+              type="number"
+              id="settingsCustomReminderMinutes"
+              min="1"
+              max="10080"
+              placeholder="既定のカスタム通知（分前）"
+              style="margin-bottom:0;"
+            />
+            <button id="addSettingsCustomReminderBtn" class="small-btn" style="flex:0 0 60px;">追加</button>
+          </div>
+          <div id="settingsReminderList" class="reminder-chip-list"></div>
+
+          <label>通知履歴の保持日数</label>
+          <input type="number" id="settingsHistoryRetentionDays" min="1" max="365" />
+        </div>
+
+        <div class="modal-actions" style="margin-top:12px;">
+          <button id="saveNotificationSettingsBtn" class="primary-btn" style="flex:1;">保存</button>
+          <button id="closeNotificationSettingsBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
         </div>
       </div>
     </div>

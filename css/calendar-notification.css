@@ -1,0 +1,157 @@
+/* ========================================================
+   calendar-notification.css
+   Notification settings and history styling (Premium iOS Glassmorphism)
+   ======================================================== */
+
+.inline-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.compact-checkbox {
+  font-size: 13px !important;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 100px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.25s cubic-bezier(0.1, 0.8, 0.3, 1);
+  gap: 0;
+  margin-bottom: 0 !important;
+}
+
+.compact-checkbox input[type="checkbox"] {
+  display: none;
+}
+
+.compact-checkbox:has(input[type="checkbox"]:checked) {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+}
+
+.compact-checkbox:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.compact-checkbox:has(input[type="checkbox"]:checked):hover {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  opacity: 0.9;
+}
+
+.reminder-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+  min-height: 28px;
+}
+
+.reminder-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--primary-light, rgba(0, 122, 255, 0.1));
+  color: var(--primary, #007aff);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 100px;
+  transition: all 0.2s cubic-bezier(0.1, 0.8, 0.3, 1);
+  border: 1px solid rgba(0, 122, 255, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.05);
+}
+
+.reminder-chip button {
+  background: transparent;
+  border: none;
+  color: var(--primary, #007aff);
+  margin-left: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.reminder-chip button:hover {
+  opacity: 1;
+}
+
+/* History logs */
+.history-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.history-list-container::-webkit-scrollbar {
+  width: 5px;
+}
+
+.history-list-container::-webkit-scrollbar-thumb {
+  background: var(--border, #e5e5ea);
+  border-radius: 10px;
+}
+
+/* Group & List Modal Enhancements */
+.group-modal, .list-modal {
+  max-width: 480px !important;
+}
+
+.group-list-container, .member-list-container {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  margin-bottom: 12px;
+}
+
+.group-list-item, .member-list-item {
+  transition: background-color 0.15s ease;
+}
+
+.group-list-item:hover {
+  background-color: var(--primary-light, rgba(0, 122, 255, 0.05)) !important;
+}
+
+.group-list-item:active {
+  background-color: var(--border, #e5e5ea) !important;
+}
+
+.event-extra-options {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+body.dark .event-extra-options {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.event-extra-options label {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 8px;
+  display: block;
+}

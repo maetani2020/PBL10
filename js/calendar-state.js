@@ -7,6 +7,9 @@ export let selectedEventId = null;
 export let currentAttachments = [];
 export const apiKey = ""; // Fill in your Gemini API key if required
 
+export let currentFilter = "all";
+export let eventsCache = [];
+
 export const STORAGE_KEY = "shared_calendar_events";
 
 // Setters for states
@@ -26,13 +29,30 @@ export function setCurrentAttachments(attachments) {
   currentAttachments = attachments;
 }
 
-// LocalStorage helpers
+export function setCurrentFilter(filter) {
+  currentFilter = filter;
+}
+
+export function setEvents(events) {
+  eventsCache = events;
+}
+
+// Memory cache helpers
 export function getEvents() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  if (currentFilter === "group") {
+    return eventsCache.filter(e => e.visibility === "group");
+  } else if (currentFilter === "private") {
+    return eventsCache.filter(e => e.visibility === "private");
+  }
+  return eventsCache;
+}
+
+export function getAllEvents() {
+  return eventsCache;
 }
 
 export function saveEvents(events) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+  eventsCache = events;
 }
 
 // Utilities

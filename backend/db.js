@@ -207,6 +207,15 @@ async function initDb() {
         await addColumnIfNotExists('events', 'hp_consumption', 'INTEGER DEFAULT 0');
         await addColumnIfNotExists('events', 'motivation_consumption', 'INTEGER DEFAULT 0');
         await addColumnIfNotExists('events', 'recurrence', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('events', 'event_type', "TEXT DEFAULT 'event'");
+        await addColumnIfNotExists('events', 'reminder_minutes', "TEXT DEFAULT '[]'");
+        await addColumnIfNotExists('events', 'notify_at_start', 'INTEGER DEFAULT 1');
+        await addColumnIfNotExists('events', 'task_deadline_notify', 'INTEGER DEFAULT 1');
+        await addColumnIfNotExists('events', 'mail_reminder_enabled', 'INTEGER DEFAULT 0');
+        await addColumnIfNotExists('events', 'mail_to', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('events', 'mail_subject', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('events', 'mail_remind_at', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('events', 'mail_sent', 'INTEGER DEFAULT 0');
 
         // 9. Create Tasks Table
         await createTable(`

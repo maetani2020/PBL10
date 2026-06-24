@@ -10,7 +10,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
         // Get owned calendars
         const ownedCalendars = await query.all(
-            `SELECT id, name, owner_id, 'owner' as access_level, 0 as is_shared 
+            `SELECT id, name, owner_id, 'owner' as access_level, 0 as is_shared, NULL as owner_name, NULL as group_id 
              FROM calendars 
              WHERE owner_id = ?`,
             [userId]
@@ -18,7 +18,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
         // Get shared calendars
         const sharedCalendars = await query.all(
-            `SELECT c.id, c.name, c.owner_id, cs.access_level, 1 as is_shared, u.display_name as owner_name
+            `SELECT c.id, c.name, c.owner_id, cs.access_level, 1 as is_shared, u.display_name as owner_name, NULL as group_id
              FROM calendars c
              JOIN calendar_shares cs ON c.id = cs.calendar_id
              JOIN users u ON c.owner_id = u.id
@@ -26,8 +26,17 @@ router.get('/', authenticateToken, async (req, res) => {
             [userId]
         );
 
+        // Get group calendars
+        const groupCalendars = await query.all(
+            `SELECT c.id, c.name, c.owner_id, gm.role as access_level, 1 as is_shared, NULL as owner_name, c.group_id
+             FROM calendars c
+             JOIN group_members gm ON c.group_id = gm.group_id
+             WHERE gm.user_id = ?`,
+            [userId]
+        );
+
         // Combine lists
-        const allCalendars = [...ownedCalendars, ...sharedCalendars];
+        const allCalendars = [...ownedCalendars, ...sharedCalendars, ...groupCalendars];
         res.json(allCalendars);
     } catch (err) {
         console.error('Get calendars error:', err);

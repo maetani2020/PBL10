@@ -171,6 +171,13 @@ body.dark .day-cell:hover {
   text-overflow: ellipsis;
 
   cursor: pointer;
+
+  transition: transform 0.2s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.2s ease;
+}
+
+.event:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .public {
@@ -292,6 +299,12 @@ body.dark .week-day-column:hover {
   padding: 15px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.2s ease;
+}
+
+.event-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
 }
 
 .event-card h4 {
@@ -344,4 +357,47 @@ body.dark .week-day-column:hover {
   .event {
     font-size: 10px;
   }
+}
+
+/* Event badges and icons */
+.event-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 4px;
+  margin-left: 4px;
+  line-height: 1;
+}
+
+.event-badge.badge-hp {
+  background: linear-gradient(135deg, rgba(52, 199, 89, 0.25), rgba(48, 209, 88, 0.15));
+  color: #34c759;
+  border: 1px solid rgba(52, 199, 89, 0.3);
+}
+
+.event-badge.badge-motivation {
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.25), rgba(10, 132, 255, 0.15));
+  color: #007aff;
+  border: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+.event-badge.badge-task {
+  background: linear-gradient(135deg, rgba(255, 149, 0, 0.25), rgba(255, 159, 10, 0.15));
+  color: #ff9500;
+  border: 1px solid rgba(255, 149, 0, 0.3);
+}
+
+.event-badge.badge-mail {
+  background: linear-gradient(135deg, rgba(175, 82, 222, 0.25), rgba(191, 90, 242, 0.15));
+  color: #af52de;
+  border: 1px solid rgba(175, 82, 222, 0.3);
+}
+
+.event-badge-icon {
+  font-size: 11px !important;
+  vertical-align: middle;
+  margin-right: 2px;
 }

@@ -168,4 +168,37 @@ router.post('/trigger-test', authenticateToken, async (req, res) => {
     }
 });
 
+// DELETE /api/notifications/history - Clear all notification history for current user
+router.delete('/history', authenticateToken, async (req, res) => {
+    try {
+        await query.run('DELETE FROM notification_history WHERE user_id = ?', [req.user.id]);
+        res.json({ message: '通知履歴をすべて削除しました' });
+    } catch (err) {
+        console.error('Delete notification history error:', err);
+        res.status(500).json({ error: 'サーバーエラーが発生しました' });
+    }
+});
+
+// POST /api/notifications/history - Log a custom notification history entry
+router.post('/history', authenticateToken, async (req, res) => {
+    const { title, message, type } = req.body;
+    if (!title || !message) {
+        return res.status(400).json({ error: 'タイトルとメッセージは必須項目です' });
+    }
+
+    try {
+        const userId = req.user.id;
+        const now = new Date().toISOString();
+        await query.run(
+            `INSERT INTO notification_history (user_id, title, message, sent_at, type)
+             VALUES (?, ?, ?, ?, ?)`,
+            [userId, title, message, now, type || 'event']
+        );
+        res.json({ success: true, message: '通知履歴を保存しました' });
+    } catch (err) {
+        console.error('Add notification history log error:', err);
+        res.status(500).json({ error: 'サーバーエラーが発生しました' });
+    }
+});
+
 module.exports = router;

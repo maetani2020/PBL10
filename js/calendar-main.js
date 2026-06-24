@@ -7,11 +7,7 @@ import {
   selectedEventId, 
   currentAttachments, 
   setCurrentAttachments, 
-  STORAGE_KEY, 
-  getEvents, 
-  saveEvents, 
   formatDate, 
-  createId, 
   showToast 
 } from './calendar-state.js';
 
@@ -20,9 +16,9 @@ import {
   initAuthForm,
   initAccountPanel,
   isLoggedIn,
-  logout,
   initPasswordResetModal,
-  initAccountSettings
+  initAccountSettings,
+  apiRequest
 } from './calendar-auth.js';
 
 import { 
@@ -32,13 +28,13 @@ import {
   openListModal, 
   closeListModal, 
   resetForm, 
-  openCreateEvent 
+  openCreateEvent,
+  collectEventReminderMinutes,
+  renderEventReminderList,
+  updateEventOptionVisibility
 } from './calendar-modals.js';
 
 import { 
-  renderMonthView, 
-  renderWeekView, 
-  renderDayView, 
   renderScheduleList, 
   refreshCalendar, 
   refreshCurrentView, 
@@ -68,14 +64,62 @@ import {
   handleFileAttachment 
 } from './calendar-ai.js';
 
+import { 
+  openGroupModal, 
+  closeGroupModal, 
+  createGroup, 
+  inviteMember, 
+  dissolveGroup, 
+  leaveGroup,
+  syncGroups
+} from './calendar-group.js';
+
+import {
+  openNotificationHistoryModal,
+  closeNotificationHistoryModal,
+  clearNotificationHistory,
+  openNotificationSettingsModal,
+  closeNotificationSettingsModal,
+  saveNotificationSettingsFromForm,
+  renderSettingsReminderList,
+  startNotificationWatcher,
+  syncNotificationSettings
+} from './calendar-notification.js';
+
+import {
+  syncHpMotivationStatus,
+  updatePreSavePreview,
+  openCalendarSettingsModal,
+  closeCalendarSettingsModal,
+  saveCalendarSettings
+} from './calendar-hp-motivation.js';
+
+// ----------------------------------------------------
+// Database Synchronizer
+// ----------------------------------------------------
+export async function syncEvents() {
+  try {
+    const events = await apiRequest('/api/events');
+    const stateModule = await import('./calendar-state.js');
+    stateModule.setEvents(events);
+    refreshCalendar();
+    
+    // Also sync HP/Motivation status
+    const targetDate = formatDate(currentDate);
+    await syncHpMotivationStatus(targetDate);
+  } catch (err) {
+    console.error('Failed to sync events:', err);
+  }
+}
+
 // ----------------------------------------------------
 // Core Operations: Save & Delete Events
 // ----------------------------------------------------
-function saveEvent() {
+async function saveEvent() {
   const title = document.getElementById("eventTitle").value.trim();
 
   if (title.length === 0) {
-    alert("タイトルを入力してください");
+    showToast("タイトルを入力してください ⚠️");
     return;
   }
 
@@ -83,70 +127,108 @@ function saveEvent() {
   const end = document.getElementById("eventEnd").value;
 
   if (start === "" || end === "") {
-    alert("日時を入力してください");
+    showToast("日時を入力してください ⚠️");
     return;
   }
 
   if (start > end) {
-    alert("終了日時が開始日時より前です");
+    showToast("終了日時が開始日時より前です ⚠️");
     return;
   }
 
   const memo = document.getElementById("eventMemo").value;
   const visibility = document.getElementById("eventVisibility").value;
   const allDay = document.getElementById("allDay").checked;
-  const date = start.substring(0, 10);
+  const hp_consumption = parseInt(document.getElementById("hpCost").value) || 0;
+  const motivation_consumption = parseInt(document.getElementById("motivationCost").value) || 0;
+  const eventType = document.getElementById("eventType").value;
 
-  let events = getEvents();
+  const reminderMinutes = collectEventReminderMinutes();
+  const notifyAtStart = document.getElementById("remindStart")?.checked ?? true;
+  const taskDeadlineNotify = document.getElementById("taskDeadlineNotify")?.checked ?? true;
 
-  if (selectedEventId) {
-    // Edit existing event
-    events = events.map((event) => {
-      if (event.id === selectedEventId) {
-        return {
-          ...event,
-          title,
-          start,
-          end,
-          date,
-          memo,
-          visibility,
-          allDay,
-        };
+  const mailReminderEnabled = document.getElementById("mailReminderEnabled")?.checked ?? false;
+  const mailTo = document.getElementById("mailTo")?.value.trim() || "";
+  const mailSubject = document.getElementById("mailSubject")?.value.trim() || "";
+  const mailRemindAt = document.getElementById("mailRemindAt")?.value || "";
+  const mailSent = document.getElementById("mailSent")?.checked ?? false;
+
+  const eventGroupId = document.getElementById("eventGroupId").value;
+
+  let calendar_id = undefined;
+  if (visibility === "group" && eventGroupId) {
+    try {
+      const calendars = await apiRequest('/api/calendars');
+      const matchedCal = calendars.find(c => c.group_id == eventGroupId);
+      if (matchedCal) {
+        calendar_id = matchedCal.id;
       }
-      return event;
-    });
-  } else {
-    // Create new event
-    events.push({
-      id: createId(),
-      title,
-      start,
-      end,
-      date,
-      memo,
-      visibility,
-      allDay,
-    });
+    } catch (err) {
+      console.error('Failed to fetch calendar for group:', err);
+    }
   }
 
-  saveEvents(events);
-  closeModal();
-  refreshCalendar();
+  const eventData = {
+    calendar_id,
+    title,
+    location: "",
+    allday: allDay,
+    start,
+    end,
+    color: "#007AFF",
+    memo,
+    visibility,
+    hp_consumption,
+    motivation_consumption,
+    eventType,
+    reminderMinutes,
+    notifyAtStart,
+    taskDeadlineNotify,
+    mailReminderEnabled,
+    mailTo,
+    mailSubject,
+    mailRemindAt,
+    mailSent
+  };
+
+  try {
+    if (selectedEventId) {
+      await apiRequest(`/api/events/${selectedEventId}`, {
+        method: 'PUT',
+        body: JSON.stringify(eventData)
+      });
+      showToast("予定を更新しました ✅");
+    } else {
+      await apiRequest('/api/events', {
+        method: 'POST',
+        body: JSON.stringify(eventData)
+      });
+      showToast("予定を追加しました ✨");
+    }
+
+    closeModal();
+    await syncEvents();
+  } catch (err) {
+    console.error('Failed to save event:', err);
+  }
 }
 
-function deleteEvent() {
+async function deleteEvent() {
   if (!selectedEventId) return;
 
   const result = confirm("予定を削除しますか？");
   if (!result) return;
 
-  let events = getEvents();
-  events = events.filter((event) => event.id !== selectedEventId);
-
-  saveEvents(events);
-  closeModal();
-  refreshCalendar();
+  try {
+    await apiRequest(`/api/events/${selectedEventId}`, {
+      method: 'DELETE'
+    });
+    showToast("予定を削除しました 🗑️");
+    closeModal();
+    await syncEvents();
+  } catch (err) {
+    console.error('Failed to delete event:', err);
+  }
 }
 
 // ----------------------------------------------------
@@ -180,34 +262,106 @@ function handleSwipe() {
   const distance = touchEndX - touchStartX;
   if (distance < -80) {
     moveNext();
+    syncEvents();
   }
   if (distance > 80) {
     movePrevious();
+    syncEvents();
   }
+}
+
+function initSidebarNavigation() {
+  const sidebarItems = document.querySelectorAll(".sidebar-item");
+  sidebarItems.forEach(item => {
+    item.addEventListener("click", () => {
+      const panel = item.dataset.nav;
+      switchPanel(panel);
+    });
+  });
+}
+
+function switchPanel(panel) {
+  document.querySelectorAll(".sidebar-item").forEach(item => {
+    item.classList.toggle("active", item.dataset.nav === panel);
+  });
+
+  const viewSwitch = document.querySelector(".view-switch");
+  const weekHeader = document.getElementById("weekHeader");
+  const filterBanner = document.getElementById("filterBanner");
+  const statsPanel = document.getElementById("statsPanel");
+
+  if (statsPanel) statsPanel.classList.add("hidden");
+  if (viewSwitch) viewSwitch.classList.remove("hidden");
+  if (weekHeader) weekHeader.classList.remove("hidden");
+
+  if (panel === "stats") {
+    renderStatsPanel('week');
+    if (viewSwitch) viewSwitch.classList.add("hidden");
+    if (weekHeader) weekHeader.classList.add("hidden");
+    if (filterBanner) filterBanner.classList.add("hidden");
+    
+    document.getElementById("monthView").classList.add("hidden");
+    document.getElementById("weekView").classList.add("hidden");
+    document.getElementById("dayView").classList.add("hidden");
+    
+    if (statsPanel) statsPanel.classList.remove("hidden");
+    closeSidebar();
+    return;
+  }
+
+  if (panel === "settings") {
+    openCalendarSettingsModal();
+    closeSidebar();
+    return;
+  }
+
+  import('./calendar-state.js').then(state => {
+    if (panel === "calendar") {
+      state.setCurrentFilter("all");
+      if (filterBanner) filterBanner.classList.add("hidden");
+    } else if (panel === "group") {
+      state.setCurrentFilter("group");
+      if (filterBanner) {
+        filterBanner.textContent = "グループ予定を表示中";
+        filterBanner.classList.remove("hidden");
+      }
+    } else if (panel === "private") {
+      state.setCurrentFilter("private");
+      if (filterBanner) {
+        filterBanner.textContent = "個人予定を表示中";
+        filterBanner.classList.remove("hidden");
+      }
+    }
+
+    const curView = state.currentView;
+    document.getElementById("monthView").classList.toggle("hidden", curView !== "month");
+    document.getElementById("weekView").classList.toggle("hidden", curView !== "week");
+    document.getElementById("dayView").classList.toggle("hidden", curView !== "day");
+
+    refreshCalendar();
+    closeSidebar();
+  });
+}
+
+function renderStatsPanel(range) {
+  import('./calendar-hp-motivation.js').then(m => {
+    m.renderStatsPanel(range);
+  });
 }
 
 // ----------------------------------------------------
 // Initialization
 // ----------------------------------------------------
-function initializeStorage() {
-  const data = localStorage.getItem(STORAGE_KEY);
-  if (!data) {
-    saveEvents([]);
-  }
-}
-
-function clearAllEvents() {
-  const result = confirm("全予定を削除しますか？");
-  if (!result) return;
-  saveEvents([]);
-  renderAll();
-}
-window.clearAllEvents = clearAllEvents;
-
-function init() {
-  initializeStorage();
+async function init() {
   restoreTheme();
-  refreshCalendar();
+  
+  if (isLoggedIn()) {
+    await syncEvents();
+    await syncGroups();
+    await syncNotificationSettings();
+    startNotificationWatcher();
+  }
+  
   switchView("month");
 }
 
@@ -220,8 +374,21 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("deleteEventBtn").addEventListener("click", deleteEvent);
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);
 
-  eventModal.addEventListener("click", (e) => {
-    if (e.target === eventModal) closeModal();
+  // Outer click to close modals
+  [
+    { id: "eventModal", close: closeModal },
+    { id: "listModal", close: closeListModal },
+    { id: "groupModal", close: closeGroupModal },
+    { id: "notificationHistoryModal", close: closeNotificationHistoryModal },
+    { id: "notificationSettingsModal", close: closeNotificationSettingsModal },
+    { id: "calendarSettingsModal", close: closeCalendarSettingsModal }
+  ].forEach(m => {
+    const el = document.getElementById(m.id);
+    if (el) {
+      el.addEventListener("click", (e) => {
+        if (e.target === el) m.close();
+      });
+    }
   });
 
   document.addEventListener("keydown", (e) => {
@@ -229,45 +396,31 @@ document.addEventListener("DOMContentLoaded", () => {
       closeModal();
       closeSidebar();
       closeListModal();
+      closeGroupModal();
+      closeNotificationHistoryModal();
+      closeNotificationSettingsModal();
+      closeCalendarSettingsModal();
     }
   });
 
   // Main navigation buttons
-  document.getElementById("prevBtn").addEventListener("click", movePrevious);
-  document.getElementById("nextBtn").addEventListener("click", moveNext);
-  document.getElementById("todayBtn").addEventListener("click", () => {
-    // Reset date to today and refresh
-    // Re-assigning read-only import directly is prevented, so we just set state's Date.
-    // currentDate in calendar-state is set via setCurrentDate
-    // Wait, let's make sure we do it timezone-safely or just reset to today:
-    // currentDate = new Date(); (Direct reassignment of imports fails)
-    // We should write a setCurrentDate setter or today handler:
-    // We import currentDate from state, but wait, does state have a setCurrentDate function?
-    // Yes, we created setCurrentDate(date). We can use that!
-    // Wait, let's check:
-    // Since we imported setCurrentDate from calendar-state.js, let's use it:
-    // setCurrentDate(new Date());
-    // Wait, where is it called?
-    // Let's call it!
+  document.getElementById("prevBtn").addEventListener("click", () => {
+    movePrevious();
+    syncEvents();
+  });
+  document.getElementById("nextBtn").addEventListener("click", () => {
+    moveNext();
+    syncEvents();
   });
 
-  // Re-bind today button:
-  document.getElementById("todayBtn").addEventListener("click", () => {
-    // We need to re-evaluate currentDate to new Date()
-    // We can't import and reassign currentDate directly. We use import setter:
-    // Wait, we need to import setCurrentDate from state, let's check: yes we did!
-    // So we do:
-    // setCurrentDate(new Date());
-    // and then call:
-    // refreshCurrentView();
-  });
-
-  // Let's implement the todayBtn click listener properly:
   const todayBtn = document.getElementById("todayBtn");
   if (todayBtn) {
     todayBtn.addEventListener("click", () => {
-      // Need to import and call setCurrentDate (we did import it!)
-      // Let's write the handler inline or here
+      import('./calendar-state.js').then(m => {
+        m.setCurrentDate(new Date());
+        refreshCurrentView();
+        syncEvents();
+      });
     });
   }
 
@@ -312,9 +465,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderScheduleList("month");
   });
   document.getElementById("closeListBtn").addEventListener("click", closeListModal);
-  listModal.addEventListener("click", (e) => {
-    if (e.target === listModal) closeListModal();
-  });
+
 
   document.querySelectorAll(".list-mode button").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -405,17 +556,81 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // -- Auth integration --
-  // Init auth form (login/register toggle logic)
-  initAuthForm();
-  // Init account panel logout button
-  initAccountPanel();
-  // Init password reset modal logic
-  initPasswordResetModal();
-  // Init account settings (password/email change)
-  initAccountSettings();
+  // Group modal triggers
+  document.getElementById("groupManageBtn").addEventListener("click", openGroupModal);
+  document.getElementById("closeGroupBtn").addEventListener("click", closeGroupModal);
+  document.getElementById("createGroupBtn").addEventListener("click", createGroup);
+  document.getElementById("inviteMemberBtn").addEventListener("click", inviteMember);
+  document.getElementById("dissolveGroupBtn").addEventListener("click", dissolveGroup);
+  document.getElementById("leaveGroupBtn").addEventListener("click", leaveGroup);
 
-  // Avatar button: click to open sidebar (shows account info)
+  // Notification history modal triggers
+  document.getElementById("notificationHistoryBtn").addEventListener("click", openNotificationHistoryModal);
+  document.getElementById("closeNotificationHistoryBtn").addEventListener("click", closeNotificationHistoryModal);
+  document.getElementById("clearNotificationHistoryBtn").addEventListener("click", clearNotificationHistory);
+
+  // Notification settings modal triggers
+  document.getElementById("notificationSettingsBtn").addEventListener("click", openNotificationSettingsModal);
+  document.getElementById("closeNotificationSettingsBtn").addEventListener("click", closeNotificationSettingsModal);
+  document.getElementById("saveNotificationSettingsBtn").addEventListener("click", saveNotificationSettingsFromForm);
+
+  // Calendar settings modal triggers
+  document.getElementById("saveCalendarSettingsBtn").addEventListener("click", saveCalendarSettings);
+  document.getElementById("closeCalendarSettingsBtn").addEventListener("click", closeCalendarSettingsModal);
+
+  // Modals features logic
+  document.getElementById("eventType").addEventListener("change", updateEventOptionVisibility);
+  
+  // HP Cost & Motivation Cost previews
+  document.getElementById("hpCost").addEventListener("input", updatePreSavePreview);
+  document.getElementById("motivationCost").addEventListener("input", updatePreSavePreview);
+  document.getElementById("eventStart").addEventListener("change", updatePreSavePreview);
+
+  // Visibility select -> show/hide group dropdown
+  document.getElementById("eventVisibility").addEventListener("change", (e) => {
+    const isGroup = e.target.value === "group";
+    document.getElementById("groupSelectWrap").classList.toggle("hidden", !isGroup);
+  });
+
+  // Notification Settings Form Events
+  ["settingsRemind30", "settingsRemind5", "settingsRemindStart", "settingsCustomReminderMinutes"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener(id.includes("Custom") ? "input" : "change", renderSettingsReminderList);
+    }
+  });
+
+  // Event modal reminder list triggers
+  ["remind30", "remind5", "remindStart", "customReminderMinutes"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener(id.includes("custom") ? "input" : "change", renderEventReminderList);
+    }
+  });
+
+  // Show HP motivation toggle check
+  const hpCheckbox = document.getElementById("showHpMotivation");
+  if (hpCheckbox) {
+    const saved = localStorage.getItem("show_hp_motivation") === "true";
+    hpCheckbox.checked = saved;
+    const gauges = document.getElementById("headerGauges");
+    if (gauges) gauges.classList.toggle("hidden", !saved);
+
+    hpCheckbox.addEventListener("change", (e) => {
+      const show = e.target.checked;
+      localStorage.setItem("show_hp_motivation", String(show));
+      if (gauges) gauges.classList.toggle("hidden", !show);
+      refreshCalendar();
+    });
+  }
+
+  // -- Auth integration --
+  initAuthForm();
+  initAccountPanel();
+  initPasswordResetModal();
+  initAccountSettings();
+  initSidebarNavigation();
+
   const userAvatarBtn = document.getElementById("userAvatarBtn");
   if (userAvatarBtn) {
     userAvatarBtn.addEventListener("click", () => {
@@ -424,29 +639,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Listen for successful login -> refresh calendar
-  document.addEventListener("auth:loggedin", () => {
-    refreshCalendar();
+  // Listen for successful login -> sync & start watchers
+  document.addEventListener("auth:loggedin", async () => {
+    await syncEvents();
+    await syncGroups();
+    await syncNotificationSettings();
+    startNotificationWatcher();
   });
 });
 
-// Re-write todayBtn listener with setter compatibility
-document.addEventListener("DOMContentLoaded", () => {
-  const todayBtn = document.getElementById("todayBtn");
-  if (todayBtn) {
-    todayBtn.addEventListener("click", () => {
-      // Import setter works on the state variable
-      // We import currentDate from state, but wait, direct reassignment triggers error.
-      // So we call:
-      const stateModule = import('./calendar-state.js');
-      stateModule.then(m => {
-        m.setCurrentDate(new Date());
-        refreshCurrentView();
-      });
-    });
-  }
-});
-
 // Run Init (with auth check)
-checkAuth();
-init();
+checkAuth().then(ok => {
+  init();
+});

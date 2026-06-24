@@ -105,8 +105,8 @@ router.post('/login', async (req, res) => {
 
         // Reset inactivity timer on login
         await query.run(
-            'UPDATE users SET last_activity_at = ? WHERE id = ?',
-            [new Date().toISOString(), user.id]
+            'UPDATE users SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [user.id]
         );
 
         res.json({
@@ -173,8 +173,8 @@ router.post('/google-login', async (req, res) => {
 
         // Reset inactivity timer on Google login
         await query.run(
-            'UPDATE users SET last_activity_at = ? WHERE id = ?',
-            [new Date().toISOString(), user.id]
+            'UPDATE users SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [user.id]
         );
 
         res.json({

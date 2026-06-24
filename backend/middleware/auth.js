@@ -41,8 +41,8 @@ async function authenticateToken(req, res, next) {
 
         // 4. 最終操作時刻を更新
         await query.run(
-            'UPDATE users SET last_activity_at = ? WHERE id = ?',
-            [new Date().toISOString(), user.id]
+            'UPDATE users SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [user.id]
         );
 
         req.user = user;

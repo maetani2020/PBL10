@@ -9,7 +9,8 @@ import {
   getEvents, 
   formatDate, 
   isToday, 
-  showToast 
+  showToast,
+  escapeHTML
 } from './calendar-state.js';
 
 import { 
@@ -132,7 +133,17 @@ export function renderMonthView() {
     dayEvents.forEach((event) => {
       const eventDiv = document.createElement("div");
       eventDiv.className = `event ${event.visibility}`;
-      eventDiv.textContent = event.allDay ? "📌 " + event.title : event.title;
+      
+      let badgeHtml = "";
+      const showHp = document.getElementById("showHpMotivation")?.checked ?? false;
+      if (showHp) {
+        if (event.hp_consumption > 0) badgeHtml += ` <span class="event-badge badge-hp">H${event.hp_consumption}</span>`;
+        if (event.motivation_consumption > 0) badgeHtml += ` <span class="event-badge badge-motivation">M${event.motivation_consumption}</span>`;
+      }
+      if (event.eventType === "task") badgeHtml += ` <span class="event-badge badge-task">📋</span>`;
+      if (event.eventType === "mail") badgeHtml += ` <span class="event-badge badge-mail">✉️</span>`;
+
+      eventDiv.innerHTML = `${event.allDay ? "📌 " : ""}${escapeHTML(event.title)}${badgeHtml}`;
 
       eventDiv.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -237,7 +248,17 @@ export function renderWeekView() {
       dayHourEvents.forEach((event) => {
         const eventDiv = document.createElement("div");
         eventDiv.className = `event ${event.visibility}`;
-        eventDiv.textContent = event.allDay ? "📌 " + event.title : event.title;
+        
+        let badgeHtml = "";
+        const showHp = document.getElementById("showHpMotivation")?.checked ?? false;
+        if (showHp) {
+          if (event.hp_consumption > 0) badgeHtml += ` <span class="event-badge badge-hp">H${event.hp_consumption}</span>`;
+          if (event.motivation_consumption > 0) badgeHtml += ` <span class="event-badge badge-motivation">M${event.motivation_consumption}</span>`;
+        }
+        if (event.eventType === "task") badgeHtml += ` <span class="event-badge badge-task">📋</span>`;
+        if (event.eventType === "mail") badgeHtml += ` <span class="event-badge badge-mail">✉️</span>`;
+
+        eventDiv.innerHTML = `${event.allDay ? "📌 " : ""}${escapeHTML(event.title)}${badgeHtml}`;
         eventDiv.title = `${event.title} (${event.start.substring(11, 16)} - ${event.end.substring(11, 16)})`;
 
         eventDiv.addEventListener("click", (e) => {
@@ -285,20 +306,34 @@ export function renderDayView() {
   }
 
   // イベントカードの生成
-  events.forEach((event) => {
-    const card = document.createElement("div");
-    card.className = "event-card";
+    events.forEach((event) => {
+      const card = document.createElement("div");
+      card.className = "event-card";
 
-    let visibilityLabel = "";
-    if (event.visibility === "public") visibilityLabel = "全体公開";
-    else if (event.visibility === "group") visibilityLabel = "グループ公開";
-    else visibilityLabel = "自分のみ";
+      let visibilityLabel = "";
+      if (event.visibility === "public") visibilityLabel = "全体公開";
+      else if (event.visibility === "group") visibilityLabel = "グループ公開";
+      else visibilityLabel = "自分のみ";
 
-    card.innerHTML = `
-      <h4>${event.title}</h4>
-      <p>📅 ${event.allDay ? "終日予定" : event.start.substring(11, 16) + " 〜 " + event.end.substring(11, 16)}</p>
-      <p>👥 ${visibilityLabel}</p>
-    `;
+      let hpText = "";
+      if (event.hp_consumption > 0 || event.motivation_consumption > 0) {
+        hpText = `<p>⚡ HP消費: ${event.hp_consumption}% / やる気消費: ${event.motivation_consumption}%</p>`;
+      }
+      
+      let typeLabel = "";
+      if (event.eventType === "task") typeLabel = "📋 タスク";
+      else if (event.eventType === "mail") typeLabel = "✉️ メール送信リマインド";
+      else typeLabel = "📅 通常予定";
+
+      card.innerHTML = `
+        <h4 style="display:flex; justify-content:space-between; align-items:center;">
+          <span>${escapeHTML(event.title)}</span>
+          <span style="font-size:11px; opacity:0.7; font-weight:normal;">${typeLabel}</span>
+        </h4>
+        <p>📅 ${event.allDay ? "終日予定" : event.start.substring(11, 16) + " 〜 " + event.end.substring(11, 16)}</p>
+        <p>👥 ${visibilityLabel}</p>
+        ${hpText}
+      `;
 
     // AI準備アドバイスブロックの設置
     const adviceBlock = document.createElement("div");

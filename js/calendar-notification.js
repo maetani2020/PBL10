@@ -1,0 +1,454 @@
+// calendar-notification.js
+// Client-side Web Notification Watcher and settings sync with PostgreSQL backend
+
+import { apiRequest } from './calendar-auth.js';
+import { getEvents, showToast } from './calendar-state.js';
+
+let notificationTimer = null;
+let lastCheckTime = new Date();
+const NOTIFIED_KEY = "shared_calendar_notified_flags";
+const LOCAL_SETTINGS_KEY = "shared_calendar_notification_settings_local";
+
+// Default settings if not in LocalStorage
+const DEFAULT_LOCAL_SETTINGS = {
+  eventBeforeMinutes: [30, 5],
+  eventAtStart: true,
+  historyRetentionDays: 30
+};
+
+// Global notification toggles synced from backend
+let backendSettings = {
+  events: true,
+  tasks: true,
+  game: true,
+  email: true
+};
+
+export function getBackendSettings() {
+  return backendSettings;
+}
+
+// Get client-side settings
+export function getLocalSettings() {
+  try {
+    const raw = localStorage.getItem(LOCAL_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : DEFAULT_LOCAL_SETTINGS;
+  } catch {
+    return DEFAULT_LOCAL_SETTINGS;
+  }
+}
+
+export function saveLocalSettings(settings) {
+  localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// Request permissions
+export async function ensureNotificationPermission() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+
+  const permission = await Notification.requestPermission();
+  return permission === "granted";
+}
+
+// Sync settings from backend
+export async function syncNotificationSettings() {
+  try {
+    backendSettings = await apiRequest('/api/notifications/settings');
+    updateSettingsUI();
+  } catch (err) {
+    console.error('Failed to sync notification settings:', err);
+  }
+}
+
+// Update UI checkboxes in Settings Modal
+function updateSettingsUI() {
+  const enabledCheckbox = document.getElementById("settingsNotificationEnabled");
+  const taskCheckbox = document.getElementById("settingsTaskDeadlineEnabled");
+  const emailCheckbox = document.getElementById("settingsMailReminderEnabled");
+  
+  if (enabledCheckbox) enabledCheckbox.checked = backendSettings.events;
+  if (taskCheckbox) taskCheckbox.checked = backendSettings.tasks;
+  if (emailCheckbox) emailCheckbox.checked = backendSettings.email;
+
+  const local = getLocalSettings();
+  const remind30 = document.getElementById("settingsRemind30");
+  const remind5 = document.getElementById("settingsRemind5");
+  const remindStart = document.getElementById("settingsRemindStart");
+  
+  if (remind30) remind30.checked = local.eventBeforeMinutes.includes(30);
+  if (remind5) remind5.checked = local.eventBeforeMinutes.includes(5);
+  if (remindStart) remindStart.checked = !!local.eventAtStart;
+
+  const custom = local.eventBeforeMinutes.find(m => m !== 30 && m !== 5);
+  const customInput = document.getElementById("settingsCustomReminderMinutes");
+  if (customInput) customInput.value = custom || "";
+
+  const retention = document.getElementById("settingsHistoryRetentionDays");
+  if (retention) retention.value = local.historyRetentionDays || 30;
+
+  renderSettingsReminderList();
+}
+
+// Open notification settings modal
+export function openNotificationSettingsModal() {
+  syncNotificationSettings();
+  const modal = document.getElementById("notificationSettingsModal");
+  if (modal) modal.style.display = "flex";
+}
+
+export function closeNotificationSettingsModal() {
+  const modal = document.getElementById("notificationSettingsModal");
+  if (modal) modal.style.display = "none";
+}
+
+// Save notification settings
+export async function saveNotificationSettingsFromForm() {
+  const enabled = document.getElementById("settingsNotificationEnabled")?.checked ?? true;
+  const tasks = document.getElementById("settingsTaskDeadlineEnabled")?.checked ?? true;
+  const email = document.getElementById("settingsMailReminderEnabled")?.checked ?? true;
+
+  try {
+    await apiRequest('/api/notifications/settings', {
+      method: 'POST',
+      body: JSON.stringify({
+        events: enabled,
+        tasks: tasks,
+        game: true,
+        email: email
+      })
+    });
+
+    // Save local settings
+    const eventBeforeMinutes = [];
+    if (document.getElementById("settingsRemind30")?.checked) eventBeforeMinutes.push(30);
+    if (document.getElementById("settingsRemind5")?.checked) eventBeforeMinutes.push(5);
+    
+    const custom = parseInt(document.getElementById("settingsCustomReminderMinutes")?.value);
+    if (!isNaN(custom) && custom > 0) eventBeforeMinutes.push(custom);
+
+    const eventAtStart = document.getElementById("settingsRemindStart")?.checked ?? true;
+    const historyRetentionDays = parseInt(document.getElementById("settingsHistoryRetentionDays")?.value) || 30;
+
+    saveLocalSettings({
+      eventBeforeMinutes,
+      eventAtStart,
+      historyRetentionDays
+    });
+
+    backendSettings = { events: enabled, tasks, game: true, email };
+
+    closeNotificationSettingsModal();
+    showToast("通知設定を保存しました ⚙️");
+  } catch (err) {
+    console.error('Failed to save settings:', err);
+  }
+}
+
+// Local notified flags
+function getNotifiedFlags() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTIFIED_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveNotifiedFlags(flags) {
+  localStorage.setItem(NOTIFIED_KEY, JSON.stringify(flags));
+}
+
+// Show Windows notification and post log to PostgreSQL history
+export async function triggerNotification(title, message, type = 'event') {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  new Notification(title, {
+    body: message,
+    icon: "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4c5.png",
+    tag: "shared-calendar"
+  });
+
+  // Save log to PostgreSQL backend
+  try {
+    await apiRequest('/api/notifications/history', {
+      method: 'POST',
+      body: JSON.stringify({ title, message, type })
+    });
+  } catch (err) {
+    console.error('Failed to save notification log to backend:', err);
+  }
+}
+
+// Notification watcher core scanning loop
+export function checkEventNotifications() {
+  // If global notifications are disabled
+  if (!backendSettings.events) {
+    lastCheckTime = new Date();
+    return;
+  }
+
+  const events = getEvents();
+  const now = new Date();
+  const prev = lastCheckTime || new Date(now.getTime() - 5000);
+  const flags = getNotifiedFlags();
+  const local = getLocalSettings();
+
+  events.forEach(event => {
+    const type = event.eventType || 'event';
+    const reminderMinutes = event.reminderMinutes || local.eventBeforeMinutes;
+    const notifyAtStart = (event.notifyAtStart !== undefined) ? event.notifyAtStart : local.eventAtStart;
+
+    // Standard event alerts
+    if (type === 'event' && !event.allday && event.start) {
+      const startTime = new Date(event.start);
+      if (!isNaN(startTime.getTime())) {
+        reminderMinutes.forEach(mins => {
+          const key = `${event.id}_${event.start}_start_before_${mins}`;
+          const targetTime = new Date(startTime.getTime() - mins * 60 * 1000);
+          
+          if (!flags[key] && targetTime > prev && targetTime <= now) {
+            triggerNotification("予定通知", `「${event.title}」の${mins}分前です`, 'event');
+            flags[key] = true;
+          }
+        });
+
+        if (notifyAtStart) {
+          const key = `${event.id}_${event.start}_start_at`;
+          if (!flags[key] && startTime > prev && startTime <= now) {
+            triggerNotification("予定通知", `「${event.title}」の開始時刻になりました`, 'event');
+            flags[key] = true;
+          }
+        }
+      }
+    }
+
+    // Task deadline alerts
+    if (type === 'task' && backendSettings.tasks && event.taskDeadlineNotify !== false && event.end) {
+      const deadlineTime = new Date(event.end);
+      if (!isNaN(deadlineTime.getTime())) {
+        reminderMinutes.forEach(mins => {
+          const key = `${event.id}_${event.end}_task_before_${mins}`;
+          const targetTime = new Date(deadlineTime.getTime() - mins * 60 * 1000);
+
+          if (!flags[key] && targetTime > prev && targetTime <= now) {
+            triggerNotification("タスク期限通知", `「${event.title}」の期限${mins}分前です`, 'task');
+            flags[key] = true;
+          }
+        });
+
+        if (notifyAtStart) {
+          const key = `${event.id}_${event.end}_task_deadline`;
+          if (!flags[key] && deadlineTime > prev && deadlineTime <= now) {
+            triggerNotification("タスク期限通知", `「${event.title}」の期限時刻です`, 'task');
+            flags[key] = true;
+          }
+        }
+      }
+    }
+
+    // Email reminder alerts
+    if (type === 'mail' && backendSettings.email && event.mailReminderEnabled && !event.mailSent && event.mailRemindAt) {
+      const mailTime = new Date(event.mailRemindAt);
+      const key = `${event.id}_${event.mailRemindAt}_mail`;
+      const subject = event.mailSubject ? ` (件名: ${event.mailSubject})` : "";
+      const to = event.mailTo ? ` (宛先: ${event.mailTo})` : "";
+
+      if (!flags[key] && mailTime > prev && mailTime <= now) {
+        triggerNotification("メール送信リマインド", `「${event.title}」のメール送信時間です。確認してください。${to}${subject}`, 'email');
+        flags[key] = true;
+      }
+    }
+  });
+
+  // Clean obsolete notified flags
+  const activeIds = new Set(events.map(e => String(e.id)));
+  Object.keys(flags).forEach(k => {
+    const id = k.split("_")[0];
+    if (!activeIds.has(id)) {
+      delete flags[k];
+    }
+  });
+
+  saveNotifiedFlags(flags);
+  lastCheckTime = now;
+}
+
+// Start watching notifications
+export function startNotificationWatcher() {
+  if (notificationTimer) clearInterval(notificationTimer);
+  lastCheckTime = new Date();
+  
+  // Watcher runs every 5 seconds
+  notificationTimer = setInterval(() => {
+    checkEventNotifications();
+  }, 5000);
+}
+
+// Notification history list rendering
+export async function syncNotificationHistory() {
+  const container = document.getElementById("notificationHistoryList");
+  if (!container) return;
+
+  try {
+    const logs = await apiRequest('/api/notifications/history');
+    container.innerHTML = "";
+
+    if (logs.length === 0) {
+      container.innerHTML = '<p style="text-align:center; padding:20px; opacity:0.7;">通知履歴はありません</p>';
+      return;
+    }
+
+    logs.forEach(log => {
+      const card = document.createElement("div");
+      card.className = "event-card";
+      
+      const time = new Date(log.sent_at).toLocaleString();
+      const typeLabel = log.type === 'task' ? '📋 タスク' : (log.type === 'email' ? '✉️ メール' : '📅 予定');
+
+      card.innerHTML = `
+        <div style="padding:12px; border-bottom:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <h4 style="margin:0; font-size:14px; font-weight:700;">${log.title}</h4>
+            <span style="font-size:10px; font-weight:600; opacity:0.7;">${typeLabel}</span>
+          </div>
+          <p style="margin:4px 0; font-size:13px; line-height:1.4;">${log.message}</p>
+          <span style="font-size:10px; opacity:0.6;">${time}</span>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Failed to sync notification history:', err);
+    container.innerHTML = '<p style="color:var(--ios-red); padding:10px;">通知履歴の読み込みに失敗しました</p>';
+  }
+}
+
+// Clear logs
+export async function clearNotificationHistory() {
+  const ok = confirm("通知履歴をすべて削除しますか？");
+  if (!ok) return;
+
+  try {
+    await apiRequest('/api/notifications/history', {
+      method: 'DELETE'
+    });
+    showToast("通知履歴をクリアしました 🧹");
+    syncNotificationHistory();
+  } catch (err) {
+    console.error('Failed to clear history:', err);
+  }
+}
+
+// Open notification history modal
+export function openNotificationHistoryModal() {
+  syncNotificationHistory();
+  const modal = document.getElementById("notificationHistoryModal");
+  if (modal) modal.style.display = "flex";
+}
+
+export function closeNotificationHistoryModal() {
+  const modal = document.getElementById("notificationHistoryModal");
+  if (modal) modal.style.display = "none";
+}
+
+// Reminder Chips UI helper in settings modal
+function addReminderChip(list, label, onDelete) {
+  const chip = document.createElement("span");
+  chip.className = "reminder-chip";
+  chip.style.marginRight = "6px";
+  chip.style.marginBottom = "6px";
+  chip.style.display = "inline-flex";
+  chip.style.alignItems = "center";
+  chip.style.padding = "4px 8px";
+  chip.style.borderRadius = "12px";
+  chip.style.background = "var(--primary-light)";
+  chip.style.color = "var(--primary)";
+  chip.style.fontSize = "11px";
+  chip.style.fontWeight = "600";
+
+  const text = document.createElement("span");
+  text.textContent = label;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "✕";
+  button.style.border = "none";
+  button.style.background = "none";
+  button.style.color = "var(--primary)";
+  button.style.marginLeft = "4px";
+  button.style.cursor = "pointer";
+  button.style.fontWeight = "bold";
+  button.addEventListener("click", onDelete);
+
+  chip.appendChild(text);
+  chip.appendChild(button);
+  list.appendChild(chip);
+}
+
+function renderReminderList(listId, minutes, atStart, removeMinute, removeStart) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+
+  list.innerHTML = "";
+
+  minutes.forEach(minute => {
+    let label = `${minute}分前`;
+    if (minute % 1440 === 0) label = `${minute / 1440}日前`;
+    else if (minute % 60 === 0) label = `${minute / 60}時間前`;
+
+    addReminderChip(list, label, () => removeMinute(minute));
+  });
+
+  if (atStart) {
+    addReminderChip(list, "開始/期限時刻", removeStart);
+  }
+
+  if (list.children.length === 0) {
+    list.innerHTML = `<span class="reminder-empty" style="opacity:0.5; font-size:11px;">通知なし</span>`;
+  }
+}
+
+function removeSettingsReminder(minute) {
+  const local = getLocalSettings();
+  local.eventBeforeMinutes = local.eventBeforeMinutes.filter(m => m !== minute);
+  saveLocalSettings(local);
+  updateSettingsUI();
+}
+
+function removeSettingsStartReminder() {
+  const local = getLocalSettings();
+  local.eventAtStart = false;
+  saveLocalSettings(local);
+  updateSettingsUI();
+}
+
+export function renderSettingsReminderList() {
+  const local = getLocalSettings();
+  const enabledRemind30 = document.getElementById("settingsRemind30")?.checked;
+  const enabledRemind5 = document.getElementById("settingsRemind5")?.checked;
+  const atStart = document.getElementById("settingsRemindStart")?.checked;
+
+  const list = [];
+  if (enabledRemind30) list.push(30);
+  if (enabledRemind5) list.push(5);
+  
+  const custom = parseInt(document.getElementById("settingsCustomReminderMinutes")?.value);
+  if (!isNaN(custom) && custom > 0) list.push(custom);
+
+  renderReminderList(
+    "settingsReminderList",
+    list,
+    atStart,
+    (minute) => {
+      if (minute === 30) document.getElementById("settingsRemind30").checked = false;
+      else if (minute === 5) document.getElementById("settingsRemind5").checked = false;
+      else document.getElementById("settingsCustomReminderMinutes").value = "";
+      renderSettingsReminderList();
+    },
+    () => {
+      document.getElementById("settingsRemindStart").checked = false;
+      renderSettingsReminderList();
+    }
+  );
+}

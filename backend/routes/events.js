@@ -154,7 +154,16 @@ router.get('/', authenticateToken, async (req, res) => {
             hp_consumption: e.hp_consumption,
             motivation_consumption: e.motivation_consumption,
             recurrence: e.recurrence,
-            user_access: e.user_access
+            user_access: e.user_access,
+            eventType: e.event_type || 'event',
+            reminderMinutes: e.reminder_minutes ? JSON.parse(e.reminder_minutes) : [],
+            notifyAtStart: e.notify_at_start === 1,
+            taskDeadlineNotify: e.task_deadline_notify === 1,
+            mailReminderEnabled: e.mail_reminder_enabled === 1,
+            mailTo: e.mail_to || '',
+            mailSubject: e.mail_subject || '',
+            mailRemindAt: e.mail_remind_at || '',
+            mailSent: e.mail_sent === 1
         }));
 
         res.json(filteredEvents);
@@ -166,7 +175,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // POST /api/events - Create a new event
 router.post('/', authenticateToken, async (req, res) => {
-    const { id, calendar_id, title, location, allday, start, end, color, memo, visibility, hp_consumption, motivation_consumption, recurrence } = req.body;
+    const { id, calendar_id, title, location, allday, start, end, color, memo, visibility, hp_consumption, motivation_consumption, recurrence, eventType, reminderMinutes, notifyAtStart, taskDeadlineNotify, mailReminderEnabled, mailTo, mailSubject, mailRemindAt, mailSent } = req.body;
 
     if (!title || !start || !end) {
         return res.status(400).json({ error: 'タイトル、開始時刻、終了時刻は必須です' });
@@ -212,9 +221,9 @@ router.post('/', authenticateToken, async (req, res) => {
         const alldayVal = allday ? 1 : 0;
 
         await query.run(
-            `INSERT INTO events (id, calendar_id, creator_id, title, location, allday, start_time, end_time, color, memo, visibility, hp_consumption, motivation_consumption, recurrence)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [eventId, targetCalendarId, userId, title, location || '', alldayVal, start, end, color || '#007AFF', memo || '', vis, hpVal, motVal, recurrence || null]
+            `INSERT INTO events (id, calendar_id, creator_id, title, location, allday, start_time, end_time, color, memo, visibility, hp_consumption, motivation_consumption, recurrence, event_type, reminder_minutes, notify_at_start, task_deadline_notify, mail_reminder_enabled, mail_to, mail_subject, mail_remind_at, mail_sent)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [eventId, targetCalendarId, userId, title, location || '', alldayVal, start, end, color || '#007AFF', memo || '', vis, hpVal, motVal, recurrence || null, eventType || 'event', JSON.stringify(reminderMinutes || []), notifyAtStart !== false ? 1 : 0, taskDeadlineNotify !== false ? 1 : 0, mailReminderEnabled ? 1 : 0, mailTo || '', mailSubject || '', mailRemindAt || '', mailSent ? 1 : 0]
         );
 
         // Broadcast to calendar accessors via WebSocket
@@ -241,7 +250,7 @@ router.post('/', authenticateToken, async (req, res) => {
 // PUT /api/events/:id - Update an existing event
 router.put('/:id', authenticateToken, async (req, res) => {
     const eventId = req.params.id;
-    const { calendar_id, title, location, allday, start, end, color, memo, visibility, hp_consumption, motivation_consumption, recurrence } = req.body;
+    const { calendar_id, title, location, allday, start, end, color, memo, visibility, hp_consumption, motivation_consumption, recurrence, eventType, reminderMinutes, notifyAtStart, taskDeadlineNotify, mailReminderEnabled, mailTo, mailSubject, mailRemindAt, mailSent } = req.body;
 
     if (!title || !start || !end) {
         return res.status(400).json({ error: 'タイトル、開始時刻、終了時刻は必須です' });
@@ -290,9 +299,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
         await query.run(
             `UPDATE events 
-             SET calendar_id = ?, title = ?, location = ?, allday = ?, start_time = ?, end_time = ?, color = ?, memo = ?, visibility = ?, hp_consumption = ?, motivation_consumption = ?, recurrence = ?
+             SET calendar_id = ?, title = ?, location = ?, allday = ?, start_time = ?, end_time = ?, color = ?, memo = ?, visibility = ?, hp_consumption = ?, motivation_consumption = ?, recurrence = ?, event_type = ?, reminder_minutes = ?, notify_at_start = ?, task_deadline_notify = ?, mail_reminder_enabled = ?, mail_to = ?, mail_subject = ?, mail_remind_at = ?, mail_sent = ?
              WHERE id = ?`,
-            [targetCalendarId, title, location || '', alldayVal, start, end, color || '#007AFF', memo || '', vis, hpVal, motVal, recurrence || null, eventId]
+            [targetCalendarId, title, location || '', alldayVal, start, end, color || '#007AFF', memo || '', vis, hpVal, motVal, recurrence || null, eventType || 'event', JSON.stringify(reminderMinutes || []), notifyAtStart !== false ? 1 : 0, taskDeadlineNotify !== false ? 1 : 0, mailReminderEnabled ? 1 : 0, mailTo || '', mailSubject || '', mailRemindAt || '', mailSent ? 1 : 0, eventId]
         );
 
         // Broadcast to original and new calendar accessors
