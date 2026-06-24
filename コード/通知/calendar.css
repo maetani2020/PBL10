@@ -523,6 +523,39 @@ FAB
   color: #fff;
 }
 
+.reminder-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.reminder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reminder-chip button {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #ea4335;
+  color: #fff;
+  font-size: 11px;
+}
+
+.reminder-empty {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 /* ==========================
 サイドバー
 ========================== */

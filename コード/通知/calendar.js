@@ -42,8 +42,6 @@ const dayView = document.getElementById("dayView");
 const currentTitle = document.getElementById("currentTitle");
 const eventModal = document.getElementById("eventModal");
 const listModal = document.getElementById("listModal");
-const notifyToggleBtn = document.getElementById("notifyToggleBtn");
-const notifyToggleIcon = document.getElementById("notifyToggleIcon");
 
 // 通知履歴
 const notificationHistoryBtn = document.getElementById("notificationHistoryBtn");
@@ -88,17 +86,7 @@ function setNotificationEnabled(enabled) {
   localStorage.setItem(NOTIFICATION_ENABLED_KEY, String(enabled));
 }
 
-function updateNotificationToggleUI() {
-  const enabled = isNotificationEnabled();
-
-  if (enabled) {
-    notifyToggleIcon.textContent = "notifications";
-    notifyToggleBtn.title = "通知ON（クリックでOFF）";
-  } else {
-    notifyToggleIcon.textContent = "notifications_off";
-    notifyToggleBtn.title = "通知OFF（クリックでON）";
-  }
-}
+function updateNotificationToggleUI() {}
 
 function normalizeMinutes(values) {
   if (!Array.isArray(values)) return [];
@@ -245,6 +233,42 @@ function closeNotificationHistoryModal() {
   notificationHistoryModal.style.display = "none";
 }
 
+function addReminderChip(list, label, onDelete) {
+  const chip = document.createElement("span");
+  chip.className = "reminder-chip";
+
+  const text = document.createElement("span");
+  text.textContent = label;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "削除";
+  button.addEventListener("click", onDelete);
+
+  chip.appendChild(text);
+  chip.appendChild(button);
+  list.appendChild(chip);
+}
+
+function renderReminderList(listId, minutes, atStart, removeMinute, removeStart) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+
+  list.innerHTML = "";
+
+  minutes.forEach((minute) => {
+    addReminderChip(list, formatReminderLabel(minute), () => removeMinute(minute));
+  });
+
+  if (atStart) {
+    addReminderChip(list, "開始/期限時刻", removeStart);
+  }
+
+  if (list.children.length === 0) {
+    list.innerHTML = `<span class="reminder-empty">通知なし</span>`;
+  }
+}
+
 function setEventReminderControls(minutes, atStart) {
   const normalized = normalizeMinutes(minutes);
   document.getElementById("remind30").checked = normalized.includes(30);
@@ -253,6 +277,7 @@ function setEventReminderControls(minutes, atStart) {
 
   const custom = normalized.find((value) => value !== 30 && value !== 5);
   document.getElementById("customReminderMinutes").value = custom || "";
+  renderEventReminderList();
 }
 
 function collectEventReminderMinutes() {
@@ -264,6 +289,29 @@ function collectEventReminderMinutes() {
   if (Number.isFinite(custom) && custom > 0) minutes.push(Math.floor(custom));
 
   return normalizeMinutes(minutes);
+}
+
+function removeEventReminder(minutes) {
+  if (minutes === 30) document.getElementById("remind30").checked = false;
+  else if (minutes === 5) document.getElementById("remind5").checked = false;
+  else document.getElementById("customReminderMinutes").value = "";
+
+  renderEventReminderList();
+}
+
+function removeEventStartReminder() {
+  document.getElementById("remindStart").checked = false;
+  renderEventReminderList();
+}
+
+function renderEventReminderList() {
+  renderReminderList(
+    "eventReminderList",
+    collectEventReminderMinutes(),
+    document.getElementById("remindStart").checked,
+    removeEventReminder,
+    removeEventStartReminder
+  );
 }
 
 function updateEventOptionVisibility() {
@@ -280,6 +328,7 @@ function setSettingsReminderControls(settings) {
 
   const custom = minutes.find((value) => value !== 30 && value !== 5);
   document.getElementById("settingsCustomReminderMinutes").value = custom || "";
+  renderSettingsReminderList();
 }
 
 function collectSettingsReminderMinutes() {
@@ -291,6 +340,29 @@ function collectSettingsReminderMinutes() {
   if (Number.isFinite(custom) && custom > 0) minutes.push(Math.floor(custom));
 
   return normalizeMinutes(minutes);
+}
+
+function removeSettingsReminder(minutes) {
+  if (minutes === 30) document.getElementById("settingsRemind30").checked = false;
+  else if (minutes === 5) document.getElementById("settingsRemind5").checked = false;
+  else document.getElementById("settingsCustomReminderMinutes").value = "";
+
+  renderSettingsReminderList();
+}
+
+function removeSettingsStartReminder() {
+  document.getElementById("settingsRemindStart").checked = false;
+  renderSettingsReminderList();
+}
+
+function renderSettingsReminderList() {
+  renderReminderList(
+    "settingsReminderList",
+    collectSettingsReminderMinutes(),
+    document.getElementById("settingsRemindStart").checked,
+    removeSettingsReminder,
+    removeSettingsStartReminder
+  );
 }
 
 function openNotificationSettingsModal() {
@@ -1235,28 +1307,16 @@ document.getElementById("eventStart").addEventListener("change", (e) => {
 
 document.getElementById("eventType").addEventListener("change", updateEventOptionVisibility);
 
-// 通知ON/OFFボタン
-notifyToggleBtn.addEventListener("click", async () => {
-  const current = isNotificationEnabled();
-
-  if (current) {
-    setNotificationEnabled(false);
-    updateNotificationToggleUI();
-    alert("通知をOFFにしました");
-    return;
-  }
-
-  const granted = await ensureNotificationPermission();
-  if (!granted) {
-    alert("通知をONにできませんでした（ブラウザ通知が許可されていません）");
-    return;
-  }
-
-  setNotificationEnabled(true);
-  updateNotificationToggleUI();
-  alert("通知をONにしました");
-  checkEventNotifications();
+["remind30", "remind5", "remindStart", "customReminderMinutes"].forEach((id) => {
+  const element = document.getElementById(id);
+  element.addEventListener(id.includes("custom") ? "input" : "change", renderEventReminderList);
 });
+
+["settingsRemind30", "settingsRemind5", "settingsRemindStart", "settingsCustomReminderMinutes"].forEach((id) => {
+  const element = document.getElementById(id);
+  element.addEventListener(id.includes("Custom") ? "input" : "change", renderSettingsReminderList);
+});
+
 
 // 通知履歴ボタン
 notificationHistoryBtn.addEventListener("click", () => {

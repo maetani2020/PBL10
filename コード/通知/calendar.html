@@ -48,12 +48,7 @@
           <span class="material-icons"> list </span>
         </button>
 
-        <!-- 通知ON/OFF -->
-        <button id="notifyToggleBtn" class="icon-btn" title="通知ON/OFF">
-          <span id="notifyToggleIcon" class="material-icons"> notifications </span>
-        </button>
-
-        <!-- 通知履歴（ON/OFFの横） -->
+        <!-- 通知履歴 -->
         <button id="notificationHistoryBtn" class="icon-btn" title="通知履歴">
           <span class="material-icons"> history </span>
         </button>
@@ -156,6 +151,7 @@
             max="10080"
             placeholder="カスタム通知（分前）"
           />
+          <div id="eventReminderList" class="reminder-chip-list"></div>
         </div>
 
         <div id="taskOptions" class="event-extra-options hidden">
@@ -268,6 +264,7 @@
           max="10080"
           placeholder="既定のカスタム通知（分前）"
         />
+        <div id="settingsReminderList" class="reminder-chip-list"></div>
 
         <label>通知履歴の保持日数</label>
         <input type="number" id="settingsHistoryRetentionDays" min="1" max="365" />
