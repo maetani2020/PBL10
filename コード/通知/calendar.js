@@ -1,4 +1,4 @@
-/* ==========================================
+﻿/* ==========================================
    Shared Calendar v2
    calendar.js
 ========================================== */
@@ -18,9 +18,15 @@ let lastCheckTime = new Date(); // 前回チェック時刻（取りこぼし防
 const NOTIFIED_KEY = "shared_calendar_notified_flags";
 const NOTIFICATION_ENABLED_KEY = "shared_calendar_notification_enabled";
 const NOTIFICATION_HISTORY_KEY = "shared_calendar_notification_history";
+const NOTIFICATION_SETTINGS_KEY = "shared_calendar_notification_settings";
 
-// 30日（ミリ秒）
-const NOTIFICATION_HISTORY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  eventBeforeMinutes: [30, 5],
+  eventAtStart: true,
+  taskDeadlineEnabled: true,
+  mailReminderEnabled: true,
+  historyRetentionDays: 30,
+};
 
 // ==========================================
 // LocalStorageキー
@@ -45,6 +51,12 @@ const notificationHistoryModal = document.getElementById("notificationHistoryMod
 const notificationHistoryList = document.getElementById("notificationHistoryList");
 const closeNotificationHistoryBtn = document.getElementById("closeNotificationHistoryBtn");
 const clearNotificationHistoryBtn = document.getElementById("clearNotificationHistoryBtn");
+
+// 通知設定
+const notificationSettingsBtn = document.getElementById("notificationSettingsBtn");
+const notificationSettingsModal = document.getElementById("notificationSettingsModal");
+const closeNotificationSettingsBtn = document.getElementById("closeNotificationSettingsBtn");
+const saveNotificationSettingsBtn = document.getElementById("saveNotificationSettingsBtn");
 
 // 現在ページURL（通知クリック復帰先）
 const CURRENT_PAGE_URL = window.location.href;
@@ -88,6 +100,67 @@ function updateNotificationToggleUI() {
   }
 }
 
+function normalizeMinutes(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0))]
+    .sort((a, b) => b - a);
+}
+
+function normalizeNotificationSettings(settings) {
+  const merged = { ...DEFAULT_NOTIFICATION_SETTINGS, ...(settings || {}) };
+  merged.eventBeforeMinutes = normalizeMinutes(merged.eventBeforeMinutes);
+  merged.eventAtStart = merged.eventAtStart !== false;
+  merged.taskDeadlineEnabled = merged.taskDeadlineEnabled !== false;
+  merged.mailReminderEnabled = merged.mailReminderEnabled !== false;
+
+  const retention = Number(merged.historyRetentionDays);
+  merged.historyRetentionDays = Number.isFinite(retention)
+    ? Math.min(Math.max(Math.floor(retention), 1), 365)
+    : DEFAULT_NOTIFICATION_SETTINGS.historyRetentionDays;
+
+  return merged;
+}
+
+function getNotificationSettings() {
+  const raw = localStorage.getItem(NOTIFICATION_SETTINGS_KEY);
+  if (!raw) return normalizeNotificationSettings(DEFAULT_NOTIFICATION_SETTINGS);
+
+  try {
+    return normalizeNotificationSettings(JSON.parse(raw));
+  } catch (e) {
+    return normalizeNotificationSettings(DEFAULT_NOTIFICATION_SETTINGS);
+  }
+}
+
+function saveNotificationSettings(settings) {
+  localStorage.setItem(
+    NOTIFICATION_SETTINGS_KEY,
+    JSON.stringify(normalizeNotificationSettings(settings))
+  );
+}
+
+function getEventReminderMinutes(event) {
+  if (Array.isArray(event.reminderMinutes)) {
+    return normalizeMinutes(event.reminderMinutes);
+  }
+  return getNotificationSettings().eventBeforeMinutes;
+}
+
+function getEventNotifyAtStart(event) {
+  if (typeof event.notifyAtStart === "boolean") return event.notifyAtStart;
+  return getNotificationSettings().eventAtStart;
+}
+
+function formatReminderLabel(minutes) {
+  if (minutes % 1440 === 0) return `${minutes / 1440}日前`;
+  if (minutes % 60 === 0) return `${minutes / 60}時間前`;
+  return `${minutes}分前`;
+}
+
+function makeReminderTarget(baseDate, minutes) {
+  return new Date(baseDate.getTime() - minutes * 60 * 1000);
+}
+
 // ==========================================
 // 通知履歴管理（30日保持）
 // ==========================================
@@ -101,9 +174,11 @@ function saveNotificationHistory(items) {
 
 function pruneOldNotificationHistory() {
   const now = Date.now();
+  const retentionDays = getNotificationSettings().historyRetentionDays;
+  const retentionMs = retentionDays * 24 * 60 * 60 * 1000;
   const items = getNotificationHistory();
   const pruned = items.filter((item) => {
-    return now - item.timestamp <= NOTIFICATION_HISTORY_RETENTION_MS;
+    return now - item.timestamp <= retentionMs;
   });
   saveNotificationHistory(pruned);
 }
@@ -168,6 +243,84 @@ function openNotificationHistoryModal() {
 
 function closeNotificationHistoryModal() {
   notificationHistoryModal.style.display = "none";
+}
+
+function setEventReminderControls(minutes, atStart) {
+  const normalized = normalizeMinutes(minutes);
+  document.getElementById("remind30").checked = normalized.includes(30);
+  document.getElementById("remind5").checked = normalized.includes(5);
+  document.getElementById("remindStart").checked = !!atStart;
+
+  const custom = normalized.find((value) => value !== 30 && value !== 5);
+  document.getElementById("customReminderMinutes").value = custom || "";
+}
+
+function collectEventReminderMinutes() {
+  const minutes = [];
+  if (document.getElementById("remind30").checked) minutes.push(30);
+  if (document.getElementById("remind5").checked) minutes.push(5);
+
+  const custom = Number(document.getElementById("customReminderMinutes").value);
+  if (Number.isFinite(custom) && custom > 0) minutes.push(Math.floor(custom));
+
+  return normalizeMinutes(minutes);
+}
+
+function updateEventOptionVisibility() {
+  const eventType = document.getElementById("eventType").value;
+  document.getElementById("taskOptions").classList.toggle("hidden", eventType !== "task");
+  document.getElementById("mailOptions").classList.toggle("hidden", eventType !== "mail");
+}
+
+function setSettingsReminderControls(settings) {
+  const minutes = normalizeMinutes(settings.eventBeforeMinutes);
+  document.getElementById("settingsRemind30").checked = minutes.includes(30);
+  document.getElementById("settingsRemind5").checked = minutes.includes(5);
+  document.getElementById("settingsRemindStart").checked = !!settings.eventAtStart;
+
+  const custom = minutes.find((value) => value !== 30 && value !== 5);
+  document.getElementById("settingsCustomReminderMinutes").value = custom || "";
+}
+
+function collectSettingsReminderMinutes() {
+  const minutes = [];
+  if (document.getElementById("settingsRemind30").checked) minutes.push(30);
+  if (document.getElementById("settingsRemind5").checked) minutes.push(5);
+
+  const custom = Number(document.getElementById("settingsCustomReminderMinutes").value);
+  if (Number.isFinite(custom) && custom > 0) minutes.push(Math.floor(custom));
+
+  return normalizeMinutes(minutes);
+}
+
+function openNotificationSettingsModal() {
+  const settings = getNotificationSettings();
+  document.getElementById("settingsNotificationEnabled").checked = isNotificationEnabled();
+  document.getElementById("settingsTaskDeadlineEnabled").checked = settings.taskDeadlineEnabled;
+  document.getElementById("settingsMailReminderEnabled").checked = settings.mailReminderEnabled;
+  document.getElementById("settingsHistoryRetentionDays").value = settings.historyRetentionDays;
+  setSettingsReminderControls(settings);
+  notificationSettingsModal.style.display = "flex";
+}
+
+function closeNotificationSettingsModal() {
+  notificationSettingsModal.style.display = "none";
+}
+
+function saveNotificationSettingsFromForm() {
+  const settings = getNotificationSettings();
+  settings.eventBeforeMinutes = collectSettingsReminderMinutes();
+  settings.eventAtStart = document.getElementById("settingsRemindStart").checked;
+  settings.taskDeadlineEnabled = document.getElementById("settingsTaskDeadlineEnabled").checked;
+  settings.mailReminderEnabled = document.getElementById("settingsMailReminderEnabled").checked;
+  settings.historyRetentionDays = document.getElementById("settingsHistoryRetentionDays").value;
+
+  saveNotificationSettings(settings);
+  setNotificationEnabled(document.getElementById("settingsNotificationEnabled").checked);
+  updateNotificationToggleUI();
+  pruneOldNotificationHistory();
+  closeNotificationSettingsModal();
+  alert("通知設定を保存しました");
 }
 
 // ==========================================
@@ -266,11 +419,22 @@ function closeListModal() {
 // 入力リセット
 // ==========================================
 function resetForm() {
+  const settings = getNotificationSettings();
+
   selectedEventId = null;
   document.getElementById("eventTitle").value = "";
   document.getElementById("eventMemo").value = "";
   document.getElementById("eventVisibility").value = "public";
   document.getElementById("allDay").checked = false;
+  document.getElementById("eventType").value = "event";
+  document.getElementById("taskDeadlineNotify").checked = settings.taskDeadlineEnabled;
+  document.getElementById("mailReminderEnabled").checked = settings.mailReminderEnabled;
+  document.getElementById("mailTo").value = "";
+  document.getElementById("mailSubject").value = "";
+  document.getElementById("mailRemindAt").value = "";
+  document.getElementById("mailSent").checked = false;
+  setEventReminderControls(settings.eventBeforeMinutes, settings.eventAtStart);
+  updateEventOptionVisibility();
 }
 
 // ==========================================
@@ -289,6 +453,7 @@ function openCreateEvent() {
 
   document.getElementById("eventStart").value = formatDateTimeLocal(start);
   document.getElementById("eventEnd").value = formatDateTimeLocal(end);
+  document.getElementById("mailRemindAt").value = formatDateTimeLocal(start);
 
   openModal();
 }
@@ -297,6 +462,8 @@ function openCreateEvent() {
 // 編集モード
 // ==========================================
 function openEditEvent(event) {
+  const settings = getNotificationSettings();
+
   selectedEventId = event.id;
   document.getElementById("eventTitle").value = event.title;
   document.getElementById("eventMemo").value = event.memo || "";
@@ -304,6 +471,17 @@ function openEditEvent(event) {
   document.getElementById("eventEnd").value = event.end;
   document.getElementById("eventVisibility").value = event.visibility;
   document.getElementById("allDay").checked = event.allDay;
+  document.getElementById("eventType").value = event.eventType || "event";
+  document.getElementById("taskDeadlineNotify").checked =
+    typeof event.taskDeadlineNotify === "boolean" ? event.taskDeadlineNotify : settings.taskDeadlineEnabled;
+  document.getElementById("mailReminderEnabled").checked =
+    typeof event.mailReminderEnabled === "boolean" ? event.mailReminderEnabled : settings.mailReminderEnabled;
+  document.getElementById("mailTo").value = event.mailTo || "";
+  document.getElementById("mailSubject").value = event.mailSubject || "";
+  document.getElementById("mailRemindAt").value = event.mailRemindAt || event.start || "";
+  document.getElementById("mailSent").checked = !!event.mailSent;
+  setEventReminderControls(getEventReminderMinutes(event), getEventNotifyAtStart(event));
+  updateEventOptionVisibility();
   openModal();
 }
 
@@ -347,54 +525,130 @@ function showWindowsNotification(title, body, tag) {
 
 // ==========================================
 // 予定通知チェック
-// 30分前 / 5分前 / 開始時刻
+// 個別通知 / タスク期限 / メール送信リマインド
 // ==========================================
+function notifyOnce(flags, key, targetTime, prev, now, title, body) {
+  if (!(targetTime instanceof Date) || isNaN(targetTime.getTime())) return;
+  if (flags[key]) return;
+  if (targetTime > prev && targetTime <= now) {
+    showWindowsNotification(title, body, key);
+    flags[key] = true;
+  }
+}
+
 function checkEventNotifications() {
   if (!isNotificationEnabled()) {
     lastCheckTime = new Date();
     return;
   }
 
+  const settings = getNotificationSettings();
   const events = getEvents();
   const now = new Date();
   const prev = lastCheckTime || new Date(now.getTime() - 5000);
   const flags = getNotifiedFlags();
 
   events.forEach((event) => {
-    if (event.allDay) return;
-    if (!event.start) return;
+    const eventType = event.eventType || "event";
+    const reminderMinutes = getEventReminderMinutes(event);
+    const notifyAtStart = getEventNotifyAtStart(event);
 
-    const startTime = new Date(event.start);
-    if (isNaN(startTime.getTime())) return;
+    if (!event.allDay && event.start && eventType === "event") {
+      const startTime = new Date(event.start);
+      if (!isNaN(startTime.getTime())) {
+        reminderMinutes.forEach((minutes) => {
+          const key = `${event.id}_${event.start}_start_before_${minutes}`;
+          const target = makeReminderTarget(startTime, minutes);
+          notifyOnce(
+            flags,
+            key,
+            target,
+            prev,
+            now,
+            "予定通知",
+            `「${event.title}」の${formatReminderLabel(minutes)}です`
+          );
+        });
 
-    const diffMs = startTime.getTime() - now.getTime();
-    const diffMin = diffMs / 60000;
-
-    const baseKey = `${event.id}_${event.start}`;
-    const key30 = `${baseKey}_30`;
-    const key5 = `${baseKey}_5`;
-    const keyStart = `${baseKey}_start`;
-
-    if (diffMin <= 30 && diffMin > 29 && !flags[key30]) {
-      showWindowsNotification("予定通知", `「${event.title}」の30分前です`, key30);
-      flags[key30] = true;
+        if (notifyAtStart) {
+          const key = `${event.id}_${event.start}_start_at`;
+          notifyOnce(
+            flags,
+            key,
+            startTime,
+            prev,
+            now,
+            "予定通知",
+            `「${event.title}」の開始時刻になりました`
+          );
+        }
+      }
     }
 
-    if (diffMin <= 5 && diffMin > 4 && !flags[key5]) {
-      showWindowsNotification("予定通知", `「${event.title}」の5分前です`, key5);
-      flags[key5] = true;
+    if (
+      eventType === "task" &&
+      settings.taskDeadlineEnabled &&
+      event.taskDeadlineNotify !== false &&
+      event.end
+    ) {
+      const deadlineTime = new Date(event.end);
+      if (!isNaN(deadlineTime.getTime())) {
+        reminderMinutes.forEach((minutes) => {
+          const key = `${event.id}_${event.end}_task_before_${minutes}`;
+          const target = makeReminderTarget(deadlineTime, minutes);
+          notifyOnce(
+            flags,
+            key,
+            target,
+            prev,
+            now,
+            "タスク期限通知",
+            `「${event.title}」の期限${formatReminderLabel(minutes)}です`
+          );
+        });
+
+        if (notifyAtStart) {
+          const key = `${event.id}_${event.end}_task_deadline`;
+          notifyOnce(
+            flags,
+            key,
+            deadlineTime,
+            prev,
+            now,
+            "タスク期限通知",
+            `「${event.title}」の期限時刻です`
+          );
+        }
+      }
     }
 
-    if (!flags[keyStart] && startTime > prev && startTime <= now) {
-      showWindowsNotification("予定通知", `「${event.title}」の開始時刻になりました`, keyStart);
-      flags[keyStart] = true;
+    if (
+      settings.mailReminderEnabled &&
+      event.mailReminderEnabled &&
+      !event.mailSent &&
+      event.mailRemindAt
+    ) {
+      const mailTime = new Date(event.mailRemindAt);
+      const key = `${event.id}_${event.mailRemindAt}_mail`;
+      const subjectText = event.mailSubject ? ` 件名: ${event.mailSubject}` : "";
+      const toText = event.mailTo ? ` 宛先: ${event.mailTo}` : "";
+
+      notifyOnce(
+        flags,
+        key,
+        mailTime,
+        prev,
+        now,
+        "メール送信リマインド",
+        `「${event.title}」のメール送信を確認してください。${toText}${subjectText}`
+      );
     }
   });
 
-  const eventKeys = new Set(events.map((e) => `${e.id}_${e.start}`));
-  Object.keys(flags).forEach((k) => {
-    const prefix = k.replace(/_(30|5|start)$/, "");
-    if (!eventKeys.has(prefix)) delete flags[k];
+  const activeIds = new Set(events.map((event) => String(event.id)));
+  Object.keys(flags).forEach((key) => {
+    const id = String(key).split("_")[0];
+    if (!activeIds.has(id)) delete flags[key];
   });
 
   saveNotifiedFlags(flags);
@@ -716,7 +970,23 @@ function saveEvent() {
   const memo = document.getElementById("eventMemo").value;
   const visibility = document.getElementById("eventVisibility").value;
   const allDay = document.getElementById("allDay").checked;
+  const eventType = document.getElementById("eventType").value;
+  const reminderMinutes = collectEventReminderMinutes();
+  const notifyAtStart = document.getElementById("remindStart").checked;
+  const taskDeadlineNotify =
+    eventType === "task" && document.getElementById("taskDeadlineNotify").checked;
+  const mailReminderEnabled =
+    eventType === "mail" && document.getElementById("mailReminderEnabled").checked;
+  const mailTo = document.getElementById("mailTo").value.trim();
+  const mailSubject = document.getElementById("mailSubject").value.trim();
+  const mailRemindAt = document.getElementById("mailRemindAt").value;
+  const mailSent = document.getElementById("mailSent").checked;
   const date = start.substring(0, 10);
+
+  if (mailReminderEnabled && mailRemindAt === "") {
+    alert("メール送信リマインドの通知日時を入力してください");
+    return;
+  }
 
   let events = getEvents();
   const isEdit = !!selectedEventId;
@@ -730,6 +1000,15 @@ function saveEvent() {
     memo,
     visibility,
     allDay,
+    eventType,
+    reminderMinutes,
+    notifyAtStart,
+    taskDeadlineNotify,
+    mailReminderEnabled,
+    mailTo,
+    mailSubject,
+    mailRemindAt,
+    mailSent,
   };
 
   if (isEdit) {
@@ -859,6 +1138,7 @@ function initializeStorage() {
   if (!localStorage.getItem(NOTIFICATION_HISTORY_KEY)) {
     saveNotificationHistory([]);
   }
+  saveNotificationSettings(getNotificationSettings());
   pruneOldNotificationHistory();
 }
 
@@ -931,6 +1211,7 @@ document.addEventListener("keydown", (e) => {
     closeListModal();
     closeSidebar();
     closeNotificationHistoryModal();
+    closeNotificationSettingsModal();
   }
 });
 
@@ -951,6 +1232,8 @@ document.getElementById("eventStart").addEventListener("change", (e) => {
     endInput.value = formatDateTimeLocal(minEnd);
   }
 });
+
+document.getElementById("eventType").addEventListener("change", updateEventOptionVisibility);
 
 // 通知ON/OFFボタン
 notifyToggleBtn.addEventListener("click", async () => {
@@ -994,6 +1277,22 @@ clearNotificationHistoryBtn.addEventListener("click", () => {
 notificationHistoryModal.addEventListener("click", (e) => {
   if (e.target === notificationHistoryModal) {
     closeNotificationHistoryModal();
+  }
+});
+
+notificationSettingsBtn.addEventListener("click", () => {
+  openNotificationSettingsModal();
+});
+
+closeNotificationSettingsBtn.addEventListener("click", () => {
+  closeNotificationSettingsModal();
+});
+
+saveNotificationSettingsBtn.addEventListener("click", saveNotificationSettingsFromForm);
+
+notificationSettingsModal.addEventListener("click", (e) => {
+  if (e.target === notificationSettingsModal) {
+    closeNotificationSettingsModal();
   }
 });
 

@@ -1,4 +1,4 @@
-/* =====================================
+﻿/* =====================================
 Shared Calendar v2
 calendar.css
 ===================================== */
@@ -485,6 +485,42 @@ FAB
 #scheduleList {
   max-height: 400px;
   overflow: auto;
+}
+
+.wide-modal {
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.event-extra-options {
+  margin-bottom: 10px;
+  padding-top: 2px;
+}
+
+.inline-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.compact-checkbox {
+  width: auto;
+  margin-bottom: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.modal-content .checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+#saveNotificationSettingsBtn {
+  background: var(--primary);
+  color: #fff;
 }
 
 /* ==========================
