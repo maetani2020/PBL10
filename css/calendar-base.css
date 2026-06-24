@@ -303,83 +303,29 @@ FAB
 
   align-items: center;
 
-  background: rgba(10, 10, 12, 0.35);
+  background: rgba(0, 0, 0, 0.4);
 
   z-index: 2000;
 
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  overflow: hidden;
-}
-
-.modal::before,
-.modal::after {
-  content: '';
-  position: absolute;
-  width: 400px;
-  height: 400px;
-  border-radius: 50%;
-  filter: blur(100px);
-  z-index: 0;
-  opacity: 0.32;
-  pointer-events: none;
-  animation: liquidMove 15s infinite alternate ease-in-out;
-}
-
-.modal::before {
-  background: radial-gradient(circle, #ff375f 0%, rgba(255, 55, 95, 0) 70%);
-  top: 5%;
-  left: 15%;
-}
-
-.modal::after {
-  background: radial-gradient(circle, #0a84ff 0%, rgba(10, 132, 255, 0) 70%);
-  bottom: 10%;
-  right: 15%;
-  animation-delay: -5s;
-}
-
-@keyframes liquidMove {
-  0% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(80px, 60px) scale(1.15);
-  }
-  100% {
-    transform: translate(-40px, -50px) scale(0.9);
-  }
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .modal-content {
   width: 90%;
   max-width: 460px;
   max-height: 85vh;
-  background: rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(8px) saturate(220%);
-  -webkit-backdrop-filter: blur(8px) saturate(220%);
+  background: var(--surface);
   padding: 24px;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 
-    0 4px 30px rgba(0, 0, 0, 0.03),
-    0 30px 70px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.70),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
-  position: relative;
-  z-index: 1;
 }
 
 body.dark .modal-content {
-  background: rgba(25, 25, 30, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 
-    0 4px 30px rgba(0, 0, 0, 0.2),
-    0 30px 70px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 .modal-body {
@@ -416,43 +362,23 @@ body.dark ::-webkit-scrollbar-thumb {
 
   margin-bottom: 10px;
 
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border);
 
-  border-radius: 10px;
+  border-radius: 8px;
 
-  background: rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  background: var(--bg);
 
   color: var(--text);
 
-  transition: all 0.25s ease;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
 }
 
 .modal-content input:not([type="checkbox"]):focus,
 .modal-content textarea:focus,
 .modal-content select:focus {
   border-color: var(--primary);
-  background: rgba(255, 255, 255, 0.85);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
   outline: none;
-}
-
-body.dark .modal-content input:not([type="checkbox"]),
-body.dark .modal-content textarea,
-body.dark .modal-content select {
-  background: rgba(0, 0, 0, 0.2);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-body.dark .modal-content input:not([type="checkbox"]):focus,
-body.dark .modal-content textarea:focus,
-body.dark .modal-content select:focus {
-  background: rgba(0, 0, 0, 0.4);
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.3);
 }
 
 .modal-content input[type="checkbox"] {
@@ -487,81 +413,75 @@ body.dark .modal-content select:focus {
 }
 
 #saveEventBtn {
-  background: linear-gradient(135deg, #007aff, #0056b3) !important;
+  background: var(--primary);
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+}
+
+#saveEventBtn:hover {
+  background: #1557b0;
 }
 
 #deleteEventBtn {
-  background: linear-gradient(135deg, #ff3b30, #c62828) !important;
+  background: #ea4335;
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 15px rgba(255, 59, 48, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+}
+
+#deleteEventBtn:hover {
+  background: #d93025;
 }
 
 #closeModalBtn {
-  background: rgba(0, 0, 0, 0.05) !important;
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: var(--border);
   color: var(--text);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
 }
 
-body.dark #closeModalBtn {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+#closeModalBtn:hover {
+  opacity: 0.9;
 }
 
 /* Premium iOS-style Modal Buttons styling for primary-btn, danger-btn, modal-footer-btn */
 .primary-btn {
-  background: linear-gradient(135deg, #007aff, #0056b3) !important;
+  background: var(--primary) !important;
   color: white !important;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: none;
   border-radius: 10px;
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .primary-btn:hover {
-  opacity: 0.95;
+  background: #1557b0 !important;
 }
 
 .danger-btn {
-  background: linear-gradient(135deg, #ff3b30, #c62828) !important;
+  background: #ea4335 !important;
   color: white !important;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: none;
   border-radius: 10px;
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(255, 59, 48, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .danger-btn:hover {
-  opacity: 0.95;
+  background: #d93025 !important;
 }
 
 .modal-footer-btn {
-  background: rgba(0, 0, 0, 0.05) !important;
+  background: var(--border) !important;
   color: var(--text) !important;
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: none;
   border-radius: 10px;
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-body.dark .modal-footer-btn {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .modal-footer-btn:hover {

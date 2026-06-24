@@ -137,16 +137,11 @@
 }
 
 .event-extra-options {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 14px;
+  background: var(--bg);
+  border-radius: 12px;
   padding: 12px;
   margin-bottom: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-body.dark .event-extra-options {
-  background: rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
 }
 
 .event-extra-options label {
