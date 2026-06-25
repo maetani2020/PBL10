@@ -61,6 +61,11 @@
           <span class="material-icons"> settings </span>
           設定
         </li>
+
+        <li class="sidebar-item admin-nav hidden" data-nav="admin">
+          <span class="material-icons"> admin_panel_settings </span>
+          管理者
+        </li>
       </ul>
 
       <!-- アカウントパネル -->
@@ -271,6 +276,43 @@
       <div id="historyPanel" class="history-panel"></div>
     </section>
 
+    <section id="adminPanel" class="admin-panel hidden">
+      <div class="admin-header">
+        <h3>管理者画面</h3>
+        <button id="refreshAdminBtn" type="button" class="secondary-btn">
+          <span class="material-icons">refresh</span>
+          更新
+        </button>
+      </div>
+
+      <div id="adminStatsCards" class="admin-stats-grid"></div>
+
+      <div class="admin-card">
+        <h4>ユーザー管理</h4>
+        <div class="admin-table-wrap">
+          <table class="admin-user-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>表示名</th>
+                <th>メール</th>
+                <th>権限</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <h4>お知らせ送信</h4>
+        <input type="text" id="adminAnnouncementTitle" placeholder="タイトル" />
+        <textarea id="adminAnnouncementMessage" rows="3" placeholder="本文"></textarea>
+        <button id="sendAnnouncementBtn" type="button" class="primary-btn">送信</button>
+      </div>
+    </section>
+
     <!-- =========================
      追加ボタン
 ========================== -->
@@ -385,7 +427,7 @@
           </div>
 
           <!-- HP消費率・やる気消費率 -->
-          <div class="hp-motivation-inputs" style="display: flex; gap: 12px; margin-bottom: 10px;">
+          <div class="hp-motivation-inputs hidden" style="display: none;">
             <div style="flex: 1;">
               <label>HP消費率 (%)</label>
               <input type="number" id="hpCost" min="0" max="100" value="0" />
@@ -403,6 +445,9 @@
         </div>
 
         <div class="modal-actions">
+          <button id="saveDraftEventBtn" type="button" class="secondary-btn">下書き保存</button>
+          <button id="loadDraftEventBtn" type="button" class="secondary-btn">下書き読込</button>
+          <button id="clearDraftEventBtn" type="button" class="danger-btn">下書き削除</button>
           <button id="saveEventBtn">保存</button>
           <button id="deleteEventBtn">削除</button>
           <button id="closeModalBtn">閉じる</button>
@@ -577,10 +622,10 @@
         <!-- Inputs -->
         <div class="auth-inputs">
           <div id="authDisplayNameContainer" class="hidden">
-            <input type="text" id="authDisplayName" class="auth-input-field" placeholder="お名前（表示名）" />
+            <input type="text" id="authDisplayName" class="auth-input-field" maxlength="10" placeholder="お名前（10文字以内）" />
           </div>
-          <input type="email" id="authEmail" class="auth-input-field" placeholder="メールアドレス" autocomplete="email" />
-          <input type="password" id="authPassword" class="auth-input-field" placeholder="パスワード（英字＋数字8文字以上）" autocomplete="current-password" />
+          <input type="email" id="authEmail" class="auth-input-field" placeholder="メールアドレス（oic-ok.ac.jp）" autocomplete="email" />
+          <input type="password" id="authPassword" class="auth-input-field" maxlength="100" placeholder="パスワード（英字＋数字8文字以上・100文字以内）" autocomplete="current-password" />
         </div>
 
         <!-- Primary Button -->
@@ -706,6 +751,14 @@
             <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">HP警告閾値 (残%)</label>
             <input type="number" id="calendarSettingsWarningThreshold" min="0" max="100" placeholder="20" />
           </div>
+          <div class="settings-field-group" style="margin-top:10px;">
+            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">予定作成時のHP消費率 (%)</label>
+            <input type="number" id="calendarSettingsDefaultHpCost" min="0" max="100" placeholder="0" />
+          </div>
+          <div class="settings-field-group" style="margin-top:10px;">
+            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">予定作成時のやる気消費率 (%)</label>
+            <input type="number" id="calendarSettingsDefaultMotivationCost" min="0" max="100" placeholder="0" />
+          </div>
         </div>
 
         <div class="modal-actions" style="margin-top:12px;">
@@ -740,7 +793,7 @@
             <h3 id="groupDetailTitle">グループ詳細</h3>
             <div id="memberList" class="member-list-container"></div>
             <div class="group-actions" style="margin-top:10px; display:flex; gap:8px; margin-bottom:8px;">
-              <input type="number" id="inviteUserId" placeholder="招待するユーザーID" style="margin-bottom:0;" />
+              <input type="email" id="inviteUserId" placeholder="招待するメールアドレス" style="margin-bottom:0;" />
               <button id="inviteMemberBtn" class="primary-btn" style="flex:0 0 80px;">招待</button>
             </div>
             <div class="group-actions" style="display:flex; gap:8px;">

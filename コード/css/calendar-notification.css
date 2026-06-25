@@ -328,3 +328,184 @@ body.dark .fab:hover {
   background: #f2f2f2 !important;
 }
 
+
+
+/* Admin panel and draft controls */
+.admin-panel {
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.admin-panel.hidden {
+  display: none !important;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-header h3,
+.admin-card h4 {
+  margin: 0;
+}
+
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.admin-stat-card,
+.admin-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 12px;
+}
+
+.admin-stat-card span {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.admin-stat-card strong {
+  font-size: 22px;
+}
+
+.admin-card {
+  margin-bottom: 16px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.admin-user-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+
+.admin-user-table th,
+.admin-user-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-user-table select,
+.member-role-select {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  padding: 4px 8px;
+}
+
+.admin-card input,
+.admin-card textarea {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.admin-card button {
+  margin-top: 8px;
+}
+
+#eventModal .modal-actions {
+  flex-wrap: wrap;
+}
+
+#eventModal .modal-actions button {
+  min-width: 92px;
+}
+
+.member-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.member-profile {
+  min-width: 0;
+}
+
+.member-profile strong,
+.member-profile small {
+  display: block;
+}
+
+.member-profile small {
+  opacity: 0.65;
+  overflow-wrap: anywhere;
+}
+
+.member-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.member-role-label {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.member-remove-btn,
+.admin-delete-user {
+  min-height: 32px;
+  padding: 4px 10px;
+}
+
+body.dark .admin-panel,
+body.dark .admin-stat-card,
+body.dark .admin-card,
+body.dark .admin-user-table,
+body.dark .admin-user-table th,
+body.dark .admin-user-table td {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+body.dark .admin-user-table select,
+body.dark .member-role-select,
+body.dark .admin-card input,
+body.dark .admin-card textarea {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+
+/* Light mode role select visibility fix */
+.member-role-select,
+.member-role-select option,
+.admin-user-table select,
+.admin-user-table select option {
+  background: #ffffff !important;
+  color: #202124 !important;
+  border-color: var(--border) !important;
+}
+
+body.dark .member-role-select option,
+body.dark .admin-user-table select option {
+  background: #000000 !important;
+  color: #ffffff !important;
+}

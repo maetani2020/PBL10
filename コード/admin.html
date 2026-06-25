@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin | Shared Calendar</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body>
+    <main id="adminLogin" class="login-shell">
+      <section class="login-card">
+        <div class="brand-icon"><span class="material-icons">admin_panel_settings</span></div>
+        <h1>管理者ログイン</h1>
+        <p>Shared Calendar の管理専用画面</p>
+        <input id="adminEmail" type="email" autocomplete="email" placeholder="メールアドレス" />
+        <input id="adminPassword" type="password" autocomplete="current-password" maxlength="100" placeholder="パスワード" />
+        <button id="adminLoginBtn">ログイン</button>
+        <a href="/">通常カレンダーへ戻る</a>
+      </section>
+    </main>
+
+    <main id="adminApp" class="admin-shell hidden">
+      <aside class="admin-sidebar">
+        <div class="admin-logo">
+          <span class="material-icons">admin_panel_settings</span>
+          <strong>Admin</strong>
+        </div>
+        <button class="admin-tab active" data-tab="overview">概要</button>
+        <button class="admin-tab" data-tab="users">ユーザー</button>
+        <button class="admin-tab" data-tab="groups">グループ共有</button>
+        <button class="admin-tab" data-tab="events">イベント</button>
+        <button id="adminLogoutBtn" class="logout-btn">ログアウト</button>
+      </aside>
+
+      <section class="admin-content">
+        <header class="admin-topbar">
+          <div>
+            <h1>管理者画面</h1>
+            <p id="adminUserLabel">---</p>
+          </div>
+          <button id="refreshAllBtn" class="ghost-btn"><span class="material-icons">refresh</span>更新</button>
+        </header>
+
+        <section id="overviewPanel" class="panel">
+          <div id="statsGrid" class="stats-grid"></div>
+        </section>
+
+        <section id="usersPanel" class="panel hidden">
+          <h2>ユーザー管理</h2>
+          <div id="usersTable" class="table-list"></div>
+        </section>
+
+        <section id="groupsPanel" class="panel hidden">
+          <h2>グループ共有管理</h2>
+          <div id="groupsList" class="table-list"></div>
+        </section>
+
+        <section id="eventsPanel" class="panel hidden">
+          <h2>イベント管理</h2>
+          <input id="eventSearch" class="search-input" placeholder="タイトル・作成者・グループで検索" />
+          <div id="eventsList" class="table-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <div id="adminToast" class="toast hidden"></div>
+    <script type="module" src="js/admin-portal.js"></script>
+  </body>
+</html>

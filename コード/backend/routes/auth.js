@@ -9,8 +9,28 @@ const authenticateToken = require('../middleware/auth');
 // Temporary memory store for email verification codes
 const emailChangeVerifications = new Map();
 
+const ALLOWED_EMAIL_DOMAIN = 'oic-ok.ac.jp';
+
+function normalizeEmail(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
+function isAllowedSchoolEmail(email) {
+    return normalizeEmail(email).endsWith('@' + ALLOWED_EMAIL_DOMAIN);
+}
+
+function normalizeDisplayName(displayName) {
+    return String(displayName || '').trim();
+}
+
+function isValidDisplayName(displayName) {
+    const name = normalizeDisplayName(displayName);
+    return name.length > 0 && Array.from(name).length <= 10;
+}
+
 function validatePassword(password) {
-    if (password.length < 8) return false;
+    if (typeof password !== 'string') return false;
+    if (password.length < 8 || password.length > 100) return false;
     const hasLetter = /[a-zA-Z]/.test(password);
     const hasNumber = /[0-9]/.test(password);
     return hasLetter && hasNumber;
@@ -18,27 +38,37 @@ function validatePassword(password) {
 
 function validateEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    return emailRegex.test(normalizeEmail(email));
 }
 
 // POST /api/auth/register - User Registration
 router.post('/register', async (req, res) => {
     const { email, password, display_name } = req.body;
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedDisplayName = normalizeDisplayName(display_name);
 
-    if (!email || !password || !display_name) {
+    if (!normalizedEmail || !password || !normalizedDisplayName) {
         return res.status(400).json({ error: 'メールアドレス、パスワード、表示名は必須項目です' });
     }
 
-    if (!validateEmail(email)) {
+    if (!validateEmail(normalizedEmail)) {
         return res.status(400).json({ error: '有効なメールアドレスを入力してください' });
     }
 
+    if (!isAllowedSchoolEmail(normalizedEmail)) {
+        return res.status(400).json({ error: 'メールアドレスは @oic-ok.ac.jp のみ登録できます' });
+    }
+
+    if (!isValidDisplayName(normalizedDisplayName)) {
+        return res.status(400).json({ error: 'ユーザー名は10文字以内で入力してください' });
+    }
+
     if (!validatePassword(password)) {
-        return res.status(400).json({ error: 'パスワードは英字と数字を両方含む8文字以上である必要があります' });
+        return res.status(400).json({ error: 'パスワードは英字と数字を両方含む8文字以上、100文字以内で入力してください' });
     }
 
     try {
-        const existingUser = await query.get('SELECT * FROM users WHERE email = ?', [email]);
+        const existingUser = await query.get('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
         if (existingUser) {
             return res.status(400).json({ error: 'このメールアドレスは既に登録されています' });
         }
@@ -48,11 +78,10 @@ router.post('/register', async (req, res) => {
 
         const result = await query.run(
             'INSERT INTO users (email, password_hash, display_name, role) VALUES (?, ?, ?, ?)',
-            [email, passwordHash, display_name, 'user']
+            [normalizedEmail, passwordHash, normalizedDisplayName, 'user']
         );
         const userId = result.lastID;
 
-        // Create default calendar
         await query.run(
             'INSERT INTO calendars (name, owner_id) VALUES (?, ?)',
             ['マイカレンダー', userId]
@@ -60,7 +89,7 @@ router.post('/register', async (req, res) => {
 
         res.status(201).json({
             message: 'ユーザー登録が完了しました',
-            user: { id: userId, email, display_name }
+            user: { id: userId, email: normalizedEmail, display_name: normalizedDisplayName }
         });
     } catch (err) {
         console.error('Registration error:', err);
@@ -129,13 +158,23 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/google - Mock Google OAuth Login
 router.post('/google-login', async (req, res) => {
     const { email, display_name } = req.body;
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedDisplayName = normalizeDisplayName(display_name);
 
-    if (!email || !display_name) {
+    if (!normalizedEmail || !normalizedDisplayName) {
         return res.status(400).json({ error: 'Googleログインに必要な情報が不足しています' });
     }
 
+    if (!validateEmail(normalizedEmail) || !isAllowedSchoolEmail(normalizedEmail)) {
+        return res.status(400).json({ error: 'Googleログインは @oic-ok.ac.jp のメールアドレスのみ利用できます' });
+    }
+
+    if (!isValidDisplayName(normalizedDisplayName)) {
+        return res.status(400).json({ error: 'ユーザー名は10文字以内で入力してください' });
+    }
+
     try {
-        let user = await query.get('SELECT * FROM users WHERE email = ?', [email]);
+        let user = await query.get('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
         
         if (!user) {
             // Auto-register google user
@@ -145,7 +184,7 @@ router.post('/google-login', async (req, res) => {
 
             const result = await query.run(
                 'INSERT INTO users (email, password_hash, display_name, role) VALUES (?, ?, ?, ?)',
-                [email, passwordHash, display_name, 'user']
+                [normalizedEmail, passwordHash, normalizedDisplayName, 'user']
             );
             const userId = result.lastID;
 
@@ -154,7 +193,7 @@ router.post('/google-login', async (req, res) => {
                 ['マイカレンダー', userId]
             );
 
-            user = { id: userId, email, display_name, role: 'user' };
+            user = { id: userId, email: normalizedEmail, display_name: normalizedDisplayName, role: 'user' };
         }
 
         const token = jwt.sign(
@@ -317,7 +356,7 @@ router.post('/password-reset', async (req, res) => {
     }
 
     if (!validatePassword(new_password)) {
-        return res.status(400).json({ error: 'パスワードは英字と数字を両方含む8文字以上である必要があります' });
+        return res.status(400).json({ error: 'パスワードは英字と数字を両方含む8文字以上、100文字以内で入力してください' });
     }
 
     try {
@@ -347,25 +386,30 @@ router.post('/password-reset', async (req, res) => {
 // POST /api/auth/change-email-request - Request email change (requires JWT)
 router.post('/change-email-request', authenticateToken, async (req, res) => {
     const { new_email } = req.body;
+    const normalizedNewEmail = normalizeEmail(new_email);
 
-    if (!new_email || !validateEmail(new_email)) {
+    if (!normalizedNewEmail || !validateEmail(normalizedNewEmail)) {
         return res.status(400).json({ error: '有効な新規メールアドレスを指定してください' });
     }
 
+    if (!isAllowedSchoolEmail(normalizedNewEmail)) {
+        return res.status(400).json({ error: 'メールアドレスは @oic-ok.ac.jp のみ変更できます' });
+    }
+
     try {
-        const existingUser = await query.get('SELECT * FROM users WHERE email = ?', [new_email]);
+        const existingUser = await query.get('SELECT * FROM users WHERE email = ?', [normalizedNewEmail]);
         if (existingUser) {
             return res.status(400).json({ error: 'このメールアドレスは既に別のユーザーに使用されています' });
         }
 
         // Generate verification code
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        emailChangeVerifications.set(req.user.id, { new_email, code, expires: Date.now() + 15 * 60 * 1000 });
+        emailChangeVerifications.set(req.user.id, { normalizedNewEmail, code, expires: Date.now() + 15 * 60 * 1000 });
 
         console.log(`\n--- [MOCK MAIL SERVER] ---`);
         console.log(`To: ${req.user.email} (現在のメールアドレス)`);
         console.log(`Subject: メールアドレス変更確認コード`);
-        console.log(`Content: メールアドレスを ${new_email} へ変更するための確認コードです（有効期限: 15分）。`);
+        console.log(`Content: メールアドレスを ${normalizedNewEmail} へ変更するための確認コードです（有効期限: 15分）。`);
         console.log(`Code: ${code}`);
         console.log(`-------------------------\n`);
 
@@ -399,7 +443,7 @@ router.post('/change-email-confirm', authenticateToken, async (req, res) => {
     }
 
     try {
-        await query.run('UPDATE users SET email = ? WHERE id = ?', [verification.new_email, req.user.id]);
+        await query.run('UPDATE users SET email = ? WHERE id = ?', [verification.normalizedNewEmail, req.user.id]);
         emailChangeVerifications.delete(req.user.id);
 
         res.json({ message: 'メールアドレスを変更しました。次回のログインから新しいメールアドレスを使用してください。' });
@@ -418,7 +462,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     }
 
     if (!validatePassword(new_password)) {
-        return res.status(400).json({ error: '新規パスワードは英字と数字を両方含む8文字以上である必要があります' });
+        return res.status(400).json({ error: 'パスワードは英字と数字を両方含む8文字以上、100文字以内で入力してください' });
     }
 
     try {

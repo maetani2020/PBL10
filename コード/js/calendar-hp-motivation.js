@@ -11,6 +11,30 @@ let limitsCache = {
   warning_threshold: 20
 };
 
+
+const DEFAULT_EVENT_COST_KEY = "shared_calendar_default_event_costs";
+
+export function getDefaultEventCosts() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DEFAULT_EVENT_COST_KEY) || "{}");
+    return {
+      hp_consumption: Number.isFinite(Number(saved.hp_consumption)) ? Number(saved.hp_consumption) : 0,
+      motivation_consumption: Number.isFinite(Number(saved.motivation_consumption)) ? Number(saved.motivation_consumption) : 0
+    };
+  } catch {
+    return { hp_consumption: 0, motivation_consumption: 0 };
+  }
+}
+
+function saveDefaultEventCosts(hp_consumption, motivation_consumption) {
+  const hp = Math.min(100, Math.max(0, parseInt(hp_consumption) || 0));
+  const motivation = Math.min(100, Math.max(0, parseInt(motivation_consumption) || 0));
+  localStorage.setItem(DEFAULT_EVENT_COST_KEY, JSON.stringify({
+    hp_consumption: hp,
+    motivation_consumption: motivation
+  }));
+}
+
 export function getLimits() {
   return limitsCache;
 }
@@ -219,8 +243,9 @@ export function updatePreSavePreview() {
   const dateStr = startInput.value.substring(0, 10);
   if (!dateStr) return;
 
-  const hpCost = parseInt(document.getElementById("hpCost").value) || 0;
-  const motivationCost = parseInt(document.getElementById("motivationCost").value) || 0;
+  const defaultEventCosts = getDefaultEventCosts();
+  const hpCost = defaultEventCosts.hp_consumption;
+  const motivationCost = defaultEventCosts.motivation_consumption;
   const editEventId = window.editingEventId || null; // Access global editing ID
 
   const check = preSaveCheck(dateStr, hpCost, motivationCost, editEventId);
@@ -251,6 +276,10 @@ export function openCalendarSettingsModal() {
   document.getElementById("calendarSettingsRecoveryRate").value = limitsCache.recovery_rate;
   document.getElementById("calendarSettingsWarningThreshold").value = limitsCache.warning_threshold;
 
+  const defaultEventCosts = getDefaultEventCosts();
+  document.getElementById("calendarSettingsDefaultHpCost").value = defaultEventCosts.hp_consumption;
+  document.getElementById("calendarSettingsDefaultMotivationCost").value = defaultEventCosts.motivation_consumption;
+
   modal.style.display = "flex";
 }
 
@@ -264,6 +293,10 @@ export async function saveCalendarSettings() {
   const max_motivation = parseInt(document.getElementById("calendarSettingsMaxMotivation").value) || 100;
   const recovery_rate = parseFloat(document.getElementById("calendarSettingsRecoveryRate").value) || 1.0;
   const warning_threshold = parseInt(document.getElementById("calendarSettingsWarningThreshold").value) || 20;
+
+  const defaultHpCost = parseInt(document.getElementById("calendarSettingsDefaultHpCost")?.value) || 0;
+  const defaultMotivationCost = parseInt(document.getElementById("calendarSettingsDefaultMotivationCost")?.value) || 0;
+  saveDefaultEventCosts(defaultHpCost, defaultMotivationCost);
 
   const btn = document.getElementById("saveCalendarSettingsBtn");
   if (btn) {

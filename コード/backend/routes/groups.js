@@ -98,13 +98,13 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
     }
 });
 
-// POST /api/groups/:id/invite - Invite a user to a group using their User ID (Admin or Editor only)
+// POST /api/groups/:id/invite - Invite a user to a group using email or User ID (Admin or Editor only)
 router.post('/:id/invite', authenticateToken, async (req, res) => {
     const groupId = req.params.id;
-    const { user_id } = req.body;
+    const { user_id, email } = req.body;
 
-    if (!user_id) {
-        return res.status(400).json({ error: '招待するユーザーのIDを指定してください' });
+    if (!user_id && !email) {
+        return res.status(400).json({ error: '招待するユーザーのメールアドレスを指定してください' });
     }
 
     try {
@@ -120,22 +120,37 @@ router.post('/:id/invite', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'グループメンバーの上限は20名です' });
         }
 
-        // 3. Find target user
-        const targetUser = await query.get('SELECT id, display_name FROM users WHERE id = ?', [user_id]);
+        // 3. Find user by email first, keeping user_id compatibility for old clients
+        let targetUser = null;
+        if (email) {
+            targetUser = await query.get(
+                'SELECT id, email, display_name FROM users WHERE LOWER(email) = LOWER(?)',
+                [String(email).trim()]
+            );
+        } else {
+            targetUser = await query.get(
+                'SELECT id, email, display_name FROM users WHERE id = ?',
+                [user_id]
+            );
+        }
+
         if (!targetUser) {
-            return res.status(404).json({ error: '指定されたユーザーIDが見つかりません' });
+            return res.status(404).json({ error: '指定されたメールアドレスのユーザーが見つかりません' });
         }
 
         // 4. Check if already a member
-        const existingMember = await getGroupRole(groupId, user_id);
+        const existingMember = await query.get(
+            'SELECT id FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, targetUser.id]
+        );
         if (existingMember) {
-            return res.status(400).json({ error: 'このユーザーは既にグループに参加しています' });
+            return res.status(400).json({ error: 'このユーザーは既にグループのメンバーです' });
         }
 
         // 5. Add user as viewer (default)
         await query.run(
             'INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
-            [groupId, user_id, 'viewer']
+            [groupId, targetUser.id, 'viewer']
         );
 
         // Get updated list of member IDs and broadcast
@@ -143,12 +158,12 @@ router.post('/:id/invite', authenticateToken, async (req, res) => {
         sendToUsers(memberIds, {
             type: 'group_sync',
             groupId,
-            message: `${targetUser.display_name} さんがグループに参加しました`
+            message: '新しいメンバーが追加されました'
         });
 
-        res.json({ message: `${targetUser.display_name} さんを招待しました` });
+        res.status(201).json({ message: 'ユーザーをグループに招待しました', user: targetUser });
     } catch (err) {
-        console.error('Invite user error:', err);
+        console.error('Invite member error:', err);
         res.status(500).json({ error: 'サーバーエラーが発生しました' });
     }
 });

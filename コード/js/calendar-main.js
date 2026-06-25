@@ -1,17 +1,17 @@
 // calendar-main.js
 // Entry point and event listener bindings
 
-import { 
-  currentDate, 
-  currentView, 
-  selectedEventId, 
-  currentAttachments, 
-  setCurrentAttachments, 
-  formatDate, 
-  showToast 
+import {
+  currentDate,
+  currentView,
+  selectedEventId,
+  currentAttachments,
+  setCurrentAttachments,
+  formatDate,
+  showToast
 } from './calendar-state.js';
 
-import { 
+import {
   checkAuth,
   initAuthForm,
   initAccountPanel,
@@ -21,55 +21,55 @@ import {
   apiRequest
 } from './calendar-auth.js';
 
-import { 
-  eventModal, 
-  listModal, 
-  closeModal, 
-  openListModal, 
-  closeListModal, 
-  resetForm, 
+import {
+  eventModal,
+  listModal,
+  closeModal,
+  openListModal,
+  closeListModal,
+  resetForm,
   openCreateEvent,
   collectEventReminderMinutes,
   renderEventReminderList,
   updateEventOptionVisibility
 } from './calendar-modals.js';
 
-import { 
-  renderScheduleList, 
-  refreshCalendar, 
-  refreshCurrentView, 
-  renderAll, 
-  movePrevious, 
-  moveNext, 
+import {
+  renderScheduleList,
+  refreshCalendar,
+  refreshCurrentView,
+  renderAll,
+  movePrevious,
+  moveNext,
   switchView,
   monthView,
   weekView,
   dayView
 } from './calendar-views.js';
 
-import { 
-  openCameraModal, 
-  closeCameraModal, 
-  capturePhotoFromCamera 
+import {
+  openCameraModal,
+  closeCameraModal,
+  capturePhotoFromCamera
 } from './calendar-camera.js';
 
-import { 
-  openScannerSheet, 
-  closeScannerSheet, 
-  showActionSheet, 
-  hideActionSheet, 
-  validateSendButton, 
-  renderAttachmentsCarousel, 
-  sendChatToGemini, 
-  handleFileAttachment 
+import {
+  openScannerSheet,
+  closeScannerSheet,
+  showActionSheet,
+  hideActionSheet,
+  validateSendButton,
+  renderAttachmentsCarousel,
+  sendChatToGemini,
+  handleFileAttachment
 } from './calendar-ai.js';
 
-import { 
-  openGroupModal, 
-  closeGroupModal, 
-  createGroup, 
-  inviteMember, 
-  dissolveGroup, 
+import {
+  openGroupModal,
+  closeGroupModal,
+  createGroup,
+  inviteMember,
+  dissolveGroup,
   leaveGroup,
   syncGroups
 } from './calendar-group.js';
@@ -91,8 +91,18 @@ import {
   updatePreSavePreview,
   openCalendarSettingsModal,
   closeCalendarSettingsModal,
-  saveCalendarSettings
+  saveCalendarSettings,
+  getDefaultEventCosts
 } from './calendar-hp-motivation.js';
+
+
+
+import {
+  initAdminUI,
+  updateAdminNavVisibility,
+  openAdminPanel,
+  closeAdminPanel
+} from './calendar-admin.js';
 
 // ----------------------------------------------------
 // Database Synchronizer
@@ -103,7 +113,7 @@ export async function syncEvents() {
     const stateModule = await import('./calendar-state.js');
     stateModule.setEvents(events);
     refreshCalendar();
-    
+
     // Also sync HP/Motivation status
     const targetDate = formatDate(currentDate);
     await syncHpMotivationStatus(targetDate);
@@ -115,7 +125,101 @@ export async function syncEvents() {
 // ----------------------------------------------------
 // Core Operations: Save & Delete Events
 // ----------------------------------------------------
-async function saveEvent() {
+
+const EVENT_DRAFT_STORAGE_KEY = "shared_calendar_event_draft";
+
+function setValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value ?? "";
+}
+
+function setChecked(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.checked = !!value;
+}
+
+function getChecked(id, fallback = false) {
+  const el = document.getElementById(id);
+  return el ? el.checked : fallback;
+}
+
+function collectEventDraftData() {
+  return {
+    title: document.getElementById("eventTitle")?.value || "",
+    start: document.getElementById("eventStart")?.value || "",
+    end: document.getElementById("eventEnd")?.value || "",
+    allDay: getChecked("allDay"),
+    eventType: document.getElementById("eventType")?.value || "event",
+    memo: document.getElementById("eventMemo")?.value || "",
+    visibility: document.getElementById("eventVisibility")?.value || "public",
+    groupId: document.getElementById("eventGroupId")?.value || "",
+    remind30: getChecked("remind30", true),
+    remind5: getChecked("remind5", true),
+    remindStart: getChecked("remindStart", true),
+    customReminderMinutes: document.getElementById("customReminderMinutes")?.value || "",
+    taskDeadlineNotify: getChecked("taskDeadlineNotify", true),
+    mailReminderEnabled: getChecked("mailReminderEnabled"),
+    mailTo: document.getElementById("mailTo")?.value || "",
+    mailSubject: document.getElementById("mailSubject")?.value || "",
+    mailRemindAt: document.getElementById("mailRemindAt")?.value || "",
+    mailSent: getChecked("mailSent")
+  };
+}
+
+function applyEventDraftData(draft) {
+  setValue("eventTitle", draft.title);
+  setValue("eventStart", draft.start);
+  setValue("eventEnd", draft.end);
+  setChecked("allDay", draft.allDay);
+  setValue("eventType", draft.eventType || "event");
+  setValue("eventMemo", draft.memo);
+  setValue("eventVisibility", draft.visibility || "public");
+  setValue("eventGroupId", draft.groupId);
+  setChecked("remind30", draft.remind30 ?? true);
+  setChecked("remind5", draft.remind5 ?? true);
+  setChecked("remindStart", draft.remindStart ?? true);
+  setValue("customReminderMinutes", draft.customReminderMinutes);
+  setChecked("taskDeadlineNotify", draft.taskDeadlineNotify ?? true);
+  setChecked("mailReminderEnabled", draft.mailReminderEnabled);
+  setValue("mailTo", draft.mailTo);
+  setValue("mailSubject", draft.mailSubject);
+  setValue("mailRemindAt", draft.mailRemindAt);
+  setChecked("mailSent", draft.mailSent);
+
+  updateEventOptionVisibility();
+  renderEventReminderList();
+  const isGroup = (draft.visibility || "public") === "group";
+  document.getElementById("groupSelectWrap")?.classList.toggle("hidden", !isGroup);
+  updatePreSavePreview();
+}
+
+function saveEventDraft() {
+  localStorage.setItem(EVENT_DRAFT_STORAGE_KEY, JSON.stringify(collectEventDraftData()));
+  showToast("下書きを保存しました");
+}
+
+function loadEventDraft() {
+  const raw = localStorage.getItem(EVENT_DRAFT_STORAGE_KEY);
+  if (!raw) {
+    showToast("保存されている下書きはありません");
+    return;
+  }
+
+  try {
+    applyEventDraftData(JSON.parse(raw));
+    showToast("下書きを読み込みました");
+  } catch (err) {
+    console.error("Failed to load event draft:", err);
+    showToast("下書きの読み込みに失敗しました");
+  }
+}
+
+function clearEventDraft() {
+  localStorage.removeItem(EVENT_DRAFT_STORAGE_KEY);
+  showToast("下書きを削除しました");
+}
+
+    async function saveEvent() {
   const title = document.getElementById("eventTitle").value.trim();
 
   if (title.length === 0) {
@@ -139,8 +243,9 @@ async function saveEvent() {
   const memo = document.getElementById("eventMemo").value;
   const visibility = document.getElementById("eventVisibility").value;
   const allDay = document.getElementById("allDay").checked;
-  const hp_consumption = parseInt(document.getElementById("hpCost").value) || 0;
-  const motivation_consumption = parseInt(document.getElementById("motivationCost").value) || 0;
+  const defaultEventCosts = getDefaultEventCosts();
+  const hp_consumption = defaultEventCosts.hp_consumption;
+  const motivation_consumption = defaultEventCosts.motivation_consumption;
   const eventType = document.getElementById("eventType").value;
 
   const reminderMinutes = collectEventReminderMinutes();
@@ -289,8 +394,10 @@ function switchPanel(panel) {
   const weekHeader = document.getElementById("weekHeader");
   const filterBanner = document.getElementById("filterBanner");
   const statsPanel = document.getElementById("statsPanel");
+  const adminPanel = document.getElementById("adminPanel");
 
   if (statsPanel) statsPanel.classList.add("hidden");
+  if (adminPanel) adminPanel.classList.add("hidden");
   if (viewSwitch) viewSwitch.classList.remove("hidden");
   if (weekHeader) weekHeader.classList.remove("hidden");
 
@@ -299,11 +406,11 @@ function switchPanel(panel) {
     if (viewSwitch) viewSwitch.classList.add("hidden");
     if (weekHeader) weekHeader.classList.add("hidden");
     if (filterBanner) filterBanner.classList.add("hidden");
-    
+
     document.getElementById("monthView").classList.add("hidden");
     document.getElementById("weekView").classList.add("hidden");
     document.getElementById("dayView").classList.add("hidden");
-    
+
     if (statsPanel) statsPanel.classList.remove("hidden");
     closeSidebar();
     return;
@@ -311,6 +418,21 @@ function switchPanel(panel) {
 
   if (panel === "settings") {
     openCalendarSettingsModal();
+    closeSidebar();
+    return;
+  }
+
+
+  if (panel === "admin") {
+    const opened = openAdminPanel();
+    if (opened) {
+      if (viewSwitch) viewSwitch.classList.add("hidden");
+      if (weekHeader) weekHeader.classList.add("hidden");
+      if (filterBanner) filterBanner.classList.add("hidden");
+      document.getElementById("monthView").classList.add("hidden");
+      document.getElementById("weekView").classList.add("hidden");
+      document.getElementById("dayView").classList.add("hidden");
+    }
     closeSidebar();
     return;
   }
@@ -354,14 +476,15 @@ function renderStatsPanel(range) {
 // ----------------------------------------------------
 async function init() {
   restoreTheme();
-  
+
   if (isLoggedIn()) {
     await syncEvents();
     await syncGroups();
     await syncNotificationSettings();
+    updateAdminNavVisibility();
     startNotificationWatcher();
   }
-  
+
   switchView("month");
 }
 
@@ -373,6 +496,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("saveEventBtn").addEventListener("click", saveEvent);
   document.getElementById("deleteEventBtn").addEventListener("click", deleteEvent);
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);
+  document.getElementById("saveDraftEventBtn")?.addEventListener("click", saveEventDraft);
+  document.getElementById("loadDraftEventBtn")?.addEventListener("click", loadEventDraft);
+  document.getElementById("clearDraftEventBtn")?.addEventListener("click", clearEventDraft);
 
   // Outer click to close modals
   [
@@ -400,6 +526,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeNotificationHistoryModal();
       closeNotificationSettingsModal();
       closeCalendarSettingsModal();
+      closeAdminPanel();
     }
   });
 
@@ -580,7 +707,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Modals features logic
   document.getElementById("eventType").addEventListener("change", updateEventOptionVisibility);
-  
+
   // HP Cost & Motivation Cost previews
   document.getElementById("hpCost").addEventListener("input", updatePreSavePreview);
   document.getElementById("motivationCost").addEventListener("input", updatePreSavePreview);
@@ -629,6 +756,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initAccountPanel();
   initPasswordResetModal();
   initAccountSettings();
+  initAdminUI();
   initSidebarNavigation();
 
   const userAvatarBtn = document.getElementById("userAvatarBtn");
@@ -644,6 +772,7 @@ document.addEventListener("DOMContentLoaded", () => {
     await syncEvents();
     await syncGroups();
     await syncNotificationSettings();
+    updateAdminNavVisibility();
     startNotificationWatcher();
   });
 });

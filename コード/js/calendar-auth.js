@@ -236,6 +236,21 @@ export function initAuthForm() {
       return;
     }
 
+    if (isSignupMode) {
+      if (!email.toLowerCase().endsWith('@oic-ok.ac.jp')) {
+        showToast('メールアドレスは @oic-ok.ac.jp のみ登録できます');
+        return;
+      }
+      if ([...displayName].length > 10) {
+        showToast('ユーザー名は10文字以内で入力してください');
+        return;
+      }
+      if (password.length > 100) {
+        showToast('パスワードは100文字以内で入力してください');
+        return;
+      }
+    }
+
     authPrimaryBtn.disabled = true;
     authPrimaryBtn.textContent = '処理中...';
 
@@ -435,6 +450,7 @@ export function initAccountSettings() {
 
     if (!current || !newPw || !confirm) { showToast('すべての項目を入力してください'); return; }
     if (newPw !== confirm) { showToast('新しいパスワードが一致しません'); return; }
+    if (newPw.length > 100) { showToast('パスワードは100文字以内で入力してください'); return; }
 
     changePasswordBtn.disabled = true;
     changePasswordBtn.textContent = '変更中...';
@@ -460,6 +476,7 @@ export function initAccountSettings() {
   requestEmailChangeBtn?.addEventListener('click', async () => {
     const newEmail = document.getElementById('newEmail')?.value.trim();
     if (!newEmail) { showToast('新しいメールアドレスを入力してください'); return; }
+    if (!newEmail.toLowerCase().endsWith('@oic-ok.ac.jp')) { showToast('メールアドレスは @oic-ok.ac.jp のみ変更できます'); return; }
 
     requestEmailChangeBtn.disabled = true;
     requestEmailChangeBtn.textContent = '送信中...';

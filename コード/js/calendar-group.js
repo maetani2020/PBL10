@@ -19,6 +19,30 @@ export function setSelectedGroupId(id) {
   selectedGroupId = id;
 }
 
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function roleLabel(role) {
+  if (role === "admin") return "管理者";
+  if (role === "editor") return "編集者";
+  return "閲覧者";
+}
+
+function roleOptions(currentRole) {
+  return ["admin", "editor", "viewer"].map(role => {
+    const selected = role === currentRole ? " selected" : "";
+    return `<option value="${role}"${selected}>${roleLabel(role)}</option>`;
+  }).join("");
+}
+
 // Fetch user's groups from PostgreSQL backend
 export async function syncGroups() {
   try {
@@ -90,7 +114,7 @@ export async function selectGroupForDetail(groupId) {
   
   if (!detailPanel || !titleEl || !memberListContainer) return;
 
-  const group = activeGroups.find(g => g.id === groupId);
+  const group = activeGroups.find(g => Number(g.id) === Number(groupId));
   if (!group) {
     detailPanel.classList.add("hidden");
     return;
@@ -99,30 +123,47 @@ export async function selectGroupForDetail(groupId) {
   titleEl.textContent = `「${group.name}」詳細`;
   detailPanel.classList.remove("hidden");
 
-  // Fetch members
   try {
     const members = await apiRequest(`/api/groups/${groupId}/members`);
     memberListContainer.innerHTML = "";
+    const canManageMembers = group.role === "admin" || (currentUser && Number(group.owner_id) === Number(currentUser.id));
     
     members.forEach(m => {
-      const isOwner = group.owner_id === m.id;
-      const roleText = isOwner ? "オーナー" : (m.role === "editor" ? "編集者" : "閲覧者");
+      const isOwner = Number(group.owner_id) === Number(m.id);
+      const isSelf = currentUser && Number(currentUser.id) === Number(m.id);
+      const canChangeRole = canManageMembers && !isOwner && !isSelf;
+      const canRemove = canManageMembers && !isOwner && !isSelf;
+      const roleControl = canChangeRole
+        ? `<select class="member-role-select" data-user-id="${m.id}">${roleOptions(m.role)}</select>`
+        : `<span class="member-role-label">${isOwner ? "オーナー" : roleLabel(m.role)}</span>`;
+      const removeControl = canRemove
+        ? `<button type="button" class="member-remove-btn danger-btn" data-user-id="${m.id}">削除</button>`
+        : "";
       
       const mDiv = document.createElement("div");
       mDiv.className = "member-list-item";
-      mDiv.style.display = "flex";
-      mDiv.style.justifyContent = "space-between";
-      mDiv.style.padding = "6px 0";
-      mDiv.style.borderBottom = "1px solid var(--border)";
       mDiv.innerHTML = `
-        <span>${m.display_name} <small style="opacity:0.6;">(${m.id})</small></span>
-        <span style="font-size:12px; font-weight:600; opacity:0.8;">${roleText}</span>
+        <div class="member-profile">
+          <strong>${escapeHtml(m.display_name || "No name")}</strong>
+          <small>${escapeHtml(m.email || "")}</small>
+        </div>
+        <div class="member-controls">
+          ${roleControl}
+          ${removeControl}
+        </div>
       `;
       memberListContainer.appendChild(mDiv);
     });
 
-    // Update action button states based on role
-    const isCurrentUserOwner = group.owner_id === currentUser.id;
+    memberListContainer.querySelectorAll(".member-role-select").forEach(select => {
+      select.addEventListener("change", () => updateMemberRole(select.dataset.userId, select.value));
+    });
+
+    memberListContainer.querySelectorAll(".member-remove-btn").forEach(button => {
+      button.addEventListener("click", () => removeMemberFromGroup(button.dataset.userId));
+    });
+
+    const isCurrentUserOwner = currentUser && Number(group.owner_id) === Number(currentUser.id);
     const dissolveBtn = document.getElementById("dissolveGroupBtn");
     const leaveBtn = document.getElementById("leaveGroupBtn");
 
@@ -161,25 +202,61 @@ export async function createGroup() {
 
 // Invite user
 export async function inviteMember() {
-  const idInput = document.getElementById("inviteUserId");
-  if (!idInput || !selectedGroupId) return;
+  const emailInput = document.getElementById("inviteUserId");
+  if (!emailInput || !selectedGroupId) return;
 
-  const userId = parseInt(idInput.value.trim());
-  if (isNaN(userId)) {
-    showToast("有効なユーザーIDを入力してください");
+  const email = emailInput.value.trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    showToast("招待するメールアドレスを入力してください");
     return;
   }
 
   try {
     await apiRequest(`/api/groups/${selectedGroupId}/invite`, {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId })
+      body: JSON.stringify({ email })
     });
-    idInput.value = "";
-    showToast("メンバーを招待しました ✉️");
-    selectGroupForDetail(selectedGroupId);
+    emailInput.value = "";
+    showToast("メンバーを招待しました");
+    await selectGroupForDetail(selectedGroupId);
+    await syncGroups();
   } catch (err) {
     console.error('Failed to invite member:', err);
+  }
+}
+
+async function updateMemberRole(userId, role) {
+  if (!selectedGroupId || !userId) return;
+
+  try {
+    await apiRequest(`/api/groups/${selectedGroupId}/role`, {
+      method: 'POST',
+      body: JSON.stringify({ target_user_id: Number(userId), role })
+    });
+    showToast("メンバー権限を更新しました");
+    await selectGroupForDetail(selectedGroupId);
+  } catch (err) {
+    console.error('Failed to update member role:', err);
+    await selectGroupForDetail(selectedGroupId);
+  }
+}
+
+async function removeMemberFromGroup(userId) {
+  if (!selectedGroupId || !userId) return;
+
+  const confirmed = confirm("このメンバーをグループから削除しますか？");
+  if (!confirmed) return;
+
+  try {
+    await apiRequest(`/api/groups/${selectedGroupId}/members/${userId}`, {
+      method: 'DELETE'
+    });
+    showToast("メンバーをグループから削除しました");
+    await selectGroupForDetail(selectedGroupId);
+    await syncGroups();
+  } catch (err) {
+    console.error('Failed to remove member:', err);
   }
 }
 

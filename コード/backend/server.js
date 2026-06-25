@@ -56,6 +56,15 @@ app.get('/api/config', (req, res) => {
     });
 });
 
+// Admin portal
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(projectRoot, 'admin.html'));
+});
+
+app.get('/admin/', (req, res) => {
+    res.sendFile(path.join(projectRoot, 'admin.html'));
+});
+
 // Fallback: serve the main calendar frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(projectRoot, 'calendar.html'));

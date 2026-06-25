@@ -172,4 +172,174 @@ router.get('/system-stats', async (req, res) => {
     }
 });
 
+// GET /api/admin/groups - Manage all groups
+router.get('/groups', async (req, res) => {
+    try {
+        const groups = await query.all(
+            `SELECT g.id, g.name, g.owner_id, g.created_at,
+                    u.display_name AS owner_name,
+                    u.email AS owner_email,
+                    COUNT(DISTINCT gm.user_id) AS member_count,
+                    COUNT(DISTINCT e.id) AS event_count
+             FROM groups g
+             LEFT JOIN users u ON g.owner_id = u.id
+             LEFT JOIN group_members gm ON g.id = gm.group_id
+             LEFT JOIN calendars c ON c.group_id = g.id
+             LEFT JOIN events e ON e.calendar_id = c.id
+             GROUP BY g.id
+             ORDER BY g.created_at DESC`
+        );
+        res.json(groups);
+    } catch (err) {
+        console.error('Admin get groups error:', err);
+        res.status(500).json({ error: 'グループ一覧の取得に失敗しました' });
+    }
+});
+
+// GET /api/admin/groups/:id/members - List members of any group
+router.get('/groups/:id/members', async (req, res) => {
+    try {
+        const members = await query.all(
+            `SELECT u.id, u.display_name, u.email, gm.role, gm.created_at
+             FROM group_members gm
+             JOIN users u ON gm.user_id = u.id
+             WHERE gm.group_id = ?
+             ORDER BY gm.created_at ASC`,
+            [req.params.id]
+        );
+        res.json(members);
+    } catch (err) {
+        console.error('Admin get group members error:', err);
+        res.status(500).json({ error: 'メンバー一覧の取得に失敗しました' });
+    }
+});
+
+// PUT /api/admin/groups/:groupId/members/:userId/role - Change any group member role
+router.put('/groups/:groupId/members/:userId/role', async (req, res) => {
+    const { role } = req.body;
+    if (!['admin', 'editor', 'viewer'].includes(role)) {
+        return res.status(400).json({ error: '無効な権限です' });
+    }
+
+    try {
+        const group = await query.get('SELECT owner_id FROM groups WHERE id = ?', [req.params.groupId]);
+        if (!group) return res.status(404).json({ error: 'グループが見つかりません' });
+
+        if (parseInt(req.params.userId) === group.owner_id && role !== 'admin') {
+            return res.status(400).json({ error: 'グループオーナーは管理者から変更できません' });
+        }
+
+        await query.run(
+            'UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?',
+            [role, req.params.groupId, req.params.userId]
+        );
+        res.json({ message: 'グループ権限を更新しました' });
+    } catch (err) {
+        console.error('Admin update group role error:', err);
+        res.status(500).json({ error: 'グループ権限の更新に失敗しました' });
+    }
+});
+
+// DELETE /api/admin/groups/:groupId/members/:userId - Remove member from any group
+router.delete('/groups/:groupId/members/:userId', async (req, res) => {
+    try {
+        const group = await query.get('SELECT owner_id FROM groups WHERE id = ?', [req.params.groupId]);
+        if (!group) return res.status(404).json({ error: 'グループが見つかりません' });
+
+        if (parseInt(req.params.userId) === group.owner_id) {
+            return res.status(400).json({ error: 'グループオーナーは削除できません。先にグループを削除してください' });
+        }
+
+        await query.run(
+            'DELETE FROM group_members WHERE group_id = ? AND user_id = ?',
+            [req.params.groupId, req.params.userId]
+        );
+        res.json({ message: 'メンバーを削除しました' });
+    } catch (err) {
+        console.error('Admin remove group member error:', err);
+        res.status(500).json({ error: 'メンバー削除に失敗しました' });
+    }
+});
+
+// DELETE /api/admin/groups/:id - Delete any group
+router.delete('/groups/:id', async (req, res) => {
+    try {
+        const group = await query.get('SELECT id FROM groups WHERE id = ?', [req.params.id]);
+        if (!group) return res.status(404).json({ error: 'グループが見つかりません' });
+
+        await query.run('DELETE FROM groups WHERE id = ?', [req.params.id]);
+        res.json({ message: 'グループを削除しました' });
+    } catch (err) {
+        console.error('Admin delete group error:', err);
+        res.status(500).json({ error: 'グループ削除に失敗しました' });
+    }
+});
+
+// GET /api/admin/events - List all events
+router.get('/events', async (req, res) => {
+    try {
+        const events = await query.all(
+            `SELECT e.id, e.title, e.start_time, e.end_time, e.visibility, e.event_type,
+                    e.creator_id, creator.display_name AS creator_name, creator.email AS creator_email,
+                    c.id AS calendar_id, c.name AS calendar_name,
+                    g.id AS group_id, g.name AS group_name
+             FROM events e
+             JOIN calendars c ON e.calendar_id = c.id
+             LEFT JOIN groups g ON c.group_id = g.id
+             LEFT JOIN users creator ON e.creator_id = creator.id
+             ORDER BY e.start_time DESC
+             LIMIT 500`
+        );
+        res.json(events);
+    } catch (err) {
+        console.error('Admin get events error:', err);
+        res.status(500).json({ error: 'イベント一覧の取得に失敗しました' });
+    }
+});
+
+// DELETE /api/admin/events/:id - Delete any event
+router.delete('/events/:id', async (req, res) => {
+    try {
+        const event = await query.get('SELECT id FROM events WHERE id = ?', [req.params.id]);
+        if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
+
+        await query.run('DELETE FROM events WHERE id = ?', [req.params.id]);
+        res.json({ message: 'イベントを削除しました' });
+    } catch (err) {
+        console.error('Admin delete event error:', err);
+        res.status(500).json({ error: 'イベント削除に失敗しました' });
+    }
+});
+
+// DELETE /api/admin/users/:id/settings - Reset user settings
+router.delete('/users/:id/settings', async (req, res) => {
+    try {
+        await query.run(
+            `UPDATE users
+             SET max_hp = 100,
+                 max_motivation = 100,
+                 recovery_rate = 1.0,
+                 warning_threshold = 20,
+                 notification_settings = ?
+             WHERE id = ?`,
+            ['{"events":true,"tasks":true,"game":true,"email":true}', req.params.id]
+        );
+        res.json({ message: 'ユーザー設定を初期化しました' });
+    } catch (err) {
+        console.error('Admin reset user settings error:', err);
+        res.status(500).json({ error: 'ユーザー設定の初期化に失敗しました' });
+    }
+});
+
+// DELETE /api/admin/users/:id/notification-history - Delete user notification history
+router.delete('/users/:id/notification-history', async (req, res) => {
+    try {
+        await query.run('DELETE FROM notification_history WHERE user_id = ?', [req.params.id]);
+        res.json({ message: '通知履歴を削除しました' });
+    } catch (err) {
+        console.error('Admin delete notification history error:', err);
+        res.status(500).json({ error: '通知履歴の削除に失敗しました' });
+    }
+});
+
 module.exports = router;
