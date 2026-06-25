@@ -310,3 +310,21 @@ body.dark .mini-action-btn {
   border-color: #ffffff !important;
 }
 
+
+/* Dark mode FAB plus visibility fix */
+body.dark .fab {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 0 0 2px #000000, 0 8px 24px rgba(255, 255, 255, 0.32) !important;
+}
+
+body.dark .fab .material-icons,
+body.dark .fab span {
+  color: #000000 !important;
+}
+
+body.dark .fab:hover {
+  background: #f2f2f2 !important;
+}
+
