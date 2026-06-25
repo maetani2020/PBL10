@@ -150,3 +150,163 @@
   margin-bottom: 8px;
   display: block;
 }
+
+/* Dark mode high contrast overrides */
+body.dark {
+  --bg: #000000;
+  --surface: #000000;
+  --surface-translucent: rgba(0, 0, 0, 0.96);
+  --text: #ffffff;
+  --border: #ffffff;
+  --primary-light: #ffffff;
+}
+
+body.dark,
+body.dark .header,
+body.dark .calendar-nav,
+body.dark .view-switch,
+body.dark .week-header,
+body.dark .sidebar,
+body.dark .modal-content,
+body.dark .auth-card,
+body.dark .account-user-card,
+body.dark .scanner-sheet,
+body.dark .scanner-header,
+body.dark .chat-input-area,
+body.dark .event-card,
+body.dark .day-cell,
+body.dark .event-extra-options,
+body.dark .group-list-container,
+body.dark .member-list-container,
+body.dark .stats-panel,
+body.dark .day-status-panel,
+body.dark .history-panel,
+body.dark .history-item {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+body.dark input,
+body.dark select,
+body.dark textarea,
+body.dark .auth-inputs,
+body.dark .auth-input-field,
+body.dark .attachment-desc-input,
+body.dark .chat-input-row,
+body.dark #aiChatInput {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+body.dark input::placeholder,
+body.dark textarea::placeholder,
+body.dark .auth-input-field::placeholder,
+body.dark #aiChatInput::placeholder {
+  color: #d0d0d0 !important;
+}
+
+body.dark .icon-btn,
+body.dark .nav-btn,
+body.dark .view-btn,
+body.dark .list-mode button,
+body.dark .account-settings-btn,
+body.dark .modal-footer-btn,
+body.dark #closeListBtn,
+body.dark #closeModalBtn,
+body.dark #deleteEventBtn,
+body.dark #closeGroupBtn,
+body.dark #closeNotificationHistoryBtn,
+body.dark #closeNotificationSettingsBtn,
+body.dark #closeMotivationSettingsBtn {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid #ffffff !important;
+}
+
+body.dark .today-btn,
+body.dark .view-btn.active,
+body.dark .settings-tab-btn.active,
+body.dark #saveEventBtn,
+body.dark #saveNotificationSettingsBtn,
+body.dark #saveMotivationSettingsBtn,
+body.dark .primary-btn,
+body.dark .auth-primary-btn,
+body.dark .fab {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+}
+
+body.dark .icon-btn:hover,
+body.dark .nav-btn:hover,
+body.dark .sidebar li:hover,
+body.dark .day-cell:hover,
+body.dark .week-day-column:hover,
+body.dark .event-card:hover,
+body.dark .group-list-item:hover,
+body.dark .group-card:hover,
+body.dark .list-mode button:hover,
+body.dark .account-settings-btn:hover {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+body.dark .other-month {
+  background: #111111 !important;
+  color: #bdbdbd !important;
+}
+
+body.dark .event-card h4,
+body.dark .event-card p,
+body.dark .account-name,
+body.dark .account-email,
+body.dark .auth-title,
+body.dark .auth-subtitle,
+body.dark .settings-label,
+body.dark .settings-tab-btn,
+body.dark .sidebar-user,
+body.dark .day-number,
+body.dark label,
+body.dark h1,
+body.dark h2,
+body.dark h3,
+body.dark h4,
+body.dark p,
+body.dark span {
+  color: #ffffff;
+}
+
+body.dark .public,
+body.dark .group,
+body.dark .private,
+body.dark .event.public,
+body.dark .event.group,
+body.dark .event.private {
+  color: #ffffff !important;
+}
+
+body.dark .compact-checkbox,
+body.dark .reminder-chip,
+body.dark .filter-banner,
+body.dark .ai-summary-container,
+body.dark .ai-proposal-card,
+body.dark .attachment-card,
+body.dark .example-box,
+body.dark .rest-suggestions,
+body.dark .rest-item {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+body.dark .compact-checkbox:has(input[type="checkbox"]:checked),
+body.dark .reminder-chip button,
+body.dark .ai-advice-btn,
+body.dark .mini-action-btn {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+}
+
