@@ -427,7 +427,7 @@
           </div>
 
           <!-- HP消費率・やる気消費率 -->
-          <div class="hp-motivation-inputs hidden" style="display: none;">
+          <div class="hp-motivation-inputs">
             <div style="flex: 1;">
               <label>HP消費率 (%)</label>
               <input type="number" id="hpCost" min="0" max="100" value="0" />
@@ -622,7 +622,7 @@
         <!-- Inputs -->
         <div class="auth-inputs">
           <div id="authDisplayNameContainer" class="hidden">
-            <input type="text" id="authDisplayName" class="auth-input-field" maxlength="10" placeholder="お名前（10文字以内）" />
+            <input type="text" id="authDisplayName" class="auth-input-field" maxlength="10" placeholder="ユーザー名（10文字以内）" autocomplete="nickname" />
           </div>
           <input type="email" id="authEmail" class="auth-input-field" placeholder="メールアドレス（oic-ok.ac.jp）" autocomplete="email" />
           <input type="password" id="authPassword" class="auth-input-field" maxlength="100" placeholder="パスワード（英字＋数字8文字以上・100文字以内）" autocomplete="current-password" />
@@ -686,6 +686,7 @@
         <!-- Tabs -->
         <div class="settings-tabs">
           <button class="settings-tab-btn active" data-tab="password">パスワード変更</button>
+          <button class="settings-tab-btn" data-tab="profile">ユーザー名変更</button>
           <button class="settings-tab-btn" data-tab="email">メール変更</button>
         </div>
 
@@ -707,6 +708,14 @@
         </div>
 
         <!-- Tab: メールアドレス変更 -->
+        <div id="settingsTab_profile" class="settings-tab-panel hidden">
+          <div class="settings-field-group">
+            <label class="settings-label">ユーザー名（10文字以内）</label>
+            <input type="text" id="newDisplayName" class="auth-input-field" maxlength="10" placeholder="新しいユーザー名" autocomplete="nickname" />
+          </div>
+          <button id="changeDisplayNameBtn" class="auth-primary-btn">ユーザー名を変更</button>
+        </div>
+
         <div id="settingsTab_email" class="settings-tab-panel hidden">
           <div class="settings-field-group">
             <label class="settings-label">新しいメールアドレス</label>
@@ -751,14 +760,8 @@
             <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">HP警告閾値 (残%)</label>
             <input type="number" id="calendarSettingsWarningThreshold" min="0" max="100" placeholder="20" />
           </div>
-          <div class="settings-field-group" style="margin-top:10px;">
-            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">予定作成時のHP消費率 (%)</label>
-            <input type="number" id="calendarSettingsDefaultHpCost" min="0" max="100" placeholder="0" />
-          </div>
-          <div class="settings-field-group" style="margin-top:10px;">
-            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">予定作成時のやる気消費率 (%)</label>
-            <input type="number" id="calendarSettingsDefaultMotivationCost" min="0" max="100" placeholder="0" />
-          </div>
+          
+          
         </div>
 
         <div class="modal-actions" style="margin-top:12px;">
@@ -771,6 +774,39 @@
     <!-- ========================================== -->
     <!-- グループ管理モーダル                        -->
     <!-- ========================================== -->
+    <div id="yearJumpModal" class="modal">
+      <div class="modal-content year-jump-modal">
+        <h2>年月へ移動</h2>
+        <div class="year-jump-grid">
+          <div class="settings-field-group">
+            <label class="settings-label">年</label>
+            <input type="number" id="jumpYearInput" min="1970" max="2100" step="1" />
+          </div>
+          <div class="settings-field-group">
+            <label class="settings-label">月</label>
+            <select id="jumpMonthSelect">
+              <option value="1">1月</option>
+              <option value="2">2月</option>
+              <option value="3">3月</option>
+              <option value="4">4月</option>
+              <option value="5">5月</option>
+              <option value="6">6月</option>
+              <option value="7">7月</option>
+              <option value="8">8月</option>
+              <option value="9">9月</option>
+              <option value="10">10月</option>
+              <option value="11">11月</option>
+              <option value="12">12月</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top:12px;">
+          <button id="applyYearJumpBtn" class="primary-btn">移動</button>
+          <button id="closeYearJumpBtn" class="modal-footer-btn">閉じる</button>
+        </div>
+      </div>
+    </div>
+
     <div id="groupModal" class="modal">
       <div class="modal-content group-modal">
         <h2>グループ管理</h2>

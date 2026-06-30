@@ -29,6 +29,40 @@ export const weekView = document.getElementById("weekView");
 export const dayView = document.getElementById("dayView");
 export const currentTitle = document.getElementById("currentTitle");
 
+export function openYearJumpModal() {
+  const modal = document.getElementById("yearJumpModal");
+  const yearInput = document.getElementById("jumpYearInput");
+  const monthSelect = document.getElementById("jumpMonthSelect");
+  if (!modal || !yearInput || !monthSelect) return;
+
+  yearInput.value = currentDate.getFullYear();
+  monthSelect.value = String(currentDate.getMonth() + 1);
+  modal.style.display = "flex";
+  yearInput.focus();
+}
+
+export function closeYearJumpModal() {
+  const modal = document.getElementById("yearJumpModal");
+  if (modal) modal.style.display = "none";
+}
+
+export function applyYearJump() {
+  const year = parseInt(document.getElementById("jumpYearInput")?.value, 10);
+  const month = parseInt(document.getElementById("jumpMonthSelect")?.value, 10);
+
+  if (!Number.isFinite(year) || year < 1970 || year > 2100 || !Number.isFinite(month) || month < 1 || month > 12) {
+    showToast("1970年から2100年までの年月を指定してください");
+    return false;
+  }
+
+  setCurrentDate(new Date(year, month - 1, 1));
+  closeYearJumpModal();
+  refreshCurrentView();
+  return true;
+}
+
+
+
 // Update Calendar Title
 export function updateTitle() {
   const year = currentDate.getFullYear();

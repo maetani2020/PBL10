@@ -310,62 +310,87 @@ export function initAuthForm() {
 // -------------------------------------------------------
 // Google Login (Google Identity Services)
 // -------------------------------------------------------
-async function handleGoogleLogin() {
-  // Google Identity Services を使用した実装
-  const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || '';
 
-  if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
-    // 実際のGoogle OAuth使用
-    window.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: async (response) => {
-        try {
-          // IDトークンをデコードしてユーザー情報取得
-          const payload = JSON.parse(atob(response.credential.split('.')[1]));
-          const data = await apiRequest('/api/auth/google-login', {
-            method: 'POST',
-            body: JSON.stringify({ email: payload.email, display_name: payload.name }),
-          });
-          setAuthToken(data.token);
-          if (data.refreshToken) setRefreshToken(data.refreshToken);
-          setCurrentUser(data.user);
-          hideAuthOverlay();
-          updateUserDisplay();
-          showToast(`Googleでログインしました！ようこそ、${data.user.display_name}さん`);
-          document.dispatchEvent(new CustomEvent('auth:loggedin'));
-        } catch (err) {
-          console.error('Google login error:', err);
-        }
-      },
-    });
-    window.google.accounts.id.prompt();
-  } else {
-    // デモ用モックフロー（Google Client ID未設定時：自動的にダミーGoogleアカウントで登録・ログインする）
-    showToast('Google Client ID未設定のため、デモGoogleアカウントで自動サインインします ⚙️');
-    
-    try {
-      const data = await apiRequest('/api/auth/google-login', {
-        method: 'POST',
-        body: JSON.stringify({ 
-          email: 'demo-google-user@example.com', 
-          display_name: 'デモGoogleユーザー' 
-        }),
-      });
-      setAuthToken(data.token);
-      if (data.refreshToken) setRefreshToken(data.refreshToken);
-      setCurrentUser(data.user);
-      hideAuthOverlay();
-      updateUserDisplay();
-      showToast(`【デモ】Googleアカウントでサインインしました！ようこそ、${data.user.display_name}さん`);
-      document.dispatchEvent(new CustomEvent('auth:loggedin'));
-    } catch (err) {
-      console.error('Demo Google login error:', err);
-    }
-  }
+function getSafeGoogleDisplayName(profile) {
+  const source = profile.name || profile.given_name || (profile.email ? profile.email.split('@')[0] : 'Googleユーザー');
+  return Array.from(String(source).trim()).slice(0, 10).join('') || 'Googleユーザー';
 }
 
-// -------------------------------------------------------
-// パスワードリセット Modal
+async function finishGoogleLogin(profile) {
+  const data = await apiRequest('/api/auth/google-login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: profile.email,
+      display_name: getSafeGoogleDisplayName(profile),
+    }),
+  });
+
+  setAuthToken(data.token);
+  if (data.refreshToken) setRefreshToken(data.refreshToken);
+  setCurrentUser(data.user);
+  hideAuthOverlay();
+  updateUserDisplay();
+  showToast(`Googleでログインしました。ようこそ、${data.user.display_name}さん`);
+  document.dispatchEvent(new CustomEvent('auth:loggedin'));
+}
+
+async function fetchGoogleUserInfo(accessToken) {
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    throw new Error('Googleアカウント情報の取得に失敗しました');
+  }
+
+  return res.json();
+}
+
+async function handleGoogleLogin() {
+  const googleLoginBtn = document.getElementById('googleLoginBtn');
+  const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || '';
+
+  if (!GOOGLE_CLIENT_ID) {
+    showToast('Google Client IDが未設定です。サーバーの環境変数 GOOGLE_CLIENT_ID を設定してください');
+    return;
+  }
+
+  if (!window.google?.accounts?.oauth2) {
+    showToast('Googleログインの読み込みが完了していません。少し待ってからもう一度押してください');
+    return;
+  }
+
+  if (googleLoginBtn) googleLoginBtn.disabled = true;
+
+  const tokenClient = window.google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: 'openid email profile',
+    prompt: 'select_account',
+    callback: async (tokenResponse) => {
+      try {
+        if (tokenResponse.error) {
+          throw new Error(tokenResponse.error_description || tokenResponse.error);
+        }
+
+        const profile = await fetchGoogleUserInfo(tokenResponse.access_token);
+        await finishGoogleLogin(profile);
+      } catch (err) {
+        console.error('Google login error:', err);
+        showToast(err.message || 'Googleログインに失敗しました');
+      } finally {
+        if (googleLoginBtn) googleLoginBtn.disabled = false;
+      }
+    },
+    error_callback: (err) => {
+      console.error('Google popup error:', err);
+      showToast('Googleアカウント選択がキャンセルされました');
+      if (googleLoginBtn) googleLoginBtn.disabled = false;
+    },
+  });
+
+  tokenClient.requestAccessToken({ prompt: 'select_account' });
+}
+
 // -------------------------------------------------------
 function showPasswordResetModal() {
   const modal = document.getElementById('passwordResetModal');
@@ -419,6 +444,8 @@ export function initAccountSettings() {
   const closeSettingsBtn = document.getElementById('closeAccountSettingsBtn');
 
   openSettingsBtn?.addEventListener('click', () => {
+    const nameInput = document.getElementById('newDisplayName');
+    if (nameInput) nameInput.value = currentUser?.display_name || '';
     settingsModal?.classList.remove('hidden');
   });
 
@@ -442,6 +469,32 @@ export function initAccountSettings() {
   });
 
   // パスワード変更
+
+  const changeDisplayNameBtn = document.getElementById('changeDisplayNameBtn');
+  changeDisplayNameBtn?.addEventListener('click', async () => {
+    const newDisplayName = document.getElementById('newDisplayName')?.value.trim();
+
+    if (!newDisplayName) { showToast('ユーザー名を入力してください'); return; }
+    if (Array.from(newDisplayName).length > 10) { showToast('ユーザー名は10文字以内で入力してください'); return; }
+
+    changeDisplayNameBtn.disabled = true;
+    changeDisplayNameBtn.textContent = '変更中...';
+    try {
+      const data = await apiRequest('/api/auth/change-display-name', {
+        method: 'POST',
+        body: JSON.stringify({ display_name: newDisplayName }),
+      });
+      setCurrentUser(data.user);
+      updateUserDisplay();
+      showToast(data.message || 'ユーザー名を変更しました');
+    } catch {
+      // error shown by apiRequest
+    } finally {
+      changeDisplayNameBtn.disabled = false;
+      changeDisplayNameBtn.textContent = 'ユーザー名を変更';
+    }
+  });
+
   const changePasswordBtn = document.getElementById('changePasswordBtn');
   changePasswordBtn?.addEventListener('click', async () => {
     const current = document.getElementById('currentPassword')?.value;

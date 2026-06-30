@@ -98,9 +98,9 @@ body.dark .day-cell:hover {
 }
 
 .day-number {
-  width: 28px;
+  width: 32px;
 
-  height: 28px;
+  height: 32px;
 
   display: flex;
 
@@ -110,7 +110,9 @@ body.dark .day-cell:hover {
 
   border-radius: 50%;
 
-  font-size: 14px;
+  font-size: 16px;
+
+  font-weight: 600;
 }
 
 .sunday {
@@ -351,7 +353,7 @@ body.dark .week-day-column:hover {
 
 @media (max-width: 768px) {
   .day-number {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .event {

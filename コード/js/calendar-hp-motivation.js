@@ -234,6 +234,12 @@ export function preSaveCheck(dateStr, hpCost, motivationCost, excludeId) {
   };
 }
 
+function readPercentInput(id) {
+  const value = parseInt(document.getElementById(id)?.value, 10);
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
 // Live preview inside the event modal
 export function updatePreSavePreview() {
   const startInput = document.getElementById("eventStart");
@@ -243,9 +249,8 @@ export function updatePreSavePreview() {
   const dateStr = startInput.value.substring(0, 10);
   if (!dateStr) return;
 
-  const defaultEventCosts = getDefaultEventCosts();
-  const hpCost = defaultEventCosts.hp_consumption;
-  const motivationCost = defaultEventCosts.motivation_consumption;
+  const hpCost = readPercentInput("hpCost");
+  const motivationCost = readPercentInput("motivationCost");
   const editEventId = window.editingEventId || null; // Access global editing ID
 
   const check = preSaveCheck(dateStr, hpCost, motivationCost, editEventId);
@@ -275,12 +280,7 @@ export function openCalendarSettingsModal() {
   document.getElementById("calendarSettingsMaxMotivation").value = limitsCache.max_motivation;
   document.getElementById("calendarSettingsRecoveryRate").value = limitsCache.recovery_rate;
   document.getElementById("calendarSettingsWarningThreshold").value = limitsCache.warning_threshold;
-
-  const defaultEventCosts = getDefaultEventCosts();
-  document.getElementById("calendarSettingsDefaultHpCost").value = defaultEventCosts.hp_consumption;
-  document.getElementById("calendarSettingsDefaultMotivationCost").value = defaultEventCosts.motivation_consumption;
-
-  modal.style.display = "flex";
+modal.style.display = "flex";
 }
 
 export function closeCalendarSettingsModal() {
@@ -293,12 +293,7 @@ export async function saveCalendarSettings() {
   const max_motivation = parseInt(document.getElementById("calendarSettingsMaxMotivation").value) || 100;
   const recovery_rate = parseFloat(document.getElementById("calendarSettingsRecoveryRate").value) || 1.0;
   const warning_threshold = parseInt(document.getElementById("calendarSettingsWarningThreshold").value) || 20;
-
-  const defaultHpCost = parseInt(document.getElementById("calendarSettingsDefaultHpCost")?.value) || 0;
-  const defaultMotivationCost = parseInt(document.getElementById("calendarSettingsDefaultMotivationCost")?.value) || 0;
-  saveDefaultEventCosts(defaultHpCost, defaultMotivationCost);
-
-  const btn = document.getElementById("saveCalendarSettingsBtn");
+const btn = document.getElementById("saveCalendarSettingsBtn");
   if (btn) {
     btn.disabled = true;
     btn.textContent = "保存中...";

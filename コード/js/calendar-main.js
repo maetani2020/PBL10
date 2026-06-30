@@ -42,6 +42,9 @@ import {
   movePrevious,
   moveNext,
   switchView,
+  openYearJumpModal,
+  closeYearJumpModal,
+  applyYearJump,
   monthView,
   weekView,
   dayView
@@ -91,8 +94,7 @@ import {
   updatePreSavePreview,
   openCalendarSettingsModal,
   closeCalendarSettingsModal,
-  saveCalendarSettings,
-  getDefaultEventCosts
+  saveCalendarSettings
 } from './calendar-hp-motivation.js';
 
 
@@ -143,6 +145,12 @@ function getChecked(id, fallback = false) {
   return el ? el.checked : fallback;
 }
 
+function readPercentInput(id) {
+  const value = parseInt(document.getElementById(id)?.value, 10);
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
 function collectEventDraftData() {
   return {
     title: document.getElementById("eventTitle")?.value || "",
@@ -150,6 +158,8 @@ function collectEventDraftData() {
     end: document.getElementById("eventEnd")?.value || "",
     allDay: getChecked("allDay"),
     eventType: document.getElementById("eventType")?.value || "event",
+    hpCost: document.getElementById("hpCost")?.value || "0",
+    motivationCost: document.getElementById("motivationCost")?.value || "0",
     memo: document.getElementById("eventMemo")?.value || "",
     visibility: document.getElementById("eventVisibility")?.value || "public",
     groupId: document.getElementById("eventGroupId")?.value || "",
@@ -172,6 +182,8 @@ function applyEventDraftData(draft) {
   setValue("eventEnd", draft.end);
   setChecked("allDay", draft.allDay);
   setValue("eventType", draft.eventType || "event");
+  setValue("hpCost", draft.hpCost ?? "0");
+  setValue("motivationCost", draft.motivationCost ?? "0");
   setValue("eventMemo", draft.memo);
   setValue("eventVisibility", draft.visibility || "public");
   setValue("eventGroupId", draft.groupId);
@@ -243,9 +255,8 @@ function clearEventDraft() {
   const memo = document.getElementById("eventMemo").value;
   const visibility = document.getElementById("eventVisibility").value;
   const allDay = document.getElementById("allDay").checked;
-  const defaultEventCosts = getDefaultEventCosts();
-  const hp_consumption = defaultEventCosts.hp_consumption;
-  const motivation_consumption = defaultEventCosts.motivation_consumption;
+  const hp_consumption = readPercentInput("hpCost");
+  const motivation_consumption = readPercentInput("motivationCost");
   const eventType = document.getElementById("eventType").value;
 
   const reminderMinutes = collectEventReminderMinutes();
@@ -507,7 +518,8 @@ document.addEventListener("DOMContentLoaded", () => {
     { id: "groupModal", close: closeGroupModal },
     { id: "notificationHistoryModal", close: closeNotificationHistoryModal },
     { id: "notificationSettingsModal", close: closeNotificationSettingsModal },
-    { id: "calendarSettingsModal", close: closeCalendarSettingsModal }
+    { id: "calendarSettingsModal", close: closeCalendarSettingsModal },
+    { id: "yearJumpModal", close: closeYearJumpModal }
   ].forEach(m => {
     const el = document.getElementById(m.id);
     if (el) {
@@ -526,8 +538,15 @@ document.addEventListener("DOMContentLoaded", () => {
       closeNotificationHistoryModal();
       closeNotificationSettingsModal();
       closeCalendarSettingsModal();
+      closeYearJumpModal();
       closeAdminPanel();
     }
+  });
+
+  document.getElementById("currentTitle")?.addEventListener("click", openYearJumpModal);
+  document.getElementById("closeYearJumpBtn")?.addEventListener("click", closeYearJumpModal);
+  document.getElementById("applyYearJumpBtn")?.addEventListener("click", () => {
+    if (applyYearJump()) syncEvents();
   });
 
   // Main navigation buttons

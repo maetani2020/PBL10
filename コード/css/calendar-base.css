@@ -250,6 +250,27 @@ body.dark .icon-btn:hover {
   font-size: 22px;
 
   font-weight: 500;
+
+  cursor: pointer;
+
+  border-radius: 10px;
+
+  padding: 4px 10px;
+}
+
+#currentTitle:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.year-jump-modal {
+  max-width: 360px;
+}
+
+.year-jump-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
 /* ==========================
