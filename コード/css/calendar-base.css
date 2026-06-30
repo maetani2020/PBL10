@@ -16,6 +16,7 @@ calendar-base.css
   --surface-translucent: rgba(255, 255, 255, 0.82);
 
   --text: #202124;
+  --text-muted: #5f6368;
   --border: #dadce0;
 
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
@@ -26,6 +27,9 @@ calendar-base.css
   --public: #1a73e8;
   --group: #34a853;
   --private: #9aa0a6;
+
+  --hover: #f1f3f4;
+  --active: #e8f0fe;
 }
 
 /* ==========================
@@ -33,16 +37,28 @@ calendar-base.css
    ========================== */
 
 body.dark {
-  --bg: #202124;
+  --primary: #6366f1;
+  --primary-light: rgba(99, 102, 241, 0.15);
 
-  --surface: #303134;
-  --surface-translucent: rgba(30, 30, 32, 0.82);
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-translucent: rgba(30, 41, 59, 0.85);
 
-  --text: #e8eaed;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --border: #334155;
 
-  --border: #5f6368;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
 
-  --primary-light: #174ea6;
+  --sunday: #f87171;
+  --saturday: #60a5fa;
+
+  --public: #6366f1;
+  --group: #34d399;
+  --private: #64748b;
+
+  --hover: #334155;
+  --active: #475569;
 }
 
 /* ==========================
@@ -68,18 +84,25 @@ body {
   overflow: hidden;
 }
 
+/* スムーズなテーマ切り替えのためのトランジション */
 body,
-header,
-aside,
+body *,
+body *::before,
+body *::after {
+  transition: background-color 0.3s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, backdrop-filter 0.3s ease;
+}
+
+/* ボタン等のアクティブ・ホバーアニメーションを個別に最適化 */
+button,
+.icon-btn,
+.today-btn,
+.view-btn,
+.nav-btn,
+.fab,
 .sidebar-item,
-.modal-content,
-.auth-card,
-.auth-sub-card,
-input,
-select,
-textarea,
-button {
-  transition: background-color 0.4s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease, transform 0.2s ease;
+.event-card,
+.rest-item {
+  transition: transform 0.2s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 /* Active buttons/FAB haptic feedback */
@@ -189,11 +212,7 @@ button {
 }
 
 .icon-btn:hover {
-  background: #f1f3f4;
-}
-
-body.dark .icon-btn:hover {
-  background: #3c4043;
+  background: var(--hover);
 }
 
 .today-btn {
@@ -567,11 +586,7 @@ body.dark ::-webkit-scrollbar-thumb {
 }
 
 .sidebar li:hover {
-  background: #f1f3f4;
-}
-
-body.dark .sidebar li:hover {
-  background: #3c4043;
+  background: var(--hover);
 }
 
 /* ==========================

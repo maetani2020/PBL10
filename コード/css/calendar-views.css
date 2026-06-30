@@ -90,11 +90,7 @@ calendar-views.css
 }
 
 .day-cell:hover {
-  background: #f8f9fa;
-}
-
-body.dark .day-cell:hover {
-  background: #3c4043;
+  background: var(--hover);
 }
 
 .day-number {
