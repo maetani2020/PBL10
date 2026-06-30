@@ -126,3 +126,68 @@ export function showToast(msg) {
     }, 300);
   }, 2500);
 }
+
+export function clearFieldErrors(root = document) {
+  const scope = root || document;
+  scope.querySelectorAll?.(".field-invalid").forEach(el => {
+    el.classList.remove("field-invalid");
+    el.removeAttribute("aria-invalid");
+  });
+  scope.querySelectorAll?.(".field-error-text").forEach(el => el.remove());
+}
+
+export function clearFieldError(field) {
+  const el = typeof field === "string" ? document.getElementById(field) : field;
+  if (!el) return;
+  el.classList.remove("field-invalid");
+  el.removeAttribute("aria-invalid");
+  const next = el.nextElementSibling;
+  if (next?.classList.contains("field-error-text")) next.remove();
+}
+
+export function showFieldError(field, message, options = {}) {
+  const el = typeof field === "string" ? document.getElementById(field) : field;
+  if (!el) {
+    showToast(message);
+    return false;
+  }
+
+  const next = el.nextElementSibling;
+  if (next?.classList.contains("field-error-text")) next.remove();
+
+  el.classList.add("field-invalid");
+  el.setAttribute("aria-invalid", "true");
+
+  const errorEl = document.createElement("div");
+  errorEl.className = "field-error-text";
+  errorEl.textContent = message;
+  el.insertAdjacentElement("afterend", errorEl);
+
+  if (options.focus !== false) {
+    el.focus?.({ preventScroll: true });
+    el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }
+
+  showToast(message);
+  return false;
+}
+
+export function showFormError(containerId, message, type = "danger") {
+  const box = document.getElementById(containerId);
+  if (!box) {
+    showToast(message);
+    return;
+  }
+
+  box.textContent = message;
+  box.classList.remove("hidden", "alert-warning", "alert-danger");
+  box.classList.add(type === "warning" ? "alert-warning" : "alert-danger");
+}
+
+export function clearFormError(containerId) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  box.textContent = "";
+  box.classList.add("hidden");
+  box.classList.remove("alert-warning", "alert-danger");
+}

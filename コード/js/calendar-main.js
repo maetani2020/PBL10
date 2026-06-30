@@ -11,6 +11,11 @@ import {
   setCurrentFilter,
   formatDate,
   showToast,
+  showFieldError,
+  clearFieldError,
+  clearFieldErrors,
+  showFormError,
+  clearFormError,
   getAllEvents,
   saveEvents,
   normalizeEvent
@@ -108,7 +113,6 @@ import {
 import {
   initAdminUI,
   updateAdminNavVisibility,
-  openAdminPanel,
   closeAdminPanel
 } from './calendar-admin.js';
 
@@ -157,6 +161,14 @@ function readPercentInput(id) {
   const value = parseInt(document.getElementById(id)?.value, 10);
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, value));
+}
+
+function isNumberInRange(id, min, max) {
+  const el = document.getElementById(id);
+  const raw = el?.value;
+  if (raw === "" || raw == null) return true;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= min && value <= max;
 }
 
 function collectEventDraftData() {
@@ -431,30 +443,55 @@ function updateLocalEventCache(savedEvent) {
   refreshCalendar();
 }
 
-    async function saveEvent() {
+async function saveEvent() {
+  clearFieldErrors(eventModal);
+  clearFormError("preSaveWarning");
+
   const title = document.getElementById("eventTitle").value.trim();
 
   if (title.length === 0) {
-    showToast("タイトルを入力してください ⚠️");
-    return;
+    setEventModalStep("basic");
+    showFormError("preSaveWarning", "タイトルを入力してください");
+    return showFieldError("eventTitle", "タイトルを入力してください");
   }
 
   const start = document.getElementById("eventStart").value;
   const end = document.getElementById("eventEnd").value;
 
   if (start === "" || end === "") {
-    showToast("日時を入力してください ⚠️");
-    return;
+    setEventModalStep("basic");
+    showFormError("preSaveWarning", "開始日時と終了日時を入力してください");
+    return showFieldError(start === "" ? "eventStart" : "eventEnd", "日時を入力してください");
   }
 
   if (start > end) {
-    showToast("終了日時が開始日時より前です ⚠️");
-    return;
+    setEventModalStep("basic");
+    showFormError("preSaveWarning", "終了日時は開始日時より後にしてください");
+    return showFieldError("eventEnd", "終了日時が開始日時より前です");
   }
 
   const memo = document.getElementById("eventMemo").value;
   const visibility = document.getElementById("eventVisibility").value;
   const allDay = document.getElementById("allDay").checked;
+
+  if (!isNumberInRange("hpCost", 0, 100)) {
+    setEventModalStep("details");
+    showFormError("preSaveWarning", "HP消費率は0から100の範囲で入力してください");
+    return showFieldError("hpCost", "0から100の範囲で入力してください");
+  }
+
+  if (!isNumberInRange("motivationCost", 0, 100)) {
+    setEventModalStep("details");
+    showFormError("preSaveWarning", "やる気消費率は0から100の範囲で入力してください");
+    return showFieldError("motivationCost", "0から100の範囲で入力してください");
+  }
+
+  if (!isNumberInRange("customReminderMinutes", 1, 10080)) {
+    setEventModalStep("details");
+    showFormError("preSaveWarning", "カスタム通知は1分から10080分の範囲で入力してください");
+    return showFieldError("customReminderMinutes", "1から10080分の範囲で入力してください");
+  }
+
   const hp_consumption = readPercentInput("hpCost");
   const motivation_consumption = readPercentInput("motivationCost");
   const eventType = document.getElementById("eventType").value;
@@ -470,6 +507,18 @@ function updateLocalEventCache(savedEvent) {
   const mailSent = document.getElementById("mailSent")?.checked ?? false;
 
   const eventGroupId = document.getElementById("eventGroupId").value;
+
+  if (visibility === "group" && !eventGroupId) {
+    setEventModalStep("details");
+    showFormError("preSaveWarning", "グループ共有にする場合はグループを選択してください");
+    return showFieldError("eventGroupId", "グループを選択してください");
+  }
+
+  if (eventType === "mail" && mailReminderEnabled && !mailRemindAt) {
+    setEventModalStep("details");
+    showFormError("preSaveWarning", "メール送信リマインドの通知日時を入力してください");
+    return showFieldError("mailRemindAt", "通知日時を入力してください");
+  }
 
   let calendar_id = undefined;
   if (visibility === "group" && eventGroupId) {
@@ -548,7 +597,7 @@ function updateLocalEventCache(savedEvent) {
 async function deleteEvent() {
   if (!selectedEventId) return;
 
-  const result = confirm("予定を削除しますか？");
+  const result = confirm("予定を削除しますか？削除後は管理者画面から復元できます。");
   if (!result) return;
 
   try {
@@ -560,6 +609,7 @@ async function deleteEvent() {
     await syncEvents();
   } catch (err) {
     console.error('Failed to delete event:', err);
+    showToast(err.message || "予定の削除に失敗しました");
   }
 }
 
@@ -651,16 +701,8 @@ function switchPanel(panel) {
 
 
   if (panel === "admin") {
-    const opened = openAdminPanel();
-    if (opened) {
-      if (viewSwitch) viewSwitch.classList.add("hidden");
-      if (weekHeader) weekHeader.classList.add("hidden");
-      if (filterBanner) filterBanner.classList.add("hidden");
-      document.getElementById("monthView").classList.add("hidden");
-      document.getElementById("weekView").classList.add("hidden");
-      document.getElementById("dayView").classList.add("hidden");
-    }
     closeSidebar();
+    window.location.href = "/admin";
     return;
   }
 
@@ -719,6 +761,18 @@ async function init() {
 // Event Listeners Binding
 // ----------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("input", (event) => {
+    if (event.target?.classList?.contains("field-invalid")) {
+      clearFieldError(event.target);
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    if (event.target?.classList?.contains("field-invalid")) {
+      clearFieldError(event.target);
+    }
+  });
+
   // Save / Delete / Close Modals
   document.getElementById("saveEventBtn").addEventListener("click", saveEvent);
   document.getElementById("deleteEventBtn").addEventListener("click", deleteEvent);
@@ -727,6 +781,14 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("loadDraftEventBtn")?.addEventListener("click", () => loadEventDraft());
   document.getElementById("clearDraftEventBtn")?.addEventListener("click", clearEventDraft);
   document.getElementById("nextEventStepBtn")?.addEventListener("click", () => {
+    clearFieldErrors(eventModal);
+    clearFormError("preSaveWarning");
+    const title = document.getElementById("eventTitle")?.value.trim();
+    const start = document.getElementById("eventStart")?.value;
+    const end = document.getElementById("eventEnd")?.value;
+    if (!title) return showFieldError("eventTitle", "タイトルを入力してください");
+    if (!start || !end) return showFieldError(!start ? "eventStart" : "eventEnd", "日時を入力してください");
+    if (start > end) return showFieldError("eventEnd", "終了日時が開始日時より前です");
     setEventModalStep("details");
     updatePreSavePreview();
   });

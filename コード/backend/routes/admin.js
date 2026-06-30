@@ -3,6 +3,7 @@ const router = express.Router();
 const os = require('os');
 const { query } = require('../db');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
+const { sendToUsers } = require('../utils/websocket');
 
 let previousCpuSnapshot = getCpuSnapshot();
 
@@ -59,6 +60,24 @@ async function logAdminAction(req, action, targetType = null, targetId = null, d
     }
 }
 
+async function getCalendarAccessors(calendarId) {
+    const calendar = await query.get('SELECT owner_id, group_id FROM calendars WHERE id = ?', [calendarId]);
+    if (!calendar) return [];
+
+    const userIds = new Set();
+    if (calendar.owner_id) userIds.add(calendar.owner_id);
+
+    const shares = await query.all('SELECT user_id FROM calendar_shares WHERE calendar_id = ?', [calendarId]);
+    shares.forEach(share => userIds.add(share.user_id));
+
+    if (calendar.group_id) {
+        const members = await query.all('SELECT user_id FROM group_members WHERE group_id = ?', [calendar.group_id]);
+        members.forEach(member => userIds.add(member.user_id));
+    }
+
+    return Array.from(userIds);
+}
+
 // IP Whitelist middleware (Optional, recommended)
 function verifyIpWhitelist(req, res, next) {
     const whitelistStr = process.env.ADMIN_IP_WHITELIST;
@@ -93,7 +112,7 @@ router.get('/users', async (req, res) => {
                     COUNT(DISTINCT gm.group_id) AS group_count,
                     COUNT(DISTINCT nh.id) AS notification_count
              FROM users u
-             LEFT JOIN events e ON e.creator_id = u.id
+             LEFT JOIN events e ON e.creator_id = u.id AND e.deleted_at IS NULL
              LEFT JOIN group_members gm ON gm.user_id = u.id
              LEFT JOIN notification_history nh ON nh.user_id = u.id
              GROUP BY u.id, u.email, u.display_name, u.role, u.created_at, u.last_activity_at
@@ -219,9 +238,14 @@ router.get('/system-stats', async (req, res) => {
 
         const userCount = await query.get('SELECT COUNT(*) as count FROM users');
         const adminCount = await query.get("SELECT COUNT(*) as count FROM users WHERE role = 'admin'");
-        const eventCount = await query.get('SELECT COUNT(*) as count FROM events');
-        const todayEventCount = await query.get('SELECT COUNT(*) as count FROM events WHERE start_time LIKE ?', [`${todayPrefix}%`]);
+        const eventCount = await query.get('SELECT COUNT(*) as count FROM events WHERE deleted_at IS NULL');
+        const deletedEventCount = await query.get('SELECT COUNT(*) as count FROM events WHERE deleted_at IS NOT NULL');
+        const todayEventCount = await query.get(
+            'SELECT COUNT(*) as count FROM events WHERE deleted_at IS NULL AND start_time LIKE ?',
+            [`${todayPrefix}%`]
+        );
         const groupCount = await query.get('SELECT COUNT(*) as count FROM groups');
+        const pendingInvitationCount = await query.get("SELECT COUNT(*) as count FROM group_invitations WHERE status = 'pending'");
         const taskCount = await query.get('SELECT COUNT(*) as count FROM tasks');
         const notificationCount = await query.get('SELECT COUNT(*) as count FROM notification_history');
         const adminLogCount = await query.get('SELECT COUNT(*) as count FROM admin_logs');
@@ -264,8 +288,10 @@ router.get('/system-stats', async (req, res) => {
                 users: userCount.count,
                 admins: adminCount.count,
                 events: eventCount.count,
+                deletedEvents: deletedEventCount.count,
                 todayEvents: todayEventCount.count,
                 groups: groupCount.count,
+                pendingInvitations: pendingInvitationCount.count,
                 tasks: taskCount.count,
                 notificationHistory: notificationCount.count,
                 adminLogs: adminLogCount.count
@@ -300,6 +326,7 @@ router.get('/backup', async (req, res) => {
                 ),
                 groups: await query.all('SELECT * FROM groups ORDER BY id ASC'),
                 groupMembers: await query.all('SELECT * FROM group_members ORDER BY id ASC'),
+                groupInvitations: await query.all('SELECT * FROM group_invitations ORDER BY id ASC'),
                 calendars: await query.all('SELECT * FROM calendars ORDER BY id ASC'),
                 calendarShares: await query.all('SELECT * FROM calendar_shares ORDER BY id ASC'),
                 events: await query.all('SELECT * FROM events ORDER BY created_at ASC'),
@@ -360,10 +387,12 @@ router.get('/groups', async (req, res) => {
                     u.display_name AS owner_name,
                     u.email AS owner_email,
                     COUNT(DISTINCT gm.user_id) AS member_count,
-                    COUNT(DISTINCT e.id) AS event_count
+                    COUNT(DISTINCT CASE WHEN e.deleted_at IS NULL THEN e.id END) AS event_count,
+                    COUNT(DISTINCT CASE WHEN gi.status = 'pending' THEN gi.id END) AS pending_invitation_count
              FROM groups g
              LEFT JOIN users u ON g.owner_id = u.id
              LEFT JOIN group_members gm ON g.id = gm.group_id
+             LEFT JOIN group_invitations gi ON g.id = gi.group_id
              LEFT JOIN calendars c ON c.group_id = g.id
              LEFT JOIN events e ON e.calendar_id = c.id
              GROUP BY g.id, g.name, g.owner_id, g.created_at, u.display_name, u.email
@@ -373,6 +402,32 @@ router.get('/groups', async (req, res) => {
     } catch (err) {
         console.error('Admin get groups error:', err);
         res.status(500).json({ error: 'グループ一覧の取得に失敗しました' });
+    }
+});
+
+// GET /api/admin/groups/:id/invitations - List invitation statuses of any group
+router.get('/groups/:id/invitations', async (req, res) => {
+    try {
+        const invitations = await query.all(
+            `SELECT gi.id, gi.group_id, gi.invited_user_id, gi.invited_by, gi.role,
+                    gi.status, gi.created_at, gi.responded_at,
+                    invited.display_name AS invited_name,
+                    invited.email AS invited_email,
+                    inviter.display_name AS inviter_name,
+                    inviter.email AS inviter_email
+             FROM group_invitations gi
+             JOIN users invited ON gi.invited_user_id = invited.id
+             LEFT JOIN users inviter ON gi.invited_by = inviter.id
+             WHERE gi.group_id = ?
+             ORDER BY
+                CASE gi.status WHEN 'pending' THEN 0 WHEN 'declined' THEN 1 ELSE 2 END,
+                gi.created_at DESC`,
+            [req.params.id]
+        );
+        res.json(invitations);
+    } catch (err) {
+        console.error('Admin get group invitations error:', err);
+        res.status(500).json({ error: 'グループ招待状態の取得に失敗しました' });
     }
 });
 
@@ -499,15 +554,18 @@ router.get('/events', async (req, res) => {
             `SELECT e.id, e.title, e.start_time, e.end_time, e.visibility, e.event_type,
                     e.color, e.memo, e.hp_consumption, e.motivation_consumption,
                     e.mail_reminder_enabled, e.mail_remind_at, e.mail_sent,
+                    e.deleted_at, e.deleted_by,
                     e.creator_id, creator.display_name AS creator_name, creator.email AS creator_email,
+                    deleter.display_name AS deleted_by_name, deleter.email AS deleted_by_email,
                     c.id AS calendar_id, c.name AS calendar_name,
                     g.id AS group_id, g.name AS group_name
              FROM events e
              JOIN calendars c ON e.calendar_id = c.id
              LEFT JOIN groups g ON c.group_id = g.id
              LEFT JOIN users creator ON e.creator_id = creator.id
+             LEFT JOIN users deleter ON e.deleted_by = deleter.id
              ORDER BY e.start_time DESC
-             LIMIT 500`
+             LIMIT 800`
         );
         res.json(events);
     } catch (err) {
@@ -519,19 +577,70 @@ router.get('/events', async (req, res) => {
 // DELETE /api/admin/events/:id - Delete any event
 router.delete('/events/:id', async (req, res) => {
     try {
-        const event = await query.get('SELECT id, title, start_time, creator_id FROM events WHERE id = ?', [req.params.id]);
+        const event = await query.get('SELECT id, title, start_time, creator_id, calendar_id, deleted_at FROM events WHERE id = ?', [req.params.id]);
         if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
 
-        await query.run('DELETE FROM events WHERE id = ?', [req.params.id]);
+        if (event.deleted_at) {
+            return res.status(400).json({ error: 'このイベントは既に削除済みです' });
+        }
+
+        await query.run(
+            'UPDATE events SET deleted_at = CURRENT_TIMESTAMP, deleted_by = ? WHERE id = ?',
+            [req.user.id, req.params.id]
+        );
         await logAdminAction(req, 'event:delete', 'event', req.params.id, {
             title: event.title,
             startTime: event.start_time,
             creatorId: event.creator_id
         });
+
+        const accessors = await getCalendarAccessors(event.calendar_id);
+        sendToUsers(accessors, {
+            type: 'event_sync',
+            calendarId: event.calendar_id,
+            action: 'delete',
+            eventId: req.params.id
+        });
+
         res.json({ message: 'イベントを削除しました' });
     } catch (err) {
         console.error('Admin delete event error:', err);
         res.status(500).json({ error: 'イベント削除に失敗しました' });
+    }
+});
+
+// POST /api/admin/events/:id/restore - Restore a soft-deleted event
+router.post('/events/:id/restore', async (req, res) => {
+    try {
+        const event = await query.get('SELECT id, title, start_time, creator_id, calendar_id, deleted_at FROM events WHERE id = ?', [req.params.id]);
+        if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
+
+        if (!event.deleted_at) {
+            return res.status(400).json({ error: 'このイベントは削除されていません' });
+        }
+
+        await query.run(
+            'UPDATE events SET deleted_at = NULL, deleted_by = NULL WHERE id = ?',
+            [req.params.id]
+        );
+        await logAdminAction(req, 'event:restore', 'event', req.params.id, {
+            title: event.title,
+            startTime: event.start_time,
+            creatorId: event.creator_id
+        });
+
+        const accessors = await getCalendarAccessors(event.calendar_id);
+        sendToUsers(accessors, {
+            type: 'event_sync',
+            calendarId: event.calendar_id,
+            action: 'restore',
+            eventId: req.params.id
+        });
+
+        res.json({ message: 'イベントを復元しました' });
+    } catch (err) {
+        console.error('Admin restore event error:', err);
+        res.status(500).json({ error: 'イベント復元に失敗しました' });
     }
 });
 

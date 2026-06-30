@@ -1,7 +1,7 @@
 // calendar-auth.js
 // Authentication state management, API helpers, and auth UI logic
 
-import { showToast } from './calendar-state.js';
+import { showToast, showFieldError, clearFieldErrors } from './calendar-state.js';
 
 // -------------------------------------------------------
 // Auth State
@@ -76,13 +76,16 @@ export async function apiRequest(endpoint, options = {}, _retry = false) {
       throw new Error('セッションの期限が切れました。再ログインしてください。');
     }
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(data.error || '通信エラーが発生しました');
     }
     return data;
   } catch (err) {
-    showToast(err.message);
+    const message = err.name === 'TypeError'
+      ? 'サーバーに接続できません。通信状況を確認してください。'
+      : err.message;
+    showToast(message);
     throw err;
   }
 }
@@ -211,6 +214,7 @@ export function initAuthForm() {
 
   // Toggle between login / signup
   authToggleBtn.addEventListener('click', () => {
+    clearFieldErrors(document.getElementById('authOverlay'));
     isSignupMode = !isSignupMode;
     if (isSignupMode) {
       authDisplayNameContainer?.classList.remove('hidden');
@@ -227,27 +231,24 @@ export function initAuthForm() {
 
   // Primary action (login or register)
   authPrimaryBtn.addEventListener('click', async () => {
+    clearFieldErrors(document.getElementById('authOverlay'));
     const email = authEmailInput?.value.trim();
     const password = authPasswordInput?.value;
     const displayName = authDisplayNameInput?.value.trim();
 
-    if (!email || !password || (isSignupMode && !displayName)) {
-      showToast('すべての項目を入力してください');
-      return;
-    }
+    if (isSignupMode && !displayName) return showFieldError(authDisplayNameInput, 'ユーザー名を入力してください');
+    if (!email) return showFieldError(authEmailInput, 'メールアドレスを入力してください');
+    if (!password) return showFieldError(authPasswordInput, 'パスワードを入力してください');
 
     if (isSignupMode) {
       if (!email.toLowerCase().endsWith('@oic-ok.ac.jp')) {
-        showToast('メールアドレスは @oic-ok.ac.jp のみ登録できます');
-        return;
+        return showFieldError(authEmailInput, 'メールアドレスは @oic-ok.ac.jp のみ登録できます');
       }
       if ([...displayName].length > 10) {
-        showToast('ユーザー名は10文字以内で入力してください');
-        return;
+        return showFieldError(authDisplayNameInput, 'ユーザー名は10文字以内で入力してください');
       }
       if (password.length > 100) {
-        showToast('パスワードは100文字以内で入力してください');
-        return;
+        return showFieldError(authPasswordInput, 'パスワードは100文字以内で入力してください');
       }
     }
 
@@ -322,8 +323,9 @@ export function initPasswordResetModal() {
   cancelBtn?.addEventListener('click', hidePasswordResetModal);
 
   sendBtn?.addEventListener('click', async () => {
+    clearFieldErrors(document.getElementById('passwordResetModal'));
     const email = document.getElementById('resetEmail')?.value.trim();
-    if (!email) { showToast('メールアドレスを入力してください'); return; }
+    if (!email) { showFieldError('resetEmail', 'メールアドレスを入力してください'); return; }
 
     sendBtn.disabled = true;
     sendBtn.textContent = '送信中...';
@@ -381,10 +383,11 @@ export function initAccountSettings() {
 
   const changeDisplayNameBtn = document.getElementById('changeDisplayNameBtn');
   changeDisplayNameBtn?.addEventListener('click', async () => {
+    clearFieldErrors(document.getElementById('accountSettingsModal'));
     const newDisplayName = document.getElementById('newDisplayName')?.value.trim();
 
-    if (!newDisplayName) { showToast('ユーザー名を入力してください'); return; }
-    if (Array.from(newDisplayName).length > 10) { showToast('ユーザー名は10文字以内で入力してください'); return; }
+    if (!newDisplayName) { showFieldError('newDisplayName', 'ユーザー名を入力してください'); return; }
+    if (Array.from(newDisplayName).length > 10) { showFieldError('newDisplayName', 'ユーザー名は10文字以内で入力してください'); return; }
 
     changeDisplayNameBtn.disabled = true;
     changeDisplayNameBtn.textContent = '変更中...';
@@ -406,13 +409,16 @@ export function initAccountSettings() {
 
   const changePasswordBtn = document.getElementById('changePasswordBtn');
   changePasswordBtn?.addEventListener('click', async () => {
+    clearFieldErrors(document.getElementById('accountSettingsModal'));
     const current = document.getElementById('currentPassword')?.value;
     const newPw = document.getElementById('newPassword')?.value;
     const confirm = document.getElementById('confirmPassword')?.value;
 
-    if (!current || !newPw || !confirm) { showToast('すべての項目を入力してください'); return; }
-    if (newPw !== confirm) { showToast('新しいパスワードが一致しません'); return; }
-    if (newPw.length > 100) { showToast('パスワードは100文字以内で入力してください'); return; }
+    if (!current) { showFieldError('currentPassword', '現在のパスワードを入力してください'); return; }
+    if (!newPw) { showFieldError('newPassword', '新しいパスワードを入力してください'); return; }
+    if (!confirm) { showFieldError('confirmPassword', '確認用パスワードを入力してください'); return; }
+    if (newPw !== confirm) { showFieldError('confirmPassword', '新しいパスワードが一致しません'); return; }
+    if (newPw.length > 100) { showFieldError('newPassword', 'パスワードは100文字以内で入力してください'); return; }
 
     changePasswordBtn.disabled = true;
     changePasswordBtn.textContent = '変更中...';
@@ -436,9 +442,10 @@ export function initAccountSettings() {
   // メール変更リクエスト
   const requestEmailChangeBtn = document.getElementById('requestEmailChangeBtn');
   requestEmailChangeBtn?.addEventListener('click', async () => {
+    clearFieldErrors(document.getElementById('accountSettingsModal'));
     const newEmail = document.getElementById('newEmail')?.value.trim();
-    if (!newEmail) { showToast('新しいメールアドレスを入力してください'); return; }
-    if (!newEmail.toLowerCase().endsWith('@oic-ok.ac.jp')) { showToast('メールアドレスは @oic-ok.ac.jp のみ変更できます'); return; }
+    if (!newEmail) { showFieldError('newEmail', '新しいメールアドレスを入力してください'); return; }
+    if (!newEmail.toLowerCase().endsWith('@oic-ok.ac.jp')) { showFieldError('newEmail', 'メールアドレスは @oic-ok.ac.jp のみ変更できます'); return; }
 
     requestEmailChangeBtn.disabled = true;
     requestEmailChangeBtn.textContent = '送信中...';
@@ -461,8 +468,9 @@ export function initAccountSettings() {
   // メール変更確認
   const confirmEmailChangeBtn = document.getElementById('confirmEmailChangeBtn');
   confirmEmailChangeBtn?.addEventListener('click', async () => {
+    clearFieldErrors(document.getElementById('accountSettingsModal'));
     const code = document.getElementById('emailConfirmCode')?.value.trim();
-    if (!code) { showToast('確認コードを入力してください'); return; }
+    if (!code) { showFieldError('emailConfirmCode', '確認コードを入力してください'); return; }
 
     confirmEmailChangeBtn.disabled = true;
     confirmEmailChangeBtn.textContent = '確認中...';

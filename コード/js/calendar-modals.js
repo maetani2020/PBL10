@@ -1,7 +1,7 @@
 // calendar-modals.js
 // Modal control functions (Open, Close, Reset, Populating inputs)
 
-import { setSelectedEventId, formatDate } from './calendar-state.js';
+import { setSelectedEventId, formatDate, clearFieldErrors, clearFormError } from './calendar-state.js';
 import { getLocalSettings } from './calendar-notification.js';
 
 export const eventModal = document.getElementById("eventModal");
@@ -29,10 +29,14 @@ export function setEventModalStep(step = "basic") {
 
 export function openModal() {
   setEventModalStep("basic");
+  clearFieldErrors(eventModal);
+  clearFormError("preSaveWarning");
   eventModal.style.display = "flex";
 }
 
 export function closeModal() {
+  clearFieldErrors(eventModal);
+  clearFormError("preSaveWarning");
   eventModal.style.display = "none";
 }
 

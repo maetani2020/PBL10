@@ -73,7 +73,7 @@ router.get('/status', authenticateToken, async (req, res) => {
         // Fetch events for this date
         const events = await query.all(
             `SELECT hp_consumption, motivation_consumption FROM events 
-             WHERE creator_id = ? AND start_time LIKE ?`,
+             WHERE creator_id = ? AND start_time LIKE ? AND deleted_at IS NULL`,
             [userId, `${targetDate}%`]
         );
 
@@ -197,7 +197,7 @@ router.get('/statistics', authenticateToken, async (req, res) => {
 
             // Sum events' consumption
             const events = await query.all(
-                'SELECT hp_consumption, motivation_consumption FROM events WHERE creator_id = ? AND start_time LIKE ?',
+                'SELECT hp_consumption, motivation_consumption FROM events WHERE creator_id = ? AND start_time LIKE ? AND deleted_at IS NULL',
                 [userId, `${dateStr}%`]
             );
 
@@ -247,7 +247,7 @@ router.post('/suggest-rest', authenticateToken, async (req, res) => {
 
         const events = await query.all(
             `SELECT start_time, end_time, hp_consumption FROM events 
-             WHERE creator_id = ? AND start_time LIKE ?`,
+             WHERE creator_id = ? AND start_time LIKE ? AND deleted_at IS NULL`,
             [userId, `${targetDate}%`]
         );
 

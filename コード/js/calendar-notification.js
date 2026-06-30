@@ -2,7 +2,7 @@
 // Client-side Web Notification Watcher and settings sync with PostgreSQL backend
 
 import { apiRequest } from './calendar-auth.js';
-import { getEvents, showToast } from './calendar-state.js';
+import { getEvents, showToast, showFieldError, clearFieldErrors } from './calendar-state.js';
 
 let notificationTimer = null;
 let lastCheckTime = new Date();
@@ -105,9 +105,21 @@ export function closeNotificationSettingsModal() {
 
 // Save notification settings
 export async function saveNotificationSettingsFromForm() {
+  clearFieldErrors(document.getElementById("notificationSettingsModal"));
   const enabled = document.getElementById("settingsNotificationEnabled")?.checked ?? true;
   const tasks = document.getElementById("settingsTaskDeadlineEnabled")?.checked ?? true;
   const email = document.getElementById("settingsMailReminderEnabled")?.checked ?? true;
+  const customRaw = document.getElementById("settingsCustomReminderMinutes")?.value;
+  const customValue = Number(customRaw);
+  if (customRaw && (!Number.isFinite(customValue) || customValue < 1 || customValue > 10080)) {
+    return showFieldError("settingsCustomReminderMinutes", "カスタム通知は1から10080分の範囲で入力してください");
+  }
+
+  const retentionRaw = document.getElementById("settingsHistoryRetentionDays")?.value;
+  const retentionValue = Number(retentionRaw);
+  if (retentionRaw && (!Number.isFinite(retentionValue) || retentionValue < 1 || retentionValue > 365)) {
+    return showFieldError("settingsHistoryRetentionDays", "通知履歴の保持日数は1から365日の範囲で入力してください");
+  }
 
   try {
     await apiRequest('/api/notifications/settings', {
@@ -143,6 +155,7 @@ export async function saveNotificationSettingsFromForm() {
     showToast("通知設定を保存しました ⚙️");
   } catch (err) {
     console.error('Failed to save settings:', err);
+    showToast(err.message || "通知設定の保存に失敗しました");
   }
 }
 

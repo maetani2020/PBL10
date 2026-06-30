@@ -2,9 +2,10 @@
 // Group sharing and group management with PostgreSQL backend integration
 
 import { apiRequest, currentUser } from './calendar-auth.js';
-import { showToast } from './calendar-state.js';
+import { showToast, showFieldError, clearFieldErrors } from './calendar-state.js';
 
 let activeGroups = [];
+let activeGroupInvitations = [];
 let selectedGroupId = null;
 
 export function getActiveGroups() {
@@ -36,6 +37,23 @@ function roleLabel(role) {
   return "閲覧者";
 }
 
+function invitationStatusLabel(status) {
+  if (status === "accepted") return "参加済み";
+  if (status === "declined") return "拒否済み";
+  return "承認待ち";
+}
+
+function invitationStatusClass(status) {
+  if (status === "accepted") return "accepted";
+  if (status === "declined") return "declined";
+  return "pending";
+}
+
+function formatInvitationDate(value) {
+  if (!value) return "-";
+  return String(value).replace("T", " ").slice(0, 16);
+}
+
 function roleOptions(currentRole) {
   return ["admin", "editor", "viewer"].map(role => {
     const selected = role === currentRole ? " selected" : "";
@@ -46,7 +64,12 @@ function roleOptions(currentRole) {
 // Fetch user's groups from PostgreSQL backend
 export async function syncGroups() {
   try {
-    activeGroups = await apiRequest('/api/groups');
+    const [groups, invitations] = await Promise.all([
+      apiRequest('/api/groups'),
+      apiRequest('/api/groups/invitations').catch(() => [])
+    ]);
+    activeGroups = groups;
+    activeGroupInvitations = invitations;
     populateGroupDropdowns();
     renderGroupList();
   } catch (err) {
@@ -74,9 +97,33 @@ export function renderGroupList() {
   if (!container) return;
 
   container.innerHTML = "";
-  if (activeGroups.length === 0) {
+  const pendingInvitations = activeGroupInvitations.filter(inv => inv.status === "pending");
+
+  if (activeGroups.length === 0 && pendingInvitations.length === 0) {
     container.innerHTML = '<p style="text-align:center; padding:10px; opacity:0.7;">所属しているグループはありません</p>';
     return;
+  }
+
+  if (pendingInvitations.length > 0) {
+    const invitationSection = document.createElement("div");
+    invitationSection.className = "group-invitation-section";
+    invitationSection.innerHTML = `
+      <div class="group-invitation-title">届いている招待</div>
+      ${pendingInvitations.map(inv => `
+        <div class="invitation-list-item">
+          <div class="member-profile">
+            <strong>${escapeHtml(inv.group_name || "No group")}</strong>
+            <small>招待者: ${escapeHtml(inv.inviter_name || inv.inviter_email || "-")} / 権限: ${roleLabel(inv.role)}</small>
+          </div>
+          <div class="member-controls">
+            <span class="invitation-status-chip ${invitationStatusClass(inv.status)}">${invitationStatusLabel(inv.status)}</span>
+            <button type="button" class="invitation-accept-btn primary-btn" data-invitation-id="${inv.id}">参加</button>
+            <button type="button" class="invitation-decline-btn danger-btn" data-invitation-id="${inv.id}">拒否</button>
+          </div>
+        </div>
+      `).join("")}
+    `;
+    container.appendChild(invitationSection);
   }
 
   activeGroups.forEach(g => {
@@ -93,6 +140,7 @@ export function renderGroupList() {
       <div>
         <strong>${g.name}</strong>
         <span style="font-size: 11px; opacity:0.7; margin-left: 8px;">(${g.member_count}名)</span>
+        ${Number(g.pending_invitation_count || 0) > 0 ? `<span class="invitation-status-chip pending" style="margin-left:8px;">招待中 ${g.pending_invitation_count}</span>` : ""}
       </div>
       <span class="material-icons" style="font-size:16px; opacity:0.5;">chevron_right</span>
     `;
@@ -102,6 +150,20 @@ export function renderGroupList() {
     });
 
     container.appendChild(item);
+  });
+
+  container.querySelectorAll(".invitation-accept-btn").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      respondToGroupInvitation(button.dataset.invitationId, "accepted");
+    });
+  });
+
+  container.querySelectorAll(".invitation-decline-btn").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      respondToGroupInvitation(button.dataset.invitationId, "declined");
+    });
   });
 }
 
@@ -127,6 +189,7 @@ export async function selectGroupForDetail(groupId) {
     const members = await apiRequest(`/api/groups/${groupId}/members`);
     memberListContainer.innerHTML = "";
     const canManageMembers = group.role === "admin" || (currentUser && Number(group.owner_id) === Number(currentUser.id));
+    const canInviteMembers = ["admin", "editor"].includes(group.role);
     
     members.forEach(m => {
       const isOwner = Number(group.owner_id) === Number(m.id);
@@ -155,6 +218,28 @@ export async function selectGroupForDetail(groupId) {
       memberListContainer.appendChild(mDiv);
     });
 
+    if (canInviteMembers) {
+      const invitations = await apiRequest(`/api/groups/${groupId}/invitations`).catch(() => []);
+      const invitationStatus = document.createElement("div");
+      invitationStatus.className = "group-invitation-section compact";
+      invitationStatus.innerHTML = `
+        <div class="group-invitation-title">招待状態</div>
+        ${invitations.length ? invitations.map(inv => `
+          <div class="invitation-list-item">
+            <div class="member-profile">
+              <strong>${escapeHtml(inv.invited_name || "No name")}</strong>
+              <small>${escapeHtml(inv.invited_email || "")}</small>
+              <small>送信: ${formatInvitationDate(inv.created_at)} / 返答: ${formatInvitationDate(inv.responded_at)}</small>
+            </div>
+            <div class="member-controls">
+              <span class="invitation-status-chip ${invitationStatusClass(inv.status)}">${invitationStatusLabel(inv.status)}</span>
+            </div>
+          </div>
+        `).join("") : '<p class="group-invitation-empty">招待中のユーザーはいません</p>'}
+      `;
+      memberListContainer.appendChild(invitationStatus);
+    }
+
     memberListContainer.querySelectorAll(".member-role-select").forEach(select => {
       select.addEventListener("change", () => updateMemberRole(select.dataset.userId, select.value));
     });
@@ -170,9 +255,38 @@ export async function selectGroupForDetail(groupId) {
     if (dissolveBtn) dissolveBtn.style.display = isCurrentUserOwner ? "block" : "none";
     if (leaveBtn) leaveBtn.style.display = isCurrentUserOwner ? "none" : "block";
 
+    const inviteInput = document.getElementById("inviteUserId");
+    const inviteBtn = document.getElementById("inviteMemberBtn");
+    if (inviteInput) {
+      inviteInput.disabled = !canInviteMembers;
+      inviteInput.placeholder = canInviteMembers ? "招待するメールアドレス" : "招待は管理者または編集者のみ可能";
+    }
+    if (inviteBtn) inviteBtn.disabled = !canInviteMembers;
+
   } catch (err) {
     console.error('Failed to load group members:', err);
     memberListContainer.innerHTML = '<p style="color:var(--ios-red);">メンバー情報の取得に失敗しました</p>';
+  }
+}
+
+async function respondToGroupInvitation(invitationId, status) {
+  if (!invitationId) return;
+
+  const confirmed = status === "accepted"
+    ? confirm("このグループ招待を承認して参加しますか？")
+    : confirm("このグループ招待を拒否しますか？");
+  if (!confirmed) return;
+
+  try {
+    const data = await apiRequest(`/api/groups/invitations/${invitationId}/respond`, {
+      method: "POST",
+      body: JSON.stringify({ status })
+    });
+    showToast(data.message || (status === "accepted" ? "グループに参加しました" : "招待を拒否しました"));
+    await syncGroups();
+  } catch (err) {
+    console.error("Failed to respond group invitation:", err);
+    showToast(err.message || "招待への返答に失敗しました");
   }
 }
 
@@ -181,10 +295,10 @@ export async function createGroup() {
   const nameInput = document.getElementById("newGroupName");
   if (!nameInput) return;
 
+  clearFieldErrors(document.getElementById("groupModal"));
   const name = nameInput.value.trim();
   if (!name) {
-    showToast("グループ名を入力してください");
-    return;
+    return showFieldError(nameInput, "グループ名を入力してください");
   }
 
   try {
@@ -197,6 +311,7 @@ export async function createGroup() {
     await syncGroups();
   } catch (err) {
     console.error('Failed to create group:', err);
+    showToast(err.message || "グループの作成に失敗しました");
   }
 }
 
@@ -205,11 +320,15 @@ export async function inviteMember() {
   const emailInput = document.getElementById("inviteUserId");
   if (!emailInput || !selectedGroupId) return;
 
+  clearFieldErrors(document.getElementById("groupModal"));
   const email = emailInput.value.trim();
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    showToast("招待するメールアドレスを入力してください");
-    return;
+    return showFieldError(emailInput, "招待するメールアドレスを入力してください");
+  }
+
+  if (!email.toLowerCase().endsWith("@oic-ok.ac.jp")) {
+    return showFieldError(emailInput, "招待できるメールアドレスは @oic-ok.ac.jp のみです");
   }
 
   try {
@@ -218,11 +337,12 @@ export async function inviteMember() {
       body: JSON.stringify({ email })
     });
     emailInput.value = "";
-    showToast("メンバーを招待しました");
+    showToast("招待を送信しました");
     await selectGroupForDetail(selectedGroupId);
     await syncGroups();
   } catch (err) {
     console.error('Failed to invite member:', err);
+    showToast(err.message || "メンバー招待に失敗しました");
   }
 }
 
@@ -238,6 +358,7 @@ async function updateMemberRole(userId, role) {
     await selectGroupForDetail(selectedGroupId);
   } catch (err) {
     console.error('Failed to update member role:', err);
+    showToast(err.message || "メンバー権限の更新に失敗しました");
     await selectGroupForDetail(selectedGroupId);
   }
 }
@@ -257,6 +378,7 @@ async function removeMemberFromGroup(userId) {
     await syncGroups();
   } catch (err) {
     console.error('Failed to remove member:', err);
+    showToast(err.message || "メンバー削除に失敗しました");
   }
 }
 
@@ -279,6 +401,7 @@ export async function dissolveGroup() {
     await syncGroups();
   } catch (err) {
     console.error('Failed to dissolve group:', err);
+    showToast(err.message || "グループの解散に失敗しました");
   }
 }
 
@@ -301,6 +424,7 @@ export async function leaveGroup() {
     await syncGroups();
   } catch (err) {
     console.error('Failed to leave group:', err);
+    showToast(err.message || "グループからの脱退に失敗しました");
   }
 }
 

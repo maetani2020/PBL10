@@ -421,6 +421,33 @@ body.dark ::-webkit-scrollbar-thumb {
   outline: none;
 }
 
+.field-invalid,
+.modal-content input.field-invalid:not([type="checkbox"]),
+.modal-content textarea.field-invalid,
+.modal-content select.field-invalid,
+.auth-input-field.field-invalid {
+  border-color: #ff3b30 !important;
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.16) !important;
+}
+
+.field-error-text {
+  color: #ff3b30;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: -6px 0 10px;
+  overflow-wrap: anywhere;
+}
+
+.auth-inputs .field-error-text {
+  padding: 0 14px 10px;
+  margin: -4px 0 0;
+  background: transparent;
+}
+
+body.dark .field-error-text {
+  color: #ff6961;
+}
+
 .modal-content input[type="checkbox"] {
   width: 18px;
   height: 18px;
@@ -638,11 +665,96 @@ body.dark ::-webkit-scrollbar-thumb {
 ========================== */
 
 @media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .header-left h1 {
     font-size: 16px;
   }
 
+  .header {
+    min-height: 56px;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .header-left {
+    min-width: 0;
+  }
+
+  .header-left h1 {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .header-right {
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .header-right::-webkit-scrollbar {
+    display: none;
+  }
+
+  .icon-btn,
+  .nav-btn,
+  #userAvatarBtn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+  }
+
+  .today-btn {
+    min-width: 54px;
+    height: 38px;
+    padding: 0 12px;
+  }
+
+  .calendar-nav {
+    min-height: 54px;
+    padding: 8px;
+  }
+
   #currentTitle {
     font-size: 18px;
+  }
+
+  .modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-content {
+    width: 100%;
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: 18px 18px 0 0;
+    padding: 18px;
+  }
+
+  .modal-body {
+    padding-right: 0;
+  }
+
+  .modal-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .modal-actions button {
+    min-height: 44px;
+  }
+
+  .sidebar {
+    width: min(86vw, 300px);
+    left: min(-86vw, -300px);
+  }
+
+  .sidebar li {
+    min-height: 48px;
   }
 }

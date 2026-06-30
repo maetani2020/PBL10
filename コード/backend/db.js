@@ -152,7 +152,25 @@ async function initDb() {
             )
         `);
 
-        // 6. Create Calendars Table
+        // 6. Create Group Invitations Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS group_invitations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                invited_user_id INTEGER NOT NULL,
+                invited_by INTEGER,
+                role TEXT NOT NULL DEFAULT 'viewer' CHECK(role IN ('admin', 'editor', 'viewer')),
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined')),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                responded_at DATETIME DEFAULT NULL,
+                UNIQUE(group_id, invited_user_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (invited_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        // 7. Create Calendars Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS calendars (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,7 +184,7 @@ async function initDb() {
         `);
         await addColumnIfNotExists('calendars', 'group_id', 'INTEGER DEFAULT NULL');
 
-        // 7. Create Calendar Shares Table
+        // 8. Create Calendar Shares Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS calendar_shares (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -180,7 +198,7 @@ async function initDb() {
             )
         `);
 
-        // 8. Create Events Table
+        // 9. Create Events Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS events (
                 id TEXT PRIMARY KEY,
@@ -216,8 +234,10 @@ async function initDb() {
         await addColumnIfNotExists('events', 'mail_subject', 'TEXT DEFAULT NULL');
         await addColumnIfNotExists('events', 'mail_remind_at', 'TEXT DEFAULT NULL');
         await addColumnIfNotExists('events', 'mail_sent', 'INTEGER DEFAULT 0');
+        await addColumnIfNotExists('events', 'deleted_at', 'TIMESTAMP DEFAULT NULL');
+        await addColumnIfNotExists('events', 'deleted_by', 'INTEGER DEFAULT NULL');
 
-        // 9. Create Tasks Table
+        // 10. Create Tasks Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -234,7 +254,7 @@ async function initDb() {
             )
         `);
 
-        // 10. Create Household Accounts Table
+        // 11. Create Household Accounts Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS household_accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -250,7 +270,7 @@ async function initDb() {
             )
         `);
 
-        // 11. Create Push Subscriptions Table
+        // 12. Create Push Subscriptions Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS push_subscriptions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -262,7 +282,7 @@ async function initDb() {
             )
         `);
 
-        // 12. Create Notifications Table
+        // 13. Create Notifications Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -276,7 +296,7 @@ async function initDb() {
             )
         `);
 
-        // 13. Create Notification History Table
+        // 14. Create Notification History Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS notification_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -289,7 +309,7 @@ async function initDb() {
             )
         `);
 
-        // 14. Create Admin Logs Table
+        // 15. Create Admin Logs Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS admin_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -304,7 +324,7 @@ async function initDb() {
             )
         `);
 
-        // 15. Create JWT Blacklist Table (for logout token invalidation)
+        // 16. Create JWT Blacklist Table (for logout token invalidation)
         await createTable(`
             CREATE TABLE IF NOT EXISTS blacklisted_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

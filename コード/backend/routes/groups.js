@@ -23,7 +23,9 @@ async function getGroupMemberIds(groupId) {
 router.get('/', authenticateToken, async (req, res) => {
     try {
         const groups = await query.all(
-            `SELECT g.*, gm.role, (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) as member_count
+            `SELECT g.*, gm.role,
+                    (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) as member_count,
+                    (SELECT COUNT(*) FROM group_invitations WHERE group_id = g.id AND status = 'pending') as pending_invitation_count
              FROM groups g
              JOIN group_members gm ON g.id = gm.group_id
              WHERE gm.user_id = ?`,
@@ -33,6 +35,91 @@ router.get('/', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error('Get groups error:', err);
         res.status(500).json({ error: 'サーバーエラーが発生しました' });
+    }
+});
+
+// GET /api/groups/invitations - Show invitation statuses for the current user
+router.get('/invitations', authenticateToken, async (req, res) => {
+    try {
+        const invitations = await query.all(
+            `SELECT gi.id, gi.group_id, gi.invited_user_id, gi.invited_by, gi.role,
+                    gi.status, gi.created_at, gi.responded_at,
+                    g.name AS group_name,
+                    inviter.display_name AS inviter_name,
+                    inviter.email AS inviter_email
+             FROM group_invitations gi
+             JOIN groups g ON gi.group_id = g.id
+             LEFT JOIN users inviter ON gi.invited_by = inviter.id
+             WHERE gi.invited_user_id = ?
+             ORDER BY
+                CASE gi.status WHEN 'pending' THEN 0 WHEN 'declined' THEN 1 ELSE 2 END,
+                gi.created_at DESC`,
+            [req.user.id]
+        );
+        res.json(invitations);
+    } catch (err) {
+        console.error('Get group invitations error:', err);
+        res.status(500).json({ error: '招待状態の取得に失敗しました' });
+    }
+});
+
+// POST /api/groups/invitations/:invitationId/respond - Accept or decline an invitation
+router.post('/invitations/:invitationId/respond', authenticateToken, async (req, res) => {
+    const invitationId = req.params.invitationId;
+    const { status } = req.body;
+
+    if (!['accepted', 'declined'].includes(status)) {
+        return res.status(400).json({ error: '招待の返答は accepted または declined を指定してください' });
+    }
+
+    try {
+        const invitation = await query.get(
+            `SELECT gi.*, g.name AS group_name
+             FROM group_invitations gi
+             JOIN groups g ON gi.group_id = g.id
+             WHERE gi.id = ? AND gi.invited_user_id = ?`,
+            [invitationId, req.user.id]
+        );
+
+        if (!invitation) {
+            return res.status(404).json({ error: '招待が見つかりません' });
+        }
+
+        if (invitation.status !== 'pending') {
+            return res.status(400).json({ error: 'この招待には既に返答済みです' });
+        }
+
+        if (status === 'accepted') {
+            await query.run(
+                `INSERT INTO group_members (group_id, user_id, role)
+                 VALUES (?, ?, ?)
+                 ON CONFLICT (group_id, user_id) DO NOTHING`,
+                [invitation.group_id, req.user.id, invitation.role || 'viewer']
+            );
+        }
+
+        await query.run(
+            `UPDATE group_invitations
+             SET status = ?, responded_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [status, invitationId]
+        );
+
+        const memberIds = await getGroupMemberIds(invitation.group_id);
+        sendToUsers(Array.from(new Set([...memberIds, req.user.id])), {
+            type: 'group_sync',
+            groupId: invitation.group_id,
+            message: status === 'accepted' ? 'グループ招待が承認されました' : 'グループ招待が拒否されました'
+        });
+
+        res.json({
+            message: status === 'accepted'
+                ? `「${invitation.group_name}」に参加しました`
+                : `「${invitation.group_name}」への招待を拒否しました`
+        });
+    } catch (err) {
+        console.error('Respond group invitation error:', err);
+        res.status(500).json({ error: '招待への返答に失敗しました' });
     }
 });
 
@@ -98,6 +185,40 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
     }
 });
 
+// GET /api/groups/:id/invitations - Show invitation statuses for a group
+router.get('/:id/invitations', authenticateToken, async (req, res) => {
+    const groupId = req.params.id;
+
+    try {
+        const role = await getGroupRole(groupId, req.user.id);
+        if (!role || !['admin', 'editor'].includes(role)) {
+            return res.status(403).json({ error: '招待状態を確認する権限がありません' });
+        }
+
+        const invitations = await query.all(
+            `SELECT gi.id, gi.group_id, gi.invited_user_id, gi.invited_by, gi.role,
+                    gi.status, gi.created_at, gi.responded_at,
+                    invited.display_name AS invited_name,
+                    invited.email AS invited_email,
+                    inviter.display_name AS inviter_name,
+                    inviter.email AS inviter_email
+             FROM group_invitations gi
+             JOIN users invited ON gi.invited_user_id = invited.id
+             LEFT JOIN users inviter ON gi.invited_by = inviter.id
+             WHERE gi.group_id = ?
+             ORDER BY
+                CASE gi.status WHEN 'pending' THEN 0 WHEN 'declined' THEN 1 ELSE 2 END,
+                gi.created_at DESC`,
+            [groupId]
+        );
+
+        res.json(invitations);
+    } catch (err) {
+        console.error('Get group invitation status error:', err);
+        res.status(500).json({ error: '招待状態の取得に失敗しました' });
+    }
+});
+
 // POST /api/groups/:id/invite - Invite a user to a group using email or User ID (Admin or Editor only)
 router.post('/:id/invite', authenticateToken, async (req, res) => {
     const groupId = req.params.id;
@@ -114,9 +235,13 @@ router.post('/:id/invite', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'メンバーを招待する権限がありません（管理者または編集者のみ可能）' });
         }
 
-        // 2. Check group size limit (max 20 members)
+        // 2. Check group size limit (max 20 accepted members + pending invites)
         const memberCountRes = await query.get('SELECT COUNT(*) as count FROM group_members WHERE group_id = ?', [groupId]);
-        if (memberCountRes.count >= 20) {
+        const pendingCountRes = await query.get(
+            "SELECT COUNT(*) as count FROM group_invitations WHERE group_id = ? AND status = 'pending'",
+            [groupId]
+        );
+        if ((memberCountRes.count + pendingCountRes.count) >= 20) {
             return res.status(400).json({ error: 'グループメンバーの上限は20名です' });
         }
 
@@ -147,21 +272,44 @@ router.post('/:id/invite', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'このユーザーは既にグループのメンバーです' });
         }
 
-        // 5. Add user as viewer (default)
-        await query.run(
-            'INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
-            [groupId, targetUser.id, 'viewer']
+        // 5. Create or renew a pending invitation
+        const existingInvitation = await query.get(
+            'SELECT id, status FROM group_invitations WHERE group_id = ? AND invited_user_id = ?',
+            [groupId, targetUser.id]
         );
 
-        // Get updated list of member IDs and broadcast
+        if (existingInvitation?.status === 'pending') {
+            return res.status(400).json({ error: 'このユーザーは既に招待中です' });
+        }
+
+        if (existingInvitation) {
+            await query.run(
+                `UPDATE group_invitations
+                 SET status = 'pending', role = 'viewer', invited_by = ?, created_at = CURRENT_TIMESTAMP, responded_at = NULL
+                 WHERE id = ?`,
+                [req.user.id, existingInvitation.id]
+            );
+        } else {
+            await query.run(
+                `INSERT INTO group_invitations (group_id, invited_user_id, invited_by, role, status)
+                 VALUES (?, ?, ?, ?, 'pending')`,
+                [groupId, targetUser.id, req.user.id, 'viewer']
+            );
+        }
+
+        // Broadcast to current members and invited user
         const memberIds = await getGroupMemberIds(groupId);
-        sendToUsers(memberIds, {
+        sendToUsers(Array.from(new Set([...memberIds, targetUser.id])), {
             type: 'group_sync',
             groupId,
-            message: '新しいメンバーが追加されました'
+            message: 'グループ招待が送信されました'
         });
 
-        res.status(201).json({ message: 'ユーザーをグループに招待しました', user: targetUser });
+        res.status(201).json({
+            message: 'ユーザーへ招待を送信しました',
+            status: 'pending',
+            user: targetUser
+        });
     } catch (err) {
         console.error('Invite member error:', err);
         res.status(500).json({ error: 'サーバーエラーが発生しました' });

@@ -81,10 +81,10 @@ async function checkCapacityWarning(userId, dateStr, additionalHp = 0, additiona
     const sql = excludeEventId
         ? `SELECT SUM(hp_consumption) as hp, SUM(motivation_consumption) as mot 
            FROM events 
-           WHERE creator_id = ? AND start_time LIKE ? AND id != ?`
+           WHERE creator_id = ? AND start_time LIKE ? AND deleted_at IS NULL AND id != ?`
         : `SELECT SUM(hp_consumption) as hp, SUM(motivation_consumption) as mot 
            FROM events 
-           WHERE creator_id = ? AND start_time LIKE ?`;
+           WHERE creator_id = ? AND start_time LIKE ? AND deleted_at IS NULL`;
 
     const params = excludeEventId
         ? [userId, `${dateStr}%`, excludeEventId]
@@ -128,7 +128,8 @@ router.get('/', authenticateToken, async (req, res) => {
              JOIN calendars c ON e.calendar_id = c.id
              LEFT JOIN calendar_shares cs ON c.id = cs.calendar_id AND cs.user_id = ?
              LEFT JOIN group_members gm ON c.group_id = gm.group_id AND gm.user_id = ?
-             WHERE c.owner_id = ? OR cs.user_id = ? OR gm.user_id = ?`,
+             WHERE e.deleted_at IS NULL
+               AND (c.owner_id = ? OR cs.user_id = ? OR gm.user_id = ?)`,
             [userId, userId, userId, userId, userId, userId]
         );
 
@@ -275,7 +276,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const existingEvent = await query.get('SELECT * FROM events WHERE id = ?', [eventId]);
+        const existingEvent = await query.get('SELECT * FROM events WHERE id = ? AND deleted_at IS NULL', [eventId]);
         if (!existingEvent) {
             return res.status(404).json({ error: 'イベントが見つかりません' });
         }
@@ -342,7 +343,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const existingEvent = await query.get('SELECT * FROM events WHERE id = ?', [eventId]);
+        const existingEvent = await query.get('SELECT * FROM events WHERE id = ? AND deleted_at IS NULL', [eventId]);
         if (!existingEvent) {
             return res.status(404).json({ error: 'イベントが見つかりません' });
         }
@@ -352,7 +353,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'このイベントを削除する権限がありません' });
         }
 
-        await query.run('DELETE FROM events WHERE id = ?', [eventId]);
+        await query.run(
+            'UPDATE events SET deleted_at = CURRENT_TIMESTAMP, deleted_by = ? WHERE id = ?',
+            [userId, eventId]
+        );
 
         // Broadcast removal
         const accessors = await getCalendarAccessors(existingEvent.calendar_id);
@@ -384,7 +388,7 @@ router.post('/copy-paste', authenticateToken, async (req, res) => {
         const affectedCalendarIds = new Set();
 
         for (const eventId of eventIds) {
-            const event = await query.get('SELECT * FROM events WHERE id = ?', [eventId]);
+            const event = await query.get('SELECT * FROM events WHERE id = ? AND deleted_at IS NULL', [eventId]);
             if (!event) continue;
 
             // Check permissions

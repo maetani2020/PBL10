@@ -68,10 +68,23 @@ function adminActionLabel(action) {
     'group_member:remove': 'グループメンバー削除',
     'group:delete': 'グループ削除',
     'event:delete': 'イベント削除',
+    'event:restore': 'イベント復元',
     'user_settings:reset': 'ユーザー設定リセット',
     'notification_history:delete': '通知履歴削除'
   };
   return labels[action] || action || '-';
+}
+
+function invitationStatusLabel(status) {
+  if (status === 'accepted') return '参加済み';
+  if (status === 'declined') return '拒否済み';
+  return '承認待ち';
+}
+
+function invitationStatusClass(status) {
+  if (status === 'accepted') return 'chip-success';
+  if (status === 'declined') return 'chip-danger';
+  return 'chip-warning';
 }
 
 function formatLogDetails(details) {
@@ -197,8 +210,10 @@ async function loadStats() {
     ['ユーザー', stats.database?.users ?? 0],
     ['管理者', stats.database?.admins ?? 0],
     ['イベント', stats.database?.events ?? 0],
+    ['削除済み予定', stats.database?.deletedEvents ?? 0],
     ['今日の予定', stats.database?.todayEvents ?? 0],
     ['グループ', stats.database?.groups ?? 0],
+    ['招待待ち', stats.database?.pendingInvitations ?? 0],
     ['タスク', stats.database?.tasks ?? 0],
     ['通知履歴', stats.database?.notificationHistory ?? 0],
     ['操作ログ', stats.database?.adminLogs ?? 0],
@@ -286,6 +301,7 @@ function renderGroups() {
           <div class="row-meta">オーナー: ${escapeHtml(group.owner_name || '-')} / ${escapeHtml(group.owner_email || '-')}</div>
           <div class="chips">
             <span class="chip">メンバー ${escapeHtml(group.member_count ?? 0)}</span>
+            <span class="chip">招待待ち ${escapeHtml(group.pending_invitation_count ?? 0)}</span>
             <span class="chip">イベント ${escapeHtml(group.event_count ?? 0)}</span>
           </div>
         </div>
@@ -308,8 +324,11 @@ async function renderMembers(groupId, forceOpen = false) {
     return;
   }
 
-  const members = await api(`/api/admin/groups/${groupId}/members`);
-  box.innerHTML = members.map(member => `
+  const [members, invitations] = await Promise.all([
+    api(`/api/admin/groups/${groupId}/members`),
+    api(`/api/admin/groups/${groupId}/invitations`).catch(() => [])
+  ]);
+  const memberHtml = members.map(member => `
     <div class="member-row">
       <div>
         <div class="row-title">${escapeHtml(member.display_name || 'No name')}</div>
@@ -325,6 +344,24 @@ async function renderMembers(groupId, forceOpen = false) {
       </div>
     </div>
   `).join('') || '<p class="empty-text">メンバーはいません</p>';
+  const invitationHtml = `
+    <div class="admin-invitation-list">
+      <div class="row-title">招待状態</div>
+      ${invitations.length ? invitations.map(invitation => `
+        <div class="member-row">
+          <div>
+            <div class="row-title">${escapeHtml(invitation.invited_name || 'No name')}</div>
+            <div class="row-meta">${escapeHtml(invitation.invited_email || '')}</div>
+            <div class="row-meta">送信: ${escapeHtml(formatDateTime(invitation.created_at))} / 返答: ${escapeHtml(formatDateTime(invitation.responded_at))}</div>
+          </div>
+          <div class="actions">
+            <span class="chip ${invitationStatusClass(invitation.status)}">${invitationStatusLabel(invitation.status)}</span>
+          </div>
+        </div>
+      `).join('') : '<p class="empty-text">招待履歴はありません</p>'}
+    </div>
+  `;
+  box.innerHTML = memberHtml + invitationHtml;
   box.classList.remove('hidden');
 }
 
@@ -337,22 +374,29 @@ function renderEvents() {
   const keyword = document.getElementById('eventSearch').value.trim().toLowerCase();
   const visibility = document.getElementById('eventVisibilityFilter').value;
   const type = document.getElementById('eventTypeFilter').value;
+  const status = document.getElementById('eventStatusFilter').value;
   const filtered = eventsCache.filter(event => {
     const text = [event.title, event.creator_name, event.creator_email, event.group_name, event.calendar_name].join(' ').toLowerCase();
+    const isDeleted = !!event.deleted_at;
     return (!keyword || text.includes(keyword))
       && (visibility === 'all' || event.visibility === visibility)
-      && (type === 'all' || (event.event_type || 'event') === type);
+      && (type === 'all' || (event.event_type || 'event') === type)
+      && (status === 'all' || (status === 'deleted' ? isDeleted : !isDeleted));
   });
 
-  document.getElementById('eventsList').innerHTML = filtered.map(event => `
-    <article class="row-card event-row" style="border-left-color:${escapeHtml(event.color || '#1a73e8')}">
+  document.getElementById('eventsList').innerHTML = filtered.map(event => {
+    const isDeleted = !!event.deleted_at;
+    return `
+    <article class="row-card event-row ${isDeleted ? 'deleted-event-row' : ''}" style="border-left-color:${escapeHtml(event.color || '#1a73e8')}">
       <div class="row-head">
         <div>
           <div class="row-title">${escapeHtml(event.title)} <span class="row-meta">#${escapeHtml(event.id)}</span></div>
           <div class="row-meta">${formatDateTime(event.start_time)} - ${formatDateTime(event.end_time)}</div>
           <div class="row-meta">作成者: ${escapeHtml(event.creator_name || '-')} / ${escapeHtml(event.creator_email || '-')}</div>
           <div class="row-meta">カレンダー: ${escapeHtml(event.calendar_name || '-')} / グループ: ${escapeHtml(event.group_name || 'なし')}</div>
+          ${isDeleted ? `<div class="row-meta">削除: ${escapeHtml(formatDateTime(event.deleted_at))} / ${escapeHtml(event.deleted_by_name || event.deleted_by_email || '-')}</div>` : ''}
           <div class="chips">
+            <span class="chip ${isDeleted ? 'chip-danger' : 'chip-success'}">${isDeleted ? '削除済み' : '有効'}</span>
             <span class="chip">${visibilityLabel(event.visibility)}</span>
             <span class="chip">${eventTypeLabel(event.event_type || 'event')}</span>
             <span class="chip">HP ${escapeHtml(event.hp_consumption ?? 0)}%</span>
@@ -360,11 +404,14 @@ function renderEvents() {
           </div>
         </div>
         <div class="actions">
-          <button class="danger" data-event-delete="${event.id}">イベント削除</button>
+          ${isDeleted
+            ? `<button class="primary" data-event-restore="${event.id}">復元</button>`
+            : `<button class="danger" data-event-delete="${event.id}">イベント削除</button>`}
         </div>
       </div>
     </article>
-  `).join('') || '<p class="empty-text">該当するイベントはありません</p>';
+  `;
+  }).join('') || '<p class="empty-text">該当するイベントはありません</p>';
 }
 
 async function createBackup() {
@@ -465,9 +512,15 @@ async function handleClick(event) {
       await Promise.all([renderMembers(groupId, true), loadGroups(), loadAdminLogs()]);
     }
     if (target.dataset.eventDelete) {
-      if (!confirm('このイベントを削除しますか？')) return;
+      if (!confirm('このイベントを削除済みにしますか？管理者画面から復元できます。')) return;
       await api(`/api/admin/events/${encodeURIComponent(target.dataset.eventDelete)}`, { method: 'DELETE' });
       showToast('イベントを削除しました');
+      await Promise.all([loadEvents(), loadStats(), loadAdminLogs()]);
+    }
+    if (target.dataset.eventRestore) {
+      if (!confirm('このイベントを復元しますか？')) return;
+      await api(`/api/admin/events/${encodeURIComponent(target.dataset.eventRestore)}/restore`, { method: 'POST' });
+      showToast('イベントを復元しました');
       await Promise.all([loadEvents(), loadStats(), loadAdminLogs()]);
     }
   } catch (err) {
@@ -537,6 +590,7 @@ document.getElementById('groupSearch').addEventListener('input', renderGroups);
 document.getElementById('eventSearch').addEventListener('input', renderEvents);
 document.getElementById('eventVisibilityFilter').addEventListener('change', renderEvents);
 document.getElementById('eventTypeFilter').addEventListener('change', renderEvents);
+document.getElementById('eventStatusFilter').addEventListener('change', renderEvents);
 document.getElementById('sendAnnouncementBtn').addEventListener('click', () => sendAnnouncement().catch(err => showToast(err.message)));
 document.getElementById('createBackupBtn').addEventListener('click', () => createBackup().catch(err => showToast(err.message)));
 document.getElementById('refreshLogsBtn').addEventListener('click', () => loadAdminLogs().catch(err => showToast(err.message)));

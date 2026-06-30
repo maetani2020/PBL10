@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Initialize Database
-initDb();
+const dbReady = initDb();
 
 // Middleware
 app.use(cors({
@@ -96,8 +96,8 @@ function getLocalIPs() {
     return ips;
 }
 
-// Start server
-server.listen(PORT, HOST, () => {
+// Start server after database migrations are ready
+dbReady.then(() => server.listen(PORT, HOST, () => {
     const localIPs = getLocalIPs();
     console.log(`==================================================`);
     console.log(`  統合型ライフマネジメントアプリ バックエンドサーバー`);
@@ -111,4 +111,7 @@ server.listen(PORT, HOST, () => {
         });
     }
     console.log(`==================================================`);
+})).catch(err => {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
 });

@@ -2,7 +2,7 @@
 // HP and Motivation status bar, statistics rendering, and rest suggestions using PostgreSQL backend
 
 import { apiRequest } from './calendar-auth.js';
-import { getAllEvents } from './calendar-state.js';
+import { getAllEvents, showFieldError, clearFieldErrors, showToast } from './calendar-state.js';
 
 let limitsCache = {
   max_hp: 100,
@@ -289,11 +289,35 @@ export function closeCalendarSettingsModal() {
 }
 
 export async function saveCalendarSettings() {
+  clearFieldErrors(document.getElementById("calendarSettingsModal"));
+  const maxHpRaw = document.getElementById("calendarSettingsMaxHp").value;
+  const maxMotivationRaw = document.getElementById("calendarSettingsMaxMotivation").value;
+  const recoveryRaw = document.getElementById("calendarSettingsRecoveryRate").value;
+  const warningRaw = document.getElementById("calendarSettingsWarningThreshold").value;
+
+  const maxHpValue = Number(maxHpRaw);
+  const maxMotivationValue = Number(maxMotivationRaw);
+  const recoveryValue = Number(recoveryRaw);
+  const warningValue = Number(warningRaw);
+
+  if (maxHpRaw && (!Number.isFinite(maxHpValue) || maxHpValue < 1 || maxHpValue > 1000)) {
+    return showFieldError("calendarSettingsMaxHp", "最大HPは1から1000の範囲で入力してください");
+  }
+  if (maxMotivationRaw && (!Number.isFinite(maxMotivationValue) || maxMotivationValue < 1 || maxMotivationValue > 1000)) {
+    return showFieldError("calendarSettingsMaxMotivation", "最大やる気は1から1000の範囲で入力してください");
+  }
+  if (recoveryRaw && (!Number.isFinite(recoveryValue) || recoveryValue < 0 || recoveryValue > 2)) {
+    return showFieldError("calendarSettingsRecoveryRate", "回復率は0.0から2.0の範囲で入力してください");
+  }
+  if (warningRaw && (!Number.isFinite(warningValue) || warningValue < 0 || warningValue > 100)) {
+    return showFieldError("calendarSettingsWarningThreshold", "警告閾値は0から100の範囲で入力してください");
+  }
+
   const max_hp = parseInt(document.getElementById("calendarSettingsMaxHp").value) || 100;
   const max_motivation = parseInt(document.getElementById("calendarSettingsMaxMotivation").value) || 100;
   const recovery_rate = parseFloat(document.getElementById("calendarSettingsRecoveryRate").value) || 1.0;
   const warning_threshold = parseInt(document.getElementById("calendarSettingsWarningThreshold").value) || 20;
-const btn = document.getElementById("saveCalendarSettingsBtn");
+  const btn = document.getElementById("saveCalendarSettingsBtn");
   if (btn) {
     btn.disabled = true;
     btn.textContent = "保存中...";
@@ -319,10 +343,10 @@ const btn = document.getElementById("saveCalendarSettingsBtn");
     await syncHpMotivationStatus(todayStr);
 
     closeCalendarSettingsModal();
-    const state = await import('./calendar-state.js');
-    state.showToast("カレンダー設定を保存しました ⚙️");
+    showToast("カレンダー設定を保存しました ⚙️");
   } catch (err) {
     console.error('Failed to save calendar settings:', err);
+    showToast(err.message || "カレンダー設定の保存に失敗しました");
   } finally {
     if (btn) {
       btn.disabled = false;

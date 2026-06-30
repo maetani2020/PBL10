@@ -315,6 +315,11 @@ select:disabled {
   border-left: 5px solid var(--primary);
 }
 
+.deleted-event-row {
+  opacity: 0.72;
+  background: #fff8f7;
+}
+
 .row-head {
   display: flex;
   justify-content: space-between;
@@ -356,6 +361,21 @@ select:disabled {
   color: #b06000;
 }
 
+.chip-success {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.chip-warning {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+.chip-danger {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -389,6 +409,14 @@ select:disabled {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+.admin-invitation-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
 }
 
 .member-row {

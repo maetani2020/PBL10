@@ -216,7 +216,7 @@ router.post('/recommend', authenticateToken, async (req, res) => {
         // Retrieve existing events for the day to check availability
         const events = await query.all(
             `SELECT start_time, end_time FROM events 
-             WHERE creator_id = ? AND start_time LIKE ?`,
+             WHERE creator_id = ? AND start_time LIKE ? AND deleted_at IS NULL`,
             [userId, `${formattedDate}%`]
         );
 

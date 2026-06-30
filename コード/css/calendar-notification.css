@@ -486,6 +486,83 @@ body.dark .draft-empty {
   padding: 4px 10px;
 }
 
+.group-invitation-section {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.group-invitation-section.compact {
+  margin-top: 12px;
+}
+
+.group-invitation-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.invitation-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.invitation-status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.invitation-status-chip.pending {
+  background: rgba(255, 149, 0, 0.12);
+  color: #b45f00;
+}
+
+.invitation-status-chip.accepted {
+  background: rgba(52, 199, 89, 0.14);
+  color: #1f7a35;
+}
+
+.invitation-status-chip.declined {
+  background: rgba(255, 59, 48, 0.12);
+  color: #b42318;
+}
+
+.group-invitation-empty {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+body.dark .group-invitation-section {
+  background: var(--surface);
+}
+
+body.dark .invitation-status-chip.pending {
+  color: #ffd18a;
+}
+
+body.dark .invitation-status-chip.accepted {
+  color: #9be7b0;
+}
+
+body.dark .invitation-status-chip.declined {
+  color: #ffaaa3;
+}
+
 body.dark .admin-panel,
 body.dark .admin-stat-card,
 body.dark .admin-card,
@@ -521,4 +598,57 @@ body.dark .member-role-select option,
 body.dark .admin-user-table select option {
   background: #000000 !important;
   color: #ffffff !important;
+}
+
+@media (max-width: 768px) {
+  #eventModal .modal-content {
+    max-height: 94dvh;
+  }
+
+  #eventModal .modal-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #eventModal .modal-actions button {
+    min-width: 0;
+    width: 100%;
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+
+  .event-step-nav {
+    gap: 6px;
+  }
+
+  .event-step-pill {
+    padding: 7px 6px;
+    font-size: 12px;
+  }
+
+  .inline-checks,
+  .settings-checks,
+  .hp-motivation-inputs,
+  .group-actions,
+  .member-list-item,
+  .invitation-list-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .compact-checkbox,
+  .group-actions button,
+  .member-controls,
+  .member-controls select,
+  .member-controls button {
+    width: 100%;
+  }
+
+  .draft-item-actions {
+    flex-direction: column;
+  }
+
+  .admin-table-wrap {
+    overflow-x: auto;
+  }
 }

@@ -348,12 +348,78 @@ body.dark .week-day-column:hover {
 ========================== */
 
 @media (max-width: 768px) {
+  .view-switch {
+    min-height: 40px;
+  }
+
+  .view-btn {
+    padding: 9px 6px;
+    font-size: 13px;
+  }
+
+  .display-options {
+    padding: 6px 10px;
+  }
+
+  .week-header div {
+    padding: 7px 2px;
+    font-size: 12px;
+  }
+
+  .month-view {
+    height: calc(100dvh - 56px - 54px - 40px - 34px - 34px);
+    min-height: 420px;
+  }
+
+  .day-cell {
+    padding: 3px;
+    min-width: 0;
+  }
+
   .day-number {
+    width: 26px;
+    height: 26px;
     font-size: 14px;
   }
 
   .event {
     font-size: 10px;
+    line-height: 1.25;
+    padding: 2px 4px;
+    margin-top: 3px;
+    max-width: 100%;
+  }
+
+  .event-badge {
+    display: none;
+  }
+
+  .week-view,
+  .day-view {
+    height: calc(100dvh - 184px);
+  }
+
+  .week-view .week-header {
+    grid-template-columns: 48px repeat(7, minmax(42px, 1fr));
+    min-width: 520px;
+  }
+
+  .week-hour {
+    min-width: 520px;
+  }
+
+  .week-time {
+    width: 48px;
+    font-size: 11px;
+  }
+
+  .week-view {
+    overflow-x: auto;
+  }
+
+  .event-card {
+    margin: 8px;
+    padding: 12px;
   }
 }
 
