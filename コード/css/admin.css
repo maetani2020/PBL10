@@ -148,10 +148,21 @@ select:disabled {
   background: transparent;
   color: #fff;
   text-align: left;
+  width: 100%;
   padding: 10px 12px;
   display: flex;
   align-items: center;
+  justify-content: flex-start !important;
   gap: 8px;
+  white-space: nowrap;
+}
+
+.admin-tab .material-icons,
+.logout-btn .material-icons {
+  width: 24px;
+  min-width: 24px;
+  flex: 0 0 24px;
+  text-align: center;
 }
 
 .admin-tab.active,
