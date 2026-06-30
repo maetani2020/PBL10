@@ -270,44 +270,6 @@ body.dark #sidebarLogoutBtn:hover {
 }
 
 /* ============================
-  Google Sign-In Button
-============================ */
-.auth-google-btn {
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.auth-google-btn:hover {
-  background: var(--bg);
-  border-color: #bdc1c6;
-}
-
-body.dark .auth-google-btn:hover {
-  border-color: #70757a;
-}
-
-.auth-google-btn:active {
-  transform: scale(0.98);
-}
-
-.auth-google-btn svg {
-  flex-shrink: 0;
-}
-
-/* ============================
   Auth Footer Links
 ============================ */
 .auth-footer-links {

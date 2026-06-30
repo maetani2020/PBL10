@@ -195,12 +195,19 @@ router.post('/', authenticateToken, async (req, res) => {
         let targetCalendarId = calendar_id;
 
         if (!targetCalendarId) {
-            const defaultCalendar = await query.get(
+            let defaultCalendar = await query.get(
                 'SELECT id FROM calendars WHERE owner_id = ? ORDER BY id ASC LIMIT 1',
                 [userId]
             );
             if (!defaultCalendar) {
-                return res.status(400).json({ error: 'デフォルトのカレンダーが見つかりません' });
+                await query.run(
+                    'INSERT INTO calendars (name, owner_id) VALUES (?, ?)',
+                    ['マイカレンダー', userId]
+                );
+                defaultCalendar = await query.get(
+                    'SELECT id FROM calendars WHERE owner_id = ? ORDER BY id DESC LIMIT 1',
+                    [userId]
+                );
             }
             targetCalendarId = defaultCalendar.id;
         }

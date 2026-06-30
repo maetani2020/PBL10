@@ -288,12 +288,6 @@ export function initAuthForm() {
     }
   });
 
-  // Google Sign-In button
-  const googleLoginBtn = document.getElementById('googleLoginBtn');
-  if (googleLoginBtn) {
-    googleLoginBtn.addEventListener('click', handleGoogleLogin);
-  }
-
   // パスワードリセットリンク
   if (forgotPasswordLink) {
     forgotPasswordLink.addEventListener('click', () => showPasswordResetModal());
@@ -307,91 +301,6 @@ export function initAuthForm() {
   });
 }
 
-// -------------------------------------------------------
-// Google Login (Google Identity Services)
-// -------------------------------------------------------
-
-function getSafeGoogleDisplayName(profile) {
-  const source = profile.name || profile.given_name || (profile.email ? profile.email.split('@')[0] : 'Googleユーザー');
-  return Array.from(String(source).trim()).slice(0, 10).join('') || 'Googleユーザー';
-}
-
-async function finishGoogleLogin(profile) {
-  const data = await apiRequest('/api/auth/google-login', {
-    method: 'POST',
-    body: JSON.stringify({
-      email: profile.email,
-      display_name: getSafeGoogleDisplayName(profile),
-    }),
-  });
-
-  setAuthToken(data.token);
-  if (data.refreshToken) setRefreshToken(data.refreshToken);
-  setCurrentUser(data.user);
-  hideAuthOverlay();
-  updateUserDisplay();
-  showToast(`Googleでログインしました。ようこそ、${data.user.display_name}さん`);
-  document.dispatchEvent(new CustomEvent('auth:loggedin'));
-}
-
-async function fetchGoogleUserInfo(accessToken) {
-  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  if (!res.ok) {
-    throw new Error('Googleアカウント情報の取得に失敗しました');
-  }
-
-  return res.json();
-}
-
-async function handleGoogleLogin() {
-  const googleLoginBtn = document.getElementById('googleLoginBtn');
-  const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || '';
-
-  if (!GOOGLE_CLIENT_ID) {
-    showToast('Google Client IDが未設定です。サーバーの環境変数 GOOGLE_CLIENT_ID を設定してください');
-    return;
-  }
-
-  if (!window.google?.accounts?.oauth2) {
-    showToast('Googleログインの読み込みが完了していません。少し待ってからもう一度押してください');
-    return;
-  }
-
-  if (googleLoginBtn) googleLoginBtn.disabled = true;
-
-  const tokenClient = window.google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: 'openid email profile',
-    prompt: 'select_account',
-    callback: async (tokenResponse) => {
-      try {
-        if (tokenResponse.error) {
-          throw new Error(tokenResponse.error_description || tokenResponse.error);
-        }
-
-        const profile = await fetchGoogleUserInfo(tokenResponse.access_token);
-        await finishGoogleLogin(profile);
-      } catch (err) {
-        console.error('Google login error:', err);
-        showToast(err.message || 'Googleログインに失敗しました');
-      } finally {
-        if (googleLoginBtn) googleLoginBtn.disabled = false;
-      }
-    },
-    error_callback: (err) => {
-      console.error('Google popup error:', err);
-      showToast('Googleアカウント選択がキャンセルされました');
-      if (googleLoginBtn) googleLoginBtn.disabled = false;
-    },
-  });
-
-  tokenClient.requestAccessToken({ prompt: 'select_account' });
-}
-
-// -------------------------------------------------------
 function showPasswordResetModal() {
   const modal = document.getElementById('passwordResetModal');
   if (!modal) return;
@@ -594,15 +503,6 @@ export function initAccountPanel() {
 // checkAuth: called on page load
 // -------------------------------------------------------
 export async function checkAuth() {
-  // バックエンドから設定情報（Google Client ID）を取得
-  try {
-    const res = await fetch('/api/config');
-    const data = await res.json();
-    window.GOOGLE_CLIENT_ID = data.googleClientId;
-  } catch (err) {
-    console.error('Failed to load config:', err);
-  }
-
   if (isLoggedIn()) {
     hideAuthOverlay();
     updateUserDisplay();

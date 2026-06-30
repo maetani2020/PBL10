@@ -12,6 +12,32 @@ export let eventsCache = [];
 
 export const STORAGE_KEY = "shared_calendar_events";
 
+export function normalizeEvent(event) {
+  const start = event?.start || event?.start_time || "";
+  const end = event?.end || event?.end_time || "";
+  const allDay = event?.allDay ?? event?.allday ?? false;
+  const reminderMinutes = Array.isArray(event?.reminderMinutes)
+    ? event.reminderMinutes
+    : Array.isArray(event?.reminder_minutes)
+      ? event.reminder_minutes
+      : [];
+
+  return {
+    ...event,
+    start,
+    end,
+    date: event?.date || (start ? start.substring(0, 10) : ""),
+    allDay: !!allDay,
+    allday: !!allDay,
+    color: event?.color || "#007AFF",
+    visibility: event?.visibility || "public",
+    hp_consumption: Number(event?.hp_consumption || 0),
+    motivation_consumption: Number(event?.motivation_consumption || 0),
+    eventType: event?.eventType || event?.event_type || "event",
+    reminderMinutes
+  };
+}
+
 // Setters for states
 export function setCurrentDate(date) {
   currentDate = date;
@@ -34,7 +60,7 @@ export function setCurrentFilter(filter) {
 }
 
 export function setEvents(events) {
-  eventsCache = events;
+  eventsCache = Array.isArray(events) ? events.map(normalizeEvent) : [];
 }
 
 // Memory cache helpers
@@ -52,7 +78,7 @@ export function getAllEvents() {
 }
 
 export function saveEvents(events) {
-  eventsCache = events;
+  eventsCache = Array.isArray(events) ? events.map(normalizeEvent) : [];
 }
 
 // Utilities

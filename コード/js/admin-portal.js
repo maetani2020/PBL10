@@ -1,9 +1,13 @@
 const TOKEN_KEY = 'pbl_admin_token';
 const USER_KEY = 'pbl_admin_user';
+const STATS_REFRESH_MS = 2000;
 
 let adminToken = localStorage.getItem(TOKEN_KEY) || '';
 let adminUser = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+let usersCache = [];
+let groupsCache = [];
 let eventsCache = [];
+let statsRefreshTimer = null;
 
 const loginView = document.getElementById('adminLogin');
 const appView = document.getElementById('adminApp');
@@ -22,7 +26,35 @@ function escapeHtml(value) {
 function showToast(message) {
   toastEl.textContent = message;
   toastEl.classList.remove('hidden');
-  setTimeout(() => toastEl.classList.add('hidden'), 2600);
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toastEl.classList.add('hidden'), 2800);
+}
+
+function roleLabel(role) {
+  return role === 'admin' ? '管理者' : '一般ユーザー';
+}
+
+function groupRoleLabel(role) {
+  if (role === 'admin') return '管理者';
+  if (role === 'editor') return '編集者';
+  return '閲覧者';
+}
+
+function eventTypeLabel(type) {
+  if (type === 'task') return 'タスク';
+  if (type === 'mail') return 'メール';
+  return '通常予定';
+}
+
+function visibilityLabel(value) {
+  if (value === 'public') return '全体公開';
+  if (value === 'private') return '自分のみ';
+  return 'グループ共有';
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  return String(value).replace('T', ' ').slice(0, 16);
 }
 
 async function api(path, options = {}) {
@@ -35,6 +67,10 @@ async function api(path, options = {}) {
   const res = await fetch(path, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      clearSession();
+      showLogin();
+    }
     throw new Error(data.error || '通信に失敗しました');
   }
   return data;
@@ -55,6 +91,7 @@ function clearSession() {
 }
 
 function showLogin() {
+  stopStatsAutoRefresh();
   loginView.classList.remove('hidden');
   appView.classList.add('hidden');
 }
@@ -62,7 +99,25 @@ function showLogin() {
 function showApp() {
   loginView.classList.add('hidden');
   appView.classList.remove('hidden');
-  document.getElementById('adminUserLabel').textContent = adminUser ? adminUser.email : '';
+  document.getElementById('adminUserLabel').textContent = adminUser
+    ? `${adminUser.display_name || adminUser.email} / ${adminUser.email}`
+    : '';
+  startStatsAutoRefresh();
+}
+
+function startStatsAutoRefresh() {
+  stopStatsAutoRefresh();
+  statsRefreshTimer = setInterval(() => {
+    const overviewPanel = document.getElementById('overviewPanel');
+    if (!adminToken || appView.classList.contains('hidden') || overviewPanel?.classList.contains('hidden')) return;
+    loadStats().catch(err => console.warn('Failed to refresh system stats:', err));
+  }, STATS_REFRESH_MS);
+}
+
+function stopStatsAutoRefresh() {
+  if (!statsRefreshTimer) return;
+  clearInterval(statsRefreshTimer);
+  statsRefreshTimer = null;
 }
 
 async function login() {
@@ -99,45 +154,101 @@ async function loadAll() {
 async function loadStats() {
   const stats = await api('/api/admin/system-stats');
   const cards = [
+    ['CPU使用率', stats.os?.cpuUsage ?? '-'],
+    ['メモリ使用率', stats.os?.memoryUsage ?? '-'],
     ['ユーザー', stats.database?.users ?? 0],
+    ['管理者', stats.database?.admins ?? 0],
     ['イベント', stats.database?.events ?? 0],
+    ['今日の予定', stats.database?.todayEvents ?? 0],
     ['グループ', stats.database?.groups ?? 0],
     ['タスク', stats.database?.tasks ?? 0],
+    ['通知履歴', stats.database?.notificationHistory ?? 0],
     ['稼働時間', stats.process?.uptime ?? '-'],
-    ['メモリ', stats.process?.memory?.heapUsed ?? '-']
+    ['Nodeメモリ', stats.process?.memory?.heapUsed ?? '-']
   ];
   document.getElementById('statsGrid').innerHTML = cards.map(([label, value]) => `
     <div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
   `).join('');
+
+  const updatedAt = stats.updatedAt
+    ? new Date(stats.updatedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : '-';
+
+  document.getElementById('systemDetails').innerHTML = `
+    <div><strong>OS</strong><span>${escapeHtml(stats.os?.platform)} / ${escapeHtml(stats.os?.release)}</span></div>
+    <div><strong>CPU</strong><span>${escapeHtml(stats.os?.cpus)} cores / ${escapeHtml(stats.os?.cpuUsage ?? '-')}</span></div>
+    <div><strong>メモリ</strong><span>${escapeHtml(stats.os?.usedmem ?? '-')} / ${escapeHtml(stats.os?.totalmem ?? '-')} 使用中</span></div>
+    <div><strong>空きメモリ</strong><span>${escapeHtml(stats.os?.freemem)} / ${escapeHtml(stats.os?.totalmem)}</span></div>
+    <div><strong>Node heap</strong><span>${escapeHtml(stats.process?.memory?.heapUsed ?? '-')} / ${escapeHtml(stats.process?.memory?.heapTotal ?? '-')} (${escapeHtml(stats.process?.memory?.heapUsage ?? '-')})</span></div>
+    <div><strong>更新間隔</strong><span>2秒ごと / 最終更新 ${escapeHtml(updatedAt)}</span></div>
+  `;
 }
 
 async function loadUsers() {
-  const users = await api('/api/admin/users');
-  document.getElementById('usersTable').innerHTML = users.map(user => `
-    <article class="row-card">
-      <div class="row-head">
-        <div>
-          <div class="row-title">${escapeHtml(user.display_name || 'No name')} <span class="row-meta">#${escapeHtml(user.id)}</span></div>
-          <div class="row-meta">${escapeHtml(user.email)} / role: ${escapeHtml(user.role)}</div>
+  usersCache = await api('/api/admin/users');
+  renderUsers();
+}
+
+function renderUsers() {
+  const keyword = document.getElementById('userSearch').value.trim().toLowerCase();
+  const role = document.getElementById('userRoleFilter').value;
+  const users = usersCache.filter(user => {
+    const text = [user.display_name, user.email, user.role].join(' ').toLowerCase();
+    return (!keyword || text.includes(keyword)) && (role === 'all' || user.role === role);
+  });
+
+  document.getElementById('usersTable').innerHTML = users.map(user => {
+    const isSelf = Number(user.id) === Number(adminUser?.id);
+    return `
+      <article class="row-card">
+        <div class="row-head">
+          <div>
+            <div class="row-title">${escapeHtml(user.display_name || 'No name')} <span class="row-meta">#${escapeHtml(user.id)}</span></div>
+            <div class="row-meta">${escapeHtml(user.email)}</div>
+            <div class="chips">
+              <span class="chip ${user.role === 'admin' ? 'chip-admin' : ''}">${roleLabel(user.role)}</span>
+              <span class="chip">予定 ${escapeHtml(user.event_count ?? 0)}</span>
+              <span class="chip">グループ ${escapeHtml(user.group_count ?? 0)}</span>
+              <span class="chip">通知 ${escapeHtml(user.notification_count ?? 0)}</span>
+            </div>
+          </div>
+          <div class="actions">
+            <select data-user-role="${user.id}" ${isSelf ? 'disabled' : ''}>
+              <option value="user" ${user.role === 'user' ? 'selected' : ''}>一般ユーザー</option>
+              <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>管理者</option>
+            </select>
+            <button class="primary" data-user-settings="${user.id}">設定リセット</button>
+            <button data-user-history="${user.id}">通知履歴削除</button>
+            <button class="danger" data-user-delete="${user.id}" ${isSelf ? 'disabled' : ''}>ユーザー削除</button>
+          </div>
         </div>
-        <div class="actions">
-          <button class="primary" data-user-settings="${user.id}">設定リセット</button>
-          <button data-user-history="${user.id}">通知履歴削除</button>
-          <button class="danger" data-user-delete="${user.id}" ${Number(user.id) === Number(adminUser?.id) ? 'disabled' : ''}>ユーザー削除</button>
-        </div>
-      </div>
-    </article>
-  `).join('');
+      </article>
+    `;
+  }).join('') || '<p class="empty-text">該当するユーザーはいません</p>';
 }
 
 async function loadGroups() {
-  const groups = await api('/api/admin/groups');
+  groupsCache = await api('/api/admin/groups');
+  renderGroups();
+}
+
+function renderGroups() {
+  const keyword = document.getElementById('groupSearch').value.trim().toLowerCase();
+  const groups = groupsCache.filter(group => {
+    const text = [group.name, group.owner_name, group.owner_email].join(' ').toLowerCase();
+    return !keyword || text.includes(keyword);
+  });
+
   document.getElementById('groupsList').innerHTML = groups.map(group => `
     <article class="row-card" data-group-card="${group.id}">
       <div class="row-head">
         <div>
           <div class="row-title">${escapeHtml(group.name)} <span class="row-meta">#${escapeHtml(group.id)}</span></div>
-          <div class="row-meta">オーナー: ${escapeHtml(group.owner_name || '-')} / メンバー: ${escapeHtml(group.member_count)} / イベント: ${escapeHtml(group.event_count)}</div>
+          <div class="row-meta">オーナー: ${escapeHtml(group.owner_name || '-')} / ${escapeHtml(group.owner_email || '-')}</div>
+          <div class="chips">
+            <span class="chip">メンバー ${escapeHtml(group.member_count ?? 0)}</span>
+            <span class="chip">イベント ${escapeHtml(group.event_count ?? 0)}</span>
+          </div>
         </div>
         <div class="actions">
           <button data-group-members="${group.id}">メンバー表示</button>
@@ -146,7 +257,7 @@ async function loadGroups() {
       </div>
       <div class="member-list hidden" id="members-${group.id}"></div>
     </article>
-  `).join('');
+  `).join('') || '<p class="empty-text">該当するグループはありません</p>';
 }
 
 async function renderMembers(groupId, forceOpen = false) {
@@ -163,7 +274,7 @@ async function renderMembers(groupId, forceOpen = false) {
     <div class="member-row">
       <div>
         <div class="row-title">${escapeHtml(member.display_name || 'No name')}</div>
-        <div class="row-meta">${escapeHtml(member.email)} / ${escapeHtml(member.role)}</div>
+        <div class="row-meta">${escapeHtml(member.email)}</div>
       </div>
       <div class="actions">
         <select data-member-role="${groupId}:${member.id}">
@@ -174,7 +285,7 @@ async function renderMembers(groupId, forceOpen = false) {
         <button class="danger" data-member-remove="${groupId}:${member.id}">削除</button>
       </div>
     </div>
-  `).join('');
+  `).join('') || '<p class="empty-text">メンバーはいません</p>';
   box.classList.remove('hidden');
 }
 
@@ -185,25 +296,59 @@ async function loadEvents() {
 
 function renderEvents() {
   const keyword = document.getElementById('eventSearch').value.trim().toLowerCase();
+  const visibility = document.getElementById('eventVisibilityFilter').value;
+  const type = document.getElementById('eventTypeFilter').value;
   const filtered = eventsCache.filter(event => {
     const text = [event.title, event.creator_name, event.creator_email, event.group_name, event.calendar_name].join(' ').toLowerCase();
-    return !keyword || text.includes(keyword);
+    return (!keyword || text.includes(keyword))
+      && (visibility === 'all' || event.visibility === visibility)
+      && (type === 'all' || (event.event_type || 'event') === type);
   });
 
   document.getElementById('eventsList').innerHTML = filtered.map(event => `
-    <article class="row-card">
+    <article class="row-card event-row" style="border-left-color:${escapeHtml(event.color || '#1a73e8')}">
       <div class="row-head">
         <div>
           <div class="row-title">${escapeHtml(event.title)} <span class="row-meta">#${escapeHtml(event.id)}</span></div>
-          <div class="row-meta">${escapeHtml(event.start_time)} - ${escapeHtml(event.end_time)}</div>
-          <div class="row-meta">作成者: ${escapeHtml(event.creator_name || '-')} / グループ: ${escapeHtml(event.group_name || 'なし')}</div>
+          <div class="row-meta">${formatDateTime(event.start_time)} - ${formatDateTime(event.end_time)}</div>
+          <div class="row-meta">作成者: ${escapeHtml(event.creator_name || '-')} / ${escapeHtml(event.creator_email || '-')}</div>
+          <div class="row-meta">カレンダー: ${escapeHtml(event.calendar_name || '-')} / グループ: ${escapeHtml(event.group_name || 'なし')}</div>
+          <div class="chips">
+            <span class="chip">${visibilityLabel(event.visibility)}</span>
+            <span class="chip">${eventTypeLabel(event.event_type || 'event')}</span>
+            <span class="chip">HP ${escapeHtml(event.hp_consumption ?? 0)}%</span>
+            <span class="chip">やる気 ${escapeHtml(event.motivation_consumption ?? 0)}%</span>
+          </div>
         </div>
         <div class="actions">
           <button class="danger" data-event-delete="${event.id}">イベント削除</button>
         </div>
       </div>
     </article>
-  `).join('');
+  `).join('') || '<p class="empty-text">該当するイベントはありません</p>';
+}
+
+async function sendAnnouncement() {
+  const titleEl = document.getElementById('adminAnnouncementTitle');
+  const messageEl = document.getElementById('adminAnnouncementMessage');
+  const title = titleEl.value.trim();
+  const message = messageEl.value.trim();
+
+  if (!title || !message) {
+    showToast('タイトルと本文を入力してください');
+    return;
+  }
+
+  if (!confirm('全ユーザーにお知らせを送信しますか？')) return;
+
+  const data = await api('/api/admin/announcements', {
+    method: 'POST',
+    body: JSON.stringify({ title, message })
+  });
+  titleEl.value = '';
+  messageEl.value = '';
+  showToast(data.message || 'お知らせを送信しました');
+  await loadStats();
 }
 
 async function handleClick(event) {
@@ -220,12 +365,13 @@ async function handleClick(event) {
       if (!confirm('このユーザーの通知履歴を削除しますか？')) return;
       await api(`/api/admin/users/${target.dataset.userHistory}/notification-history`, { method: 'DELETE' });
       showToast('通知履歴を削除しました');
+      await Promise.all([loadUsers(), loadStats()]);
     }
     if (target.dataset.userDelete) {
-      if (!confirm('このユーザーを削除しますか？')) return;
+      if (!confirm('このユーザーを削除しますか？関連データも削除されます。')) return;
       await api(`/api/admin/users/${target.dataset.userDelete}`, { method: 'DELETE' });
       showToast('ユーザーを削除しました');
-      await loadUsers();
+      await Promise.all([loadUsers(), loadGroups(), loadEvents(), loadStats()]);
     }
     if (target.dataset.groupMembers) {
       await renderMembers(target.dataset.groupMembers);
@@ -241,7 +387,7 @@ async function handleClick(event) {
       if (!confirm('このメンバーをグループから削除しますか？')) return;
       await api(`/api/admin/groups/${groupId}/members/${userId}`, { method: 'DELETE' });
       showToast('メンバーを削除しました');
-      await renderMembers(groupId, true);
+      await Promise.all([renderMembers(groupId, true), loadGroups()]);
     }
     if (target.dataset.eventDelete) {
       if (!confirm('このイベントを削除しますか？')) return;
@@ -255,41 +401,68 @@ async function handleClick(event) {
 }
 
 async function handleChange(event) {
-  const select = event.target.closest('select[data-member-role]');
-  if (!select) return;
-
-  const [groupId, userId] = select.dataset.memberRole.split(':');
-  try {
-    await api(`/api/admin/groups/${groupId}/members/${userId}/role`, {
-      method: 'PUT',
-      body: JSON.stringify({ role: select.value })
-    });
-    showToast('権限を更新しました');
-  } catch (err) {
-    showToast(err.message);
+  const memberSelect = event.target.closest('select[data-member-role]');
+  if (memberSelect) {
+    const [groupId, userId] = memberSelect.dataset.memberRole.split(':');
+    try {
+      await api(`/api/admin/groups/${groupId}/members/${userId}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ role: memberSelect.value })
+      });
+      showToast('グループ権限を更新しました');
+      await renderMembers(groupId, true);
+    } catch (err) {
+      showToast(err.message);
+    }
+    return;
   }
+
+  const userSelect = event.target.closest('select[data-user-role]');
+  if (userSelect) {
+    const userId = userSelect.dataset.userRole;
+    try {
+      await api(`/api/admin/users/${userId}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ role: userSelect.value })
+      });
+      showToast('ユーザー権限を更新しました');
+      await loadUsers();
+    } catch (err) {
+      showToast(err.message);
+      await loadUsers();
+    }
+  }
+}
+
+function bindTabs() {
+  document.querySelectorAll('.admin-tab').forEach(button => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('.admin-tab').forEach(item => item.classList.toggle('active', item === button));
+      document.querySelectorAll('.panel').forEach(panel => panel.classList.add('hidden'));
+      document.getElementById(button.dataset.tab + 'Panel').classList.remove('hidden');
+    });
+  });
 }
 
 document.getElementById('adminLoginBtn').addEventListener('click', login);
 document.getElementById('adminPassword').addEventListener('keydown', event => {
   if (event.key === 'Enter') login();
 });
-document.getElementById('refreshAllBtn').addEventListener('click', loadAll);
+document.getElementById('refreshAllBtn').addEventListener('click', () => loadAll().catch(err => showToast(err.message)));
 document.getElementById('adminLogoutBtn').addEventListener('click', () => {
   clearSession();
   showLogin();
 });
+document.getElementById('userSearch').addEventListener('input', renderUsers);
+document.getElementById('userRoleFilter').addEventListener('change', renderUsers);
+document.getElementById('groupSearch').addEventListener('input', renderGroups);
 document.getElementById('eventSearch').addEventListener('input', renderEvents);
+document.getElementById('eventVisibilityFilter').addEventListener('change', renderEvents);
+document.getElementById('eventTypeFilter').addEventListener('change', renderEvents);
+document.getElementById('sendAnnouncementBtn').addEventListener('click', () => sendAnnouncement().catch(err => showToast(err.message)));
 document.addEventListener('click', handleClick);
 document.addEventListener('change', handleChange);
-
-document.querySelectorAll('.admin-tab').forEach(button => {
-  button.addEventListener('click', () => {
-    document.querySelectorAll('.admin-tab').forEach(item => item.classList.toggle('active', item === button));
-    document.querySelectorAll('.panel').forEach(panel => panel.classList.add('hidden'));
-    document.getElementById(button.dataset.tab + 'Panel').classList.remove('hidden');
-  });
-});
+bindTabs();
 
 if (adminToken && adminUser?.role === 'admin') {
   showApp();

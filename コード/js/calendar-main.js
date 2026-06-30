@@ -4,11 +4,16 @@
 import {
   currentDate,
   currentView,
+  currentFilter,
   selectedEventId,
   currentAttachments,
   setCurrentAttachments,
+  setCurrentFilter,
   formatDate,
-  showToast
+  showToast,
+  getAllEvents,
+  saveEvents,
+  normalizeEvent
 } from './calendar-state.js';
 
 import {
@@ -31,7 +36,8 @@ import {
   openCreateEvent,
   collectEventReminderMinutes,
   renderEventReminderList,
-  updateEventOptionVisibility
+  updateEventOptionVisibility,
+  setEventModalStep
 } from './calendar-modals.js';
 
 import {
@@ -129,6 +135,8 @@ export async function syncEvents() {
 // ----------------------------------------------------
 
 const EVENT_DRAFT_STORAGE_KEY = "shared_calendar_event_draft";
+const EVENT_DRAFTS_STORAGE_KEY = "shared_calendar_event_drafts";
+const MAX_EVENT_DRAFTS = 30;
 
 function setValue(id, value) {
   const el = document.getElementById(id);
@@ -176,6 +184,76 @@ function collectEventDraftData() {
   };
 }
 
+function createDraftId() {
+  return `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function readDraftsFromStorage() {
+  let drafts = [];
+
+  try {
+    const raw = localStorage.getItem(EVENT_DRAFTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    drafts = Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error("Failed to read event drafts:", err);
+    drafts = [];
+  }
+
+  const legacyRaw = localStorage.getItem(EVENT_DRAFT_STORAGE_KEY);
+  if (legacyRaw) {
+    try {
+      const legacyDraft = JSON.parse(legacyRaw);
+      const hasLegacy = drafts.some(draft => draft.id === "legacy_event_draft");
+      if (legacyDraft && !hasLegacy) {
+        drafts.unshift({
+          ...legacyDraft,
+          id: "legacy_event_draft",
+          savedAt: legacyDraft.savedAt || new Date().toISOString()
+        });
+        writeDraftsToStorage(drafts);
+      }
+      localStorage.removeItem(EVENT_DRAFT_STORAGE_KEY);
+    } catch (err) {
+      console.error("Failed to migrate legacy event draft:", err);
+    }
+  }
+
+  return drafts
+    .filter(draft => draft && typeof draft === "object")
+    .sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+}
+
+function writeDraftsToStorage(drafts) {
+  const normalized = drafts
+    .filter(draft => draft && typeof draft === "object")
+    .slice(0, MAX_EVENT_DRAFTS);
+  localStorage.setItem(EVENT_DRAFTS_STORAGE_KEY, JSON.stringify(normalized));
+}
+
+function formatDraftDate(value) {
+  if (!value) return "保存日時なし";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "保存日時なし";
+  return date.toLocaleString("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function getDraftTitle(draft) {
+  const title = String(draft.title || "").trim();
+  return title || "無題の下書き";
+}
+
+function getDraftDateRange(draft) {
+  const start = draft.start ? draft.start.replace("T", " ") : "開始未設定";
+  const end = draft.end ? draft.end.replace("T", " ") : "終了未設定";
+  return `${start} - ${end}`;
+}
+
 function applyEventDraftData(draft) {
   setValue("eventTitle", draft.title);
   setValue("eventStart", draft.start);
@@ -206,29 +284,151 @@ function applyEventDraftData(draft) {
 }
 
 function saveEventDraft() {
-  localStorage.setItem(EVENT_DRAFT_STORAGE_KEY, JSON.stringify(collectEventDraftData()));
-  showToast("下書きを保存しました");
+  const draft = {
+    ...collectEventDraftData(),
+    id: createDraftId(),
+    savedAt: new Date().toISOString()
+  };
+  const drafts = readDraftsFromStorage();
+  drafts.unshift(draft);
+  writeDraftsToStorage(drafts);
+  renderDraftList();
+  showToast(`下書きを保存しました（${Math.min(drafts.length, MAX_EVENT_DRAFTS)}件）`);
 }
 
-function loadEventDraft() {
-  const raw = localStorage.getItem(EVENT_DRAFT_STORAGE_KEY);
-  if (!raw) {
+function openDraftListModal() {
+  renderDraftList();
+  const modal = document.getElementById("draftListModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeDraftListModal() {
+  const modal = document.getElementById("draftListModal");
+  if (modal) modal.style.display = "none";
+}
+
+function loadEventDraft(draftId) {
+  const drafts = readDraftsFromStorage();
+  if (drafts.length === 0) {
     showToast("保存されている下書きはありません");
     return;
   }
 
-  try {
-    applyEventDraftData(JSON.parse(raw));
-    showToast("下書きを読み込みました");
-  } catch (err) {
-    console.error("Failed to load event draft:", err);
-    showToast("下書きの読み込みに失敗しました");
+  if (!draftId) {
+    openDraftListModal();
+    return;
   }
+
+  const draft = drafts.find(item => item.id === draftId);
+  if (!draft) {
+    showToast("選択した下書きが見つかりません");
+    renderDraftList();
+    return;
+  }
+
+  applyEventDraftData(draft);
+  setEventModalStep("basic");
+  closeDraftListModal();
+  showToast("下書きを読み込みました");
+}
+
+function deleteEventDraft(draftId) {
+  const drafts = readDraftsFromStorage();
+  const nextDrafts = drafts.filter(draft => draft.id !== draftId);
+  writeDraftsToStorage(nextDrafts);
+  renderDraftList();
+  showToast("下書きを削除しました");
 }
 
 function clearEventDraft() {
+  const drafts = readDraftsFromStorage();
+  if (drafts.length === 0) {
+    showToast("保存されている下書きはありません");
+    return;
+  }
+
+  if (!confirm("保存済みの下書きをすべて削除しますか？")) return;
+
+  writeDraftsToStorage([]);
   localStorage.removeItem(EVENT_DRAFT_STORAGE_KEY);
-  showToast("下書きを削除しました");
+  renderDraftList();
+  showToast("下書きをすべて削除しました");
+}
+
+function renderDraftList() {
+  const container = document.getElementById("draftListContainer");
+  if (!container) return;
+
+  const drafts = readDraftsFromStorage();
+  container.innerHTML = "";
+
+  if (drafts.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "draft-empty";
+    empty.textContent = "保存されている下書きはありません";
+    container.appendChild(empty);
+    return;
+  }
+
+  drafts.forEach(draft => {
+    const item = document.createElement("div");
+    item.className = "draft-item";
+
+    const title = document.createElement("div");
+    title.className = "draft-item-title";
+    title.textContent = getDraftTitle(draft);
+
+    const meta = document.createElement("div");
+    meta.className = "draft-item-meta";
+    meta.textContent = `${getDraftDateRange(draft)} / 保存: ${formatDraftDate(draft.savedAt)}`;
+
+    const actions = document.createElement("div");
+    actions.className = "draft-item-actions";
+
+    const loadBtn = document.createElement("button");
+    loadBtn.type = "button";
+    loadBtn.className = "primary-btn";
+    loadBtn.textContent = "読込";
+    loadBtn.addEventListener("click", () => loadEventDraft(draft.id));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "danger-btn";
+    deleteBtn.textContent = "削除";
+    deleteBtn.addEventListener("click", () => deleteEventDraft(draft.id));
+
+    actions.append(loadBtn, deleteBtn);
+    item.append(title, meta, actions);
+    container.appendChild(item);
+  });
+}
+
+function updateLocalEventCache(savedEvent) {
+  if (!savedEvent) return;
+
+  const normalized = normalizeEvent(savedEvent);
+  if (!normalized.id) return;
+
+  if (currentFilter !== "all" && normalized.visibility !== currentFilter) {
+    setCurrentFilter("all");
+    document.querySelectorAll(".sidebar-item").forEach(item => {
+      item.classList.toggle("active", item.dataset.nav === "calendar");
+    });
+    document.getElementById("filterBanner")?.classList.add("hidden");
+  }
+
+  const currentEvents = getAllEvents();
+  const index = currentEvents.findIndex(event => event.id === normalized.id);
+  const nextEvents = [...currentEvents];
+
+  if (index >= 0) {
+    nextEvents[index] = { ...nextEvents[index], ...normalized };
+  } else {
+    nextEvents.push(normalized);
+  }
+
+  saveEvents(nextEvents);
+  refreshCalendar();
 }
 
     async function saveEvent() {
@@ -308,24 +508,40 @@ function clearEventDraft() {
   };
 
   try {
+    let savedEvent = null;
     if (selectedEventId) {
-      await apiRequest(`/api/events/${selectedEventId}`, {
+      const data = await apiRequest(`/api/events/${selectedEventId}`, {
         method: 'PUT',
         body: JSON.stringify(eventData)
       });
+      savedEvent = {
+        ...eventData,
+        ...(data.event || {}),
+        id: selectedEventId,
+        allDay,
+        date: start.substring(0, 10)
+      };
       showToast("予定を更新しました ✅");
     } else {
-      await apiRequest('/api/events', {
+      const data = await apiRequest('/api/events', {
         method: 'POST',
         body: JSON.stringify(eventData)
       });
+      savedEvent = {
+        ...eventData,
+        ...(data.event || {}),
+        allDay,
+        date: start.substring(0, 10)
+      };
       showToast("予定を追加しました ✨");
     }
 
+    updateLocalEventCache(savedEvent);
     closeModal();
     await syncEvents();
   } catch (err) {
     console.error('Failed to save event:', err);
+    showToast(err.message || "予定の保存に失敗しました");
   }
 }
 
@@ -508,12 +724,20 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("deleteEventBtn").addEventListener("click", deleteEvent);
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);
   document.getElementById("saveDraftEventBtn")?.addEventListener("click", saveEventDraft);
-  document.getElementById("loadDraftEventBtn")?.addEventListener("click", loadEventDraft);
+  document.getElementById("loadDraftEventBtn")?.addEventListener("click", () => loadEventDraft());
   document.getElementById("clearDraftEventBtn")?.addEventListener("click", clearEventDraft);
+  document.getElementById("nextEventStepBtn")?.addEventListener("click", () => {
+    setEventModalStep("details");
+    updatePreSavePreview();
+  });
+  document.getElementById("prevEventStepBtn")?.addEventListener("click", () => setEventModalStep("basic"));
+  document.getElementById("closeDraftListBtn")?.addEventListener("click", closeDraftListModal);
+  document.getElementById("clearAllDraftsBtn")?.addEventListener("click", clearEventDraft);
 
   // Outer click to close modals
   [
     { id: "eventModal", close: closeModal },
+    { id: "draftListModal", close: closeDraftListModal },
     { id: "listModal", close: closeListModal },
     { id: "groupModal", close: closeGroupModal },
     { id: "notificationHistoryModal", close: closeNotificationHistoryModal },
@@ -532,6 +756,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeModal();
+      closeDraftListModal();
       closeSidebar();
       closeListModal();
       closeGroupModal();

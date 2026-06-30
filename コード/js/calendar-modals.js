@@ -7,7 +7,28 @@ import { getLocalSettings } from './calendar-notification.js';
 export const eventModal = document.getElementById("eventModal");
 export const listModal = document.getElementById("listModal");
 
+export function setEventModalStep(step = "basic") {
+  const isDetails = step === "details";
+  const basicPanel = document.getElementById("eventStepBasic");
+  const detailsPanel = document.getElementById("eventStepDetails");
+  const basicTab = document.getElementById("eventStepBasicTab");
+  const detailsTab = document.getElementById("eventStepDetailsTab");
+  const prevBtn = document.getElementById("prevEventStepBtn");
+  const nextBtn = document.getElementById("nextEventStepBtn");
+  const saveBtn = document.getElementById("saveEventBtn");
+
+  if (eventModal) eventModal.dataset.step = isDetails ? "details" : "basic";
+  basicPanel?.classList.toggle("hidden", isDetails);
+  detailsPanel?.classList.toggle("hidden", !isDetails);
+  basicTab?.classList.toggle("active", !isDetails);
+  detailsTab?.classList.toggle("active", isDetails);
+  prevBtn?.classList.toggle("hidden", !isDetails);
+  nextBtn?.classList.toggle("hidden", isDetails);
+  saveBtn?.classList.toggle("hidden", !isDetails);
+}
+
 export function openModal() {
+  setEventModalStep("basic");
   eventModal.style.display = "flex";
 }
 

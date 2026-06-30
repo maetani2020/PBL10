@@ -26,11 +26,12 @@
           <span class="material-icons">admin_panel_settings</span>
           <strong>Admin</strong>
         </div>
-        <button class="admin-tab active" data-tab="overview">概要</button>
-        <button class="admin-tab" data-tab="users">ユーザー</button>
-        <button class="admin-tab" data-tab="groups">グループ共有</button>
-        <button class="admin-tab" data-tab="events">イベント</button>
-        <button id="adminLogoutBtn" class="logout-btn">ログアウト</button>
+        <button class="admin-tab active" data-tab="overview"><span class="material-icons">monitoring</span>概要</button>
+        <button class="admin-tab" data-tab="users"><span class="material-icons">group</span>ユーザー</button>
+        <button class="admin-tab" data-tab="groups"><span class="material-icons">groups</span>グループ</button>
+        <button class="admin-tab" data-tab="events"><span class="material-icons">event</span>イベント</button>
+        <button class="admin-tab" data-tab="announcements"><span class="material-icons">campaign</span>お知らせ</button>
+        <button id="adminLogoutBtn" class="logout-btn"><span class="material-icons">logout</span>ログアウト</button>
       </aside>
 
       <section class="admin-content">
@@ -43,23 +44,84 @@
         </header>
 
         <section id="overviewPanel" class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>システム概要</h2>
+              <p>ユーザー数、予定数、通知履歴などの利用状況を確認できます。</p>
+            </div>
+          </div>
           <div id="statsGrid" class="stats-grid"></div>
+          <div id="systemDetails" class="system-details"></div>
         </section>
 
         <section id="usersPanel" class="panel hidden">
-          <h2>ユーザー管理</h2>
+          <div class="panel-heading">
+            <div>
+              <h2>ユーザー管理</h2>
+              <p>ユーザー検索、管理者権限の変更、設定リセット、通知履歴削除ができます。</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <input id="userSearch" class="search-input" placeholder="ユーザー名・メールアドレスで検索" />
+            <select id="userRoleFilter" class="filter-select">
+              <option value="all">すべての権限</option>
+              <option value="admin">管理者</option>
+              <option value="user">一般ユーザー</option>
+            </select>
+          </div>
           <div id="usersTable" class="table-list"></div>
         </section>
 
         <section id="groupsPanel" class="panel hidden">
-          <h2>グループ共有管理</h2>
+          <div class="panel-heading">
+            <div>
+              <h2>グループ共有管理</h2>
+              <p>グループ、メンバー、メンバー権限を管理できます。</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <input id="groupSearch" class="search-input" placeholder="グループ名・オーナーで検索" />
+          </div>
           <div id="groupsList" class="table-list"></div>
         </section>
 
         <section id="eventsPanel" class="panel hidden">
-          <h2>イベント管理</h2>
-          <input id="eventSearch" class="search-input" placeholder="タイトル・作成者・グループで検索" />
+          <div class="panel-heading">
+            <div>
+              <h2>イベント管理</h2>
+              <p>全ユーザーの予定を検索し、不要な予定を削除できます。</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <input id="eventSearch" class="search-input" placeholder="タイトル・作成者・グループで検索" />
+            <select id="eventVisibilityFilter" class="filter-select">
+              <option value="all">すべての公開範囲</option>
+              <option value="public">全体公開</option>
+              <option value="group">グループ共有</option>
+              <option value="private">自分のみ</option>
+            </select>
+            <select id="eventTypeFilter" class="filter-select">
+              <option value="all">すべての種類</option>
+              <option value="event">通常予定</option>
+              <option value="task">タスク</option>
+              <option value="mail">メール</option>
+            </select>
+          </div>
           <div id="eventsList" class="table-list"></div>
+        </section>
+
+        <section id="announcementsPanel" class="panel hidden">
+          <div class="panel-heading">
+            <div>
+              <h2>お知らせ送信</h2>
+              <p>全ユーザーの通知履歴へ管理者からのお知らせを配信します。</p>
+            </div>
+          </div>
+          <div class="announcement-form">
+            <input id="adminAnnouncementTitle" type="text" maxlength="80" placeholder="お知らせタイトル" />
+            <textarea id="adminAnnouncementMessage" rows="5" maxlength="1000" placeholder="お知らせ本文"></textarea>
+            <button id="sendAnnouncementBtn" class="primary-wide"><span class="material-icons">send</span>送信</button>
+          </div>
         </section>
       </section>
     </main>

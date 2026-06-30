@@ -29,6 +29,12 @@ export const weekView = document.getElementById("weekView");
 export const dayView = document.getElementById("dayView");
 export const currentTitle = document.getElementById("currentTitle");
 
+function applyEventColor(element, event) {
+  const color = event.color || "#007AFF";
+  element.style.backgroundColor = color;
+  element.style.borderColor = color;
+}
+
 export function openYearJumpModal() {
   const modal = document.getElementById("yearJumpModal");
   const yearInput = document.getElementById("jumpYearInput");
@@ -167,6 +173,7 @@ export function renderMonthView() {
     dayEvents.forEach((event) => {
       const eventDiv = document.createElement("div");
       eventDiv.className = `event ${event.visibility}`;
+      applyEventColor(eventDiv, event);
       
       let badgeHtml = "";
       const showHp = document.getElementById("showHpMotivation")?.checked ?? false;
@@ -282,6 +289,7 @@ export function renderWeekView() {
       dayHourEvents.forEach((event) => {
         const eventDiv = document.createElement("div");
         eventDiv.className = `event ${event.visibility}`;
+        applyEventColor(eventDiv, event);
         
         let badgeHtml = "";
         const showHp = document.getElementById("showHpMotivation")?.checked ?? false;
@@ -343,6 +351,7 @@ export function renderDayView() {
     events.forEach((event) => {
       const card = document.createElement("div");
       card.className = "event-card";
+      card.style.borderLeft = `5px solid ${event.color || "#007AFF"}`;
 
       let visibilityLabel = "";
       if (event.visibility === "public") visibilityLabel = "全体公開";
@@ -439,6 +448,7 @@ export function renderScheduleList(mode) {
   events.forEach((event) => {
     const card = document.createElement("div");
     card.className = "event-card";
+    card.style.borderLeft = `5px solid ${event.color || "#007AFF"}`;
 
     let visibility = "";
     if (event.visibility === "public") {

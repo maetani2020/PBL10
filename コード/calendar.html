@@ -332,6 +332,12 @@
         <div class="modal-body">
           <div id="preSaveWarning" class="alert-box hidden"></div>
 
+          <div class="event-step-nav" aria-label="予定登録ステップ">
+            <span id="eventStepBasicTab" class="event-step-pill active">基本情報</span>
+            <span id="eventStepDetailsTab" class="event-step-pill">詳細設定</span>
+          </div>
+
+          <div id="eventStepBasic" class="event-step-panel">
           <input
             type="text"
             id="eventTitle"
@@ -356,7 +362,9 @@
             <option value="task">タスク</option>
             <option value="mail">メール送信リマインド</option>
           </select>
+          </div>
 
+          <div id="eventStepDetails" class="event-step-panel hidden">
           <!-- 予定のオプション：通知タイミング -->
           <div class="event-extra-options">
             <label>通知タイミング</label>
@@ -442,15 +450,31 @@
           <div id="restSuggestions" class="rest-suggestions hidden"></div>
 
           <textarea id="eventMemo" rows="3" placeholder="メモ"></textarea>
+          </div>
         </div>
 
         <div class="modal-actions">
           <button id="saveDraftEventBtn" type="button" class="secondary-btn">下書き保存</button>
           <button id="loadDraftEventBtn" type="button" class="secondary-btn">下書き読込</button>
           <button id="clearDraftEventBtn" type="button" class="danger-btn">下書き削除</button>
+          <button id="prevEventStepBtn" type="button" class="secondary-btn hidden">戻る</button>
+          <button id="nextEventStepBtn" type="button" class="primary-btn">次へ</button>
           <button id="saveEventBtn">保存</button>
           <button id="deleteEventBtn">削除</button>
           <button id="closeModalBtn">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="draftListModal" class="modal">
+      <div class="modal-content draft-list-modal">
+        <h2>下書き一覧</h2>
+        <div class="modal-body">
+          <div id="draftListContainer" class="draft-list-container"></div>
+        </div>
+        <div class="modal-actions" style="margin-top: 10px;">
+          <button id="clearAllDraftsBtn" class="danger-btn" style="flex:1;">すべて削除</button>
+          <button id="closeDraftListBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
         </div>
       </div>
     </div>
@@ -630,17 +654,6 @@
 
         <!-- Primary Button -->
         <button id="authPrimaryBtn" class="auth-primary-btn">サインイン</button>
-
-        <!-- Google Login Button -->
-        <button id="googleLoginBtn" class="auth-google-btn">
-          <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
-            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
-            <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-          </svg>
-          Googleでサインイン
-        </button>
 
         <!-- Footer Links -->
         <div class="auth-footer-links">
@@ -924,7 +937,6 @@
     </div>
 
     <!-- JavaScript -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script type="module" src="js/calendar-main.js"></script>
   </body>
 </html>

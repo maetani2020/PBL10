@@ -4,6 +4,37 @@ const os = require('os');
 const { query } = require('../db');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 
+let previousCpuSnapshot = getCpuSnapshot();
+
+function bytesToMb(bytes) {
+    return Math.round(bytes / (1024 * 1024)) + ' MB';
+}
+
+function toPercent(value) {
+    const normalized = Math.max(0, Math.min(100, Number(value) || 0));
+    return normalized.toFixed(1) + '%';
+}
+
+function getCpuSnapshot() {
+    return os.cpus().reduce((snapshot, cpu) => {
+        const times = cpu.times;
+        const total = Object.values(times).reduce((sum, time) => sum + time, 0);
+        snapshot.idle += times.idle;
+        snapshot.total += total;
+        return snapshot;
+    }, { idle: 0, total: 0 });
+}
+
+function getCpuUsagePercent() {
+    const currentSnapshot = getCpuSnapshot();
+    const idleDiff = currentSnapshot.idle - previousCpuSnapshot.idle;
+    const totalDiff = currentSnapshot.total - previousCpuSnapshot.total;
+    previousCpuSnapshot = currentSnapshot;
+
+    if (totalDiff <= 0) return 0;
+    return (1 - idleDiff / totalDiff) * 100;
+}
+
 // IP Whitelist middleware (Optional, recommended)
 function verifyIpWhitelist(req, res, next) {
     const whitelistStr = process.env.ADMIN_IP_WHITELIST;
@@ -33,7 +64,16 @@ router.use(verifyIpWhitelist);
 router.get('/users', async (req, res) => {
     try {
         const users = await query.all(
-            'SELECT id, email, display_name, role, created_at FROM users ORDER BY id ASC'
+            `SELECT u.id, u.email, u.display_name, u.role, u.created_at, u.last_activity_at,
+                    COUNT(DISTINCT e.id) AS event_count,
+                    COUNT(DISTINCT gm.group_id) AS group_count,
+                    COUNT(DISTINCT nh.id) AS notification_count
+             FROM users u
+             LEFT JOIN events e ON e.creator_id = u.id
+             LEFT JOIN group_members gm ON gm.user_id = u.id
+             LEFT JOIN notification_history nh ON nh.user_id = u.id
+             GROUP BY u.id, u.email, u.display_name, u.role, u.created_at, u.last_activity_at
+             ORDER BY u.id ASC`
         );
         res.json(users);
     } catch (err) {
@@ -131,37 +171,63 @@ router.post('/announcements', async (req, res) => {
 router.get('/system-stats', async (req, res) => {
     try {
         // 1. Get counts from Database
+        const today = new Date();
+        const todayPrefix = [
+            today.getFullYear(),
+            String(today.getMonth() + 1).padStart(2, '0'),
+            String(today.getDate()).padStart(2, '0')
+        ].join('-');
+
         const userCount = await query.get('SELECT COUNT(*) as count FROM users');
+        const adminCount = await query.get("SELECT COUNT(*) as count FROM users WHERE role = 'admin'");
         const eventCount = await query.get('SELECT COUNT(*) as count FROM events');
+        const todayEventCount = await query.get('SELECT COUNT(*) as count FROM events WHERE start_time LIKE ?', [`${todayPrefix}%`]);
         const groupCount = await query.get('SELECT COUNT(*) as count FROM groups');
         const taskCount = await query.get('SELECT COUNT(*) as count FROM tasks');
+        const notificationCount = await query.get('SELECT COUNT(*) as count FROM notification_history');
 
         // 2. Fetch System/Runtime Info
         const memoryUsage = process.memoryUsage();
+        const totalMemory = os.totalmem();
+        const freeMemory = os.freemem();
+        const usedMemory = totalMemory - freeMemory;
+        const memoryUsagePercent = totalMemory > 0 ? (usedMemory / totalMemory) * 100 : 0;
+        const cpuUsagePercent = getCpuUsagePercent();
         const stats = {
+            updatedAt: new Date().toISOString(),
             os: {
                 platform: os.platform(),
                 arch: os.arch(),
                 release: os.release(),
-                totalmem: Math.round(os.totalmem() / (1024 * 1024)) + ' MB',
-                freemem: Math.round(os.freemem() / (1024 * 1024)) + ' MB',
-                loadavg: os.loadavg(),
+                totalmem: bytesToMb(totalMemory),
+                freemem: bytesToMb(freeMemory),
+                usedmem: bytesToMb(usedMemory),
+                memoryUsage: toPercent(memoryUsagePercent),
+                memoryUsagePercent: Number(memoryUsagePercent.toFixed(1)),
+                cpuUsage: toPercent(cpuUsagePercent),
+                cpuUsagePercent: Number(cpuUsagePercent.toFixed(1)),
+                loadavg: os.loadavg().map(value => Number(value.toFixed(2))),
                 cpus: os.cpus().length
             },
             process: {
                 uptime: Math.round(process.uptime()) + ' 秒',
+                uptimeSeconds: Math.round(process.uptime()),
                 memory: {
-                    rss: Math.round(memoryUsage.rss / (1024 * 1024)) + ' MB',
-                    heapTotal: Math.round(memoryUsage.heapTotal / (1024 * 1024)) + ' MB',
-                    heapUsed: Math.round(memoryUsage.heapUsed / (1024 * 1024)) + ' MB',
-                    external: Math.round(memoryUsage.external / (1024 * 1024)) + ' MB'
+                    rss: bytesToMb(memoryUsage.rss),
+                    heapTotal: bytesToMb(memoryUsage.heapTotal),
+                    heapUsed: bytesToMb(memoryUsage.heapUsed),
+                    external: bytesToMb(memoryUsage.external),
+                    heapUsage: toPercent(memoryUsage.heapTotal > 0 ? (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100 : 0)
                 }
             },
             database: {
                 users: userCount.count,
+                admins: adminCount.count,
                 events: eventCount.count,
+                todayEvents: todayEventCount.count,
                 groups: groupCount.count,
-                tasks: taskCount.count
+                tasks: taskCount.count,
+                notificationHistory: notificationCount.count
             }
         };
 
@@ -186,7 +252,7 @@ router.get('/groups', async (req, res) => {
              LEFT JOIN group_members gm ON g.id = gm.group_id
              LEFT JOIN calendars c ON c.group_id = g.id
              LEFT JOIN events e ON e.calendar_id = c.id
-             GROUP BY g.id
+             GROUP BY g.id, g.name, g.owner_id, g.created_at, u.display_name, u.email
              ORDER BY g.created_at DESC`
         );
         res.json(groups);
@@ -280,6 +346,8 @@ router.get('/events', async (req, res) => {
     try {
         const events = await query.all(
             `SELECT e.id, e.title, e.start_time, e.end_time, e.visibility, e.event_type,
+                    e.color, e.memo, e.hp_consumption, e.motivation_consumption,
+                    e.mail_reminder_enabled, e.mail_remind_at, e.mail_sent,
                     e.creator_id, creator.display_name AS creator_name, creator.email AS creator_email,
                     c.id AS calendar_id, c.name AS calendar_name,
                     g.id AS group_id, g.name AS group_name
