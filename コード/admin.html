@@ -31,6 +31,7 @@
         <button class="admin-tab" data-tab="groups"><span class="material-icons">groups</span>グループ</button>
         <button class="admin-tab" data-tab="events"><span class="material-icons">event</span>イベント</button>
         <button class="admin-tab" data-tab="announcements"><span class="material-icons">campaign</span>お知らせ</button>
+        <button class="admin-tab" data-tab="maintenance"><span class="material-icons">admin_panel_settings</span>保守</button>
         <button id="adminLogoutBtn" class="logout-btn"><span class="material-icons">logout</span>ログアウト</button>
       </aside>
 
@@ -122,6 +123,28 @@
             <textarea id="adminAnnouncementMessage" rows="5" maxlength="1000" placeholder="お知らせ本文"></textarea>
             <button id="sendAnnouncementBtn" class="primary-wide"><span class="material-icons">send</span>送信</button>
           </div>
+        </section>
+
+        <section id="maintenancePanel" class="panel hidden">
+          <div class="panel-heading">
+            <div>
+              <h2>バックアップ・操作ログ</h2>
+              <p>管理用データのバックアップ作成と、管理者が行った削除・権限変更などの履歴を確認できます。</p>
+            </div>
+          </div>
+          <div class="maintenance-grid">
+            <article class="maintenance-card">
+              <h3>データバックアップ</h3>
+              <p>パスワードや認証トークンを除いたJSONバックアップを作成します。</p>
+              <button id="createBackupBtn" class="primary-wide"><span class="material-icons">download</span>バックアップを作成</button>
+            </article>
+            <article class="maintenance-card">
+              <h3>管理者操作ログ</h3>
+              <p>直近の管理者操作を表示します。</p>
+              <button id="refreshLogsBtn" class="ghost-btn"><span class="material-icons">refresh</span>ログ更新</button>
+            </article>
+          </div>
+          <div id="adminLogsList" class="table-list maintenance-logs"></div>
         </section>
       </section>
     </main>

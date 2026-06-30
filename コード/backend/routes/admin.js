@@ -35,6 +35,30 @@ function getCpuUsagePercent() {
     return (1 - idleDiff / totalDiff) * 100;
 }
 
+function getClientIp(req) {
+    const clientIp = req.ip || req.connection.remoteAddress || '';
+    return clientIp.startsWith('::ffff:') ? clientIp.substring(7) : clientIp;
+}
+
+async function logAdminAction(req, action, targetType = null, targetId = null, details = {}) {
+    try {
+        await query.run(
+            `INSERT INTO admin_logs (admin_user_id, action, target_type, target_id, details, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+                req.user?.id || null,
+                action,
+                targetType,
+                targetId == null ? null : String(targetId),
+                JSON.stringify(details || {}),
+                getClientIp(req)
+            ]
+        );
+    } catch (err) {
+        console.error('Admin log write error:', err);
+    }
+}
+
 // IP Whitelist middleware (Optional, recommended)
 function verifyIpWhitelist(req, res, next) {
     const whitelistStr = process.env.ADMIN_IP_WHITELIST;
@@ -97,12 +121,18 @@ router.put('/users/:id/role', async (req, res) => {
             return res.status(400).json({ error: '自分自身の管理者権限を変更することはできません' });
         }
 
-        const user = await query.get('SELECT id FROM users WHERE id = ?', [userId]);
+        const user = await query.get('SELECT id, email, display_name, role FROM users WHERE id = ?', [userId]);
         if (!user) {
             return res.status(404).json({ error: 'ユーザーが見つかりません' });
         }
 
         await query.run('UPDATE users SET role = ? WHERE id = ?', [role, userId]);
+        await logAdminAction(req, 'user:role:update', 'user', userId, {
+            email: user.email,
+            displayName: user.display_name,
+            beforeRole: user.role,
+            afterRole: role
+        });
         res.json({ message: 'ユーザー権限を更新しました' });
     } catch (err) {
         console.error('Admin update role error:', err);
@@ -120,12 +150,17 @@ router.delete('/users/:id', async (req, res) => {
             return res.status(400).json({ error: '自分自身のアカウントを削除することはできません' });
         }
 
-        const user = await query.get('SELECT id FROM users WHERE id = ?', [userId]);
+        const user = await query.get('SELECT id, email, display_name, role FROM users WHERE id = ?', [userId]);
         if (!user) {
             return res.status(404).json({ error: 'ユーザーが見つかりません' });
         }
 
         await query.run('DELETE FROM users WHERE id = ?', [userId]);
+        await logAdminAction(req, 'user:delete', 'user', userId, {
+            email: user.email,
+            displayName: user.display_name,
+            role: user.role
+        });
         res.json({ message: 'ユーザーアカウントを削除しました' });
     } catch (err) {
         console.error('Admin delete user error:', err);
@@ -160,6 +195,10 @@ router.post('/announcements', async (req, res) => {
         console.log(`Sent to ${users.length} users.`);
         console.log(`---------------------------------------\n`);
 
+        await logAdminAction(req, 'announcement:send', 'announcement', null, {
+            title: title.trim(),
+            userCount: users.length
+        });
         res.json({ message: `${users.length}名のユーザーにお知らせを配信しました` });
     } catch (err) {
         console.error('Admin broadcast announcement error:', err);
@@ -185,6 +224,7 @@ router.get('/system-stats', async (req, res) => {
         const groupCount = await query.get('SELECT COUNT(*) as count FROM groups');
         const taskCount = await query.get('SELECT COUNT(*) as count FROM tasks');
         const notificationCount = await query.get('SELECT COUNT(*) as count FROM notification_history');
+        const adminLogCount = await query.get('SELECT COUNT(*) as count FROM admin_logs');
 
         // 2. Fetch System/Runtime Info
         const memoryUsage = process.memoryUsage();
@@ -227,7 +267,8 @@ router.get('/system-stats', async (req, res) => {
                 todayEvents: todayEventCount.count,
                 groups: groupCount.count,
                 tasks: taskCount.count,
-                notificationHistory: notificationCount.count
+                notificationHistory: notificationCount.count,
+                adminLogs: adminLogCount.count
             }
         };
 
@@ -235,6 +276,79 @@ router.get('/system-stats', async (req, res) => {
     } catch (err) {
         console.error('Admin get system stats error:', err);
         res.status(500).json({ error: 'サーバーエラーが発生しました' });
+    }
+});
+
+// GET /api/admin/backup - Export safe application data as JSON
+router.get('/backup', async (req, res) => {
+    try {
+        const backup = {
+            generatedAt: new Date().toISOString(),
+            generatedBy: {
+                id: req.user.id,
+                email: req.user.email,
+                displayName: req.user.display_name
+            },
+            format: 'pbl-calendar-backup-v1',
+            note: 'Password hashes, refresh tokens, reset tokens, blacklisted tokens, and push subscription secrets are not included.',
+            tables: {
+                users: await query.all(
+                    `SELECT id, email, display_name, max_hp, max_motivation, recovery_rate,
+                            warning_threshold, role, notification_settings, last_activity_at, created_at
+                     FROM users
+                     ORDER BY id ASC`
+                ),
+                groups: await query.all('SELECT * FROM groups ORDER BY id ASC'),
+                groupMembers: await query.all('SELECT * FROM group_members ORDER BY id ASC'),
+                calendars: await query.all('SELECT * FROM calendars ORDER BY id ASC'),
+                calendarShares: await query.all('SELECT * FROM calendar_shares ORDER BY id ASC'),
+                events: await query.all('SELECT * FROM events ORDER BY created_at ASC'),
+                tasks: await query.all('SELECT * FROM tasks ORDER BY id ASC'),
+                householdAccounts: await query.all('SELECT * FROM household_accounts ORDER BY id ASC'),
+                notifications: await query.all('SELECT * FROM notifications ORDER BY id ASC'),
+                notificationHistory: await query.all('SELECT * FROM notification_history ORDER BY id ASC'),
+                adminLogs: await query.all('SELECT * FROM admin_logs ORDER BY id ASC')
+            }
+        };
+
+        await logAdminAction(req, 'backup:create', 'system', 'backup', {
+            tableCount: Object.keys(backup.tables).length,
+            userCount: backup.tables.users.length,
+            eventCount: backup.tables.events.length,
+            groupCount: backup.tables.groups.length
+        });
+
+        res.setHeader('Content-Disposition', `attachment; filename="pbl-calendar-backup-${Date.now()}.json"`);
+        res.json(backup);
+    } catch (err) {
+        console.error('Admin backup error:', err);
+        res.status(500).json({ error: 'バックアップの作成に失敗しました' });
+    }
+});
+
+// GET /api/admin/logs - List admin operation logs
+router.get('/logs', async (req, res) => {
+    try {
+        const requestedLimit = Number(req.query.limit || 100);
+        const limit = Math.max(1, Math.min(300, Number.isFinite(requestedLimit) ? requestedLimit : 100));
+        const logs = await query.all(
+            `SELECT al.id, al.admin_user_id, al.action, al.target_type, al.target_id,
+                    al.details, al.ip_address, al.created_at,
+                    u.email AS admin_email, u.display_name AS admin_name
+             FROM admin_logs al
+             LEFT JOIN users u ON al.admin_user_id = u.id
+             ORDER BY al.created_at DESC, al.id DESC
+             LIMIT ?`,
+            [limit]
+        );
+
+        res.json(logs.map(log => ({
+            ...log,
+            details: log.details ? JSON.parse(log.details) : {}
+        })));
+    } catch (err) {
+        console.error('Admin get logs error:', err);
+        res.status(500).json({ error: '管理者操作ログの取得に失敗しました' });
     }
 });
 
@@ -288,17 +402,34 @@ router.put('/groups/:groupId/members/:userId/role', async (req, res) => {
     }
 
     try {
-        const group = await query.get('SELECT owner_id FROM groups WHERE id = ?', [req.params.groupId]);
+        const group = await query.get('SELECT id, name, owner_id FROM groups WHERE id = ?', [req.params.groupId]);
         if (!group) return res.status(404).json({ error: 'グループが見つかりません' });
 
         if (parseInt(req.params.userId) === group.owner_id && role !== 'admin') {
             return res.status(400).json({ error: 'グループオーナーは管理者から変更できません' });
         }
 
+        const member = await query.get(
+            `SELECT gm.role, u.email, u.display_name
+             FROM group_members gm
+             JOIN users u ON gm.user_id = u.id
+             WHERE gm.group_id = ? AND gm.user_id = ?`,
+            [req.params.groupId, req.params.userId]
+        );
+
         await query.run(
             'UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?',
             [role, req.params.groupId, req.params.userId]
         );
+        await logAdminAction(req, 'group_member:role:update', 'group_member', `${req.params.groupId}:${req.params.userId}`, {
+            groupId: req.params.groupId,
+            groupName: group.name,
+            userId: req.params.userId,
+            userEmail: member?.email,
+            userName: member?.display_name,
+            beforeRole: member?.role,
+            afterRole: role
+        });
         res.json({ message: 'グループ権限を更新しました' });
     } catch (err) {
         console.error('Admin update group role error:', err);
@@ -309,17 +440,33 @@ router.put('/groups/:groupId/members/:userId/role', async (req, res) => {
 // DELETE /api/admin/groups/:groupId/members/:userId - Remove member from any group
 router.delete('/groups/:groupId/members/:userId', async (req, res) => {
     try {
-        const group = await query.get('SELECT owner_id FROM groups WHERE id = ?', [req.params.groupId]);
+        const group = await query.get('SELECT id, name, owner_id FROM groups WHERE id = ?', [req.params.groupId]);
         if (!group) return res.status(404).json({ error: 'グループが見つかりません' });
 
         if (parseInt(req.params.userId) === group.owner_id) {
             return res.status(400).json({ error: 'グループオーナーは削除できません。先にグループを削除してください' });
         }
 
+        const member = await query.get(
+            `SELECT gm.role, u.email, u.display_name
+             FROM group_members gm
+             JOIN users u ON gm.user_id = u.id
+             WHERE gm.group_id = ? AND gm.user_id = ?`,
+            [req.params.groupId, req.params.userId]
+        );
+
         await query.run(
             'DELETE FROM group_members WHERE group_id = ? AND user_id = ?',
             [req.params.groupId, req.params.userId]
         );
+        await logAdminAction(req, 'group_member:remove', 'group_member', `${req.params.groupId}:${req.params.userId}`, {
+            groupId: req.params.groupId,
+            groupName: group.name,
+            userId: req.params.userId,
+            userEmail: member?.email,
+            userName: member?.display_name,
+            role: member?.role
+        });
         res.json({ message: 'メンバーを削除しました' });
     } catch (err) {
         console.error('Admin remove group member error:', err);
@@ -330,10 +477,14 @@ router.delete('/groups/:groupId/members/:userId', async (req, res) => {
 // DELETE /api/admin/groups/:id - Delete any group
 router.delete('/groups/:id', async (req, res) => {
     try {
-        const group = await query.get('SELECT id FROM groups WHERE id = ?', [req.params.id]);
+        const group = await query.get('SELECT id, name, owner_id FROM groups WHERE id = ?', [req.params.id]);
         if (!group) return res.status(404).json({ error: 'グループが見つかりません' });
 
         await query.run('DELETE FROM groups WHERE id = ?', [req.params.id]);
+        await logAdminAction(req, 'group:delete', 'group', req.params.id, {
+            groupName: group.name,
+            ownerId: group.owner_id
+        });
         res.json({ message: 'グループを削除しました' });
     } catch (err) {
         console.error('Admin delete group error:', err);
@@ -368,10 +519,15 @@ router.get('/events', async (req, res) => {
 // DELETE /api/admin/events/:id - Delete any event
 router.delete('/events/:id', async (req, res) => {
     try {
-        const event = await query.get('SELECT id FROM events WHERE id = ?', [req.params.id]);
+        const event = await query.get('SELECT id, title, start_time, creator_id FROM events WHERE id = ?', [req.params.id]);
         if (!event) return res.status(404).json({ error: 'イベントが見つかりません' });
 
         await query.run('DELETE FROM events WHERE id = ?', [req.params.id]);
+        await logAdminAction(req, 'event:delete', 'event', req.params.id, {
+            title: event.title,
+            startTime: event.start_time,
+            creatorId: event.creator_id
+        });
         res.json({ message: 'イベントを削除しました' });
     } catch (err) {
         console.error('Admin delete event error:', err);
@@ -382,6 +538,9 @@ router.delete('/events/:id', async (req, res) => {
 // DELETE /api/admin/users/:id/settings - Reset user settings
 router.delete('/users/:id/settings', async (req, res) => {
     try {
+        const user = await query.get('SELECT id, email, display_name FROM users WHERE id = ?', [req.params.id]);
+        if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+
         await query.run(
             `UPDATE users
              SET max_hp = 100,
@@ -392,6 +551,10 @@ router.delete('/users/:id/settings', async (req, res) => {
              WHERE id = ?`,
             ['{"events":true,"tasks":true,"game":true,"email":true}', req.params.id]
         );
+        await logAdminAction(req, 'user_settings:reset', 'user', req.params.id, {
+            email: user.email,
+            displayName: user.display_name
+        });
         res.json({ message: 'ユーザー設定を初期化しました' });
     } catch (err) {
         console.error('Admin reset user settings error:', err);
@@ -402,7 +565,16 @@ router.delete('/users/:id/settings', async (req, res) => {
 // DELETE /api/admin/users/:id/notification-history - Delete user notification history
 router.delete('/users/:id/notification-history', async (req, res) => {
     try {
+        const user = await query.get('SELECT id, email, display_name FROM users WHERE id = ?', [req.params.id]);
+        if (!user) return res.status(404).json({ error: 'ユーザーが見つかりません' });
+
+        const historyCount = await query.get('SELECT COUNT(*) as count FROM notification_history WHERE user_id = ?', [req.params.id]);
         await query.run('DELETE FROM notification_history WHERE user_id = ?', [req.params.id]);
+        await logAdminAction(req, 'notification_history:delete', 'user', req.params.id, {
+            email: user.email,
+            displayName: user.display_name,
+            deletedCount: historyCount?.count || 0
+        });
         res.json({ message: '通知履歴を削除しました' });
     } catch (err) {
         console.error('Admin delete notification history error:', err);

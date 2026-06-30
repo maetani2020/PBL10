@@ -404,6 +404,40 @@ select:disabled {
   max-width: 720px;
 }
 
+.maintenance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.maintenance-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.maintenance-card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.maintenance-card p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.maintenance-card .ghost-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.maintenance-logs {
+  margin-top: 10px;
+}
+
 .primary-wide {
   display: inline-flex;
   align-items: center;

@@ -289,7 +289,22 @@ async function initDb() {
             )
         `);
 
-        // 14. Create JWT Blacklist Table (for logout token invalidation)
+        // 14. Create Admin Logs Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_user_id INTEGER,
+                action TEXT NOT NULL,
+                target_type TEXT,
+                target_id TEXT,
+                details TEXT,
+                ip_address TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        // 15. Create JWT Blacklist Table (for logout token invalidation)
         await createTable(`
             CREATE TABLE IF NOT EXISTS blacklisted_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

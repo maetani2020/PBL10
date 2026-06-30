@@ -7,6 +7,7 @@ let adminUser = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
 let usersCache = [];
 let groupsCache = [];
 let eventsCache = [];
+let adminLogsCache = [];
 let statsRefreshTimer = null;
 
 const loginView = document.getElementById('adminLogin');
@@ -55,6 +56,43 @@ function visibilityLabel(value) {
 function formatDateTime(value) {
   if (!value) return '-';
   return String(value).replace('T', ' ').slice(0, 16);
+}
+
+function adminActionLabel(action) {
+  const labels = {
+    'backup:create': 'バックアップ作成',
+    'user:role:update': 'ユーザー権限変更',
+    'user:delete': 'ユーザー削除',
+    'announcement:send': 'お知らせ送信',
+    'group_member:role:update': 'グループ権限変更',
+    'group_member:remove': 'グループメンバー削除',
+    'group:delete': 'グループ削除',
+    'event:delete': 'イベント削除',
+    'user_settings:reset': 'ユーザー設定リセット',
+    'notification_history:delete': '通知履歴削除'
+  };
+  return labels[action] || action || '-';
+}
+
+function formatLogDetails(details) {
+  if (!details || typeof details !== 'object') return '-';
+  const entries = Object.entries(details)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .slice(0, 6);
+  if (!entries.length) return '-';
+  return entries.map(([key, value]) => `${key}: ${value}`).join(' / ');
+}
+
+function downloadJsonFile(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 async function api(path, options = {}) {
@@ -148,7 +186,7 @@ async function login() {
 }
 
 async function loadAll() {
-  await Promise.all([loadStats(), loadUsers(), loadGroups(), loadEvents()]);
+  await Promise.all([loadStats(), loadUsers(), loadGroups(), loadEvents(), loadAdminLogs()]);
 }
 
 async function loadStats() {
@@ -163,6 +201,7 @@ async function loadStats() {
     ['グループ', stats.database?.groups ?? 0],
     ['タスク', stats.database?.tasks ?? 0],
     ['通知履歴', stats.database?.notificationHistory ?? 0],
+    ['操作ログ', stats.database?.adminLogs ?? 0],
     ['稼働時間', stats.process?.uptime ?? '-'],
     ['Nodeメモリ', stats.process?.memory?.heapUsed ?? '-']
   ];
@@ -328,6 +367,41 @@ function renderEvents() {
   `).join('') || '<p class="empty-text">該当するイベントはありません</p>';
 }
 
+async function createBackup() {
+  const backup = await api('/api/admin/backup');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  downloadJsonFile(backup, `pbl-calendar-backup-${stamp}.json`);
+  showToast('バックアップを作成しました');
+  await Promise.all([loadAdminLogs(), loadStats()]);
+}
+
+async function loadAdminLogs() {
+  adminLogsCache = await api('/api/admin/logs?limit=100');
+  renderAdminLogs();
+}
+
+function renderAdminLogs() {
+  const container = document.getElementById('adminLogsList');
+  if (!container) return;
+
+  container.innerHTML = adminLogsCache.map(log => `
+    <article class="row-card">
+      <div class="row-head">
+        <div>
+          <div class="row-title">${escapeHtml(adminActionLabel(log.action))} <span class="row-meta">#${escapeHtml(log.id)}</span></div>
+          <div class="row-meta">${escapeHtml(formatDateTime(log.created_at))} / ${escapeHtml(log.admin_name || log.admin_email || 'Unknown admin')}</div>
+          <div class="chips">
+            <span class="chip">${escapeHtml(log.target_type || 'system')}</span>
+            <span class="chip">対象 ${escapeHtml(log.target_id || '-')}</span>
+            <span class="chip">IP ${escapeHtml(log.ip_address || '-')}</span>
+          </div>
+          <div class="row-meta">${escapeHtml(formatLogDetails(log.details))}</div>
+        </div>
+      </div>
+    </article>
+  `).join('') || '<p class="empty-text">管理者操作ログはまだありません</p>';
+}
+
 async function sendAnnouncement() {
   const titleEl = document.getElementById('adminAnnouncementTitle');
   const messageEl = document.getElementById('adminAnnouncementMessage');
@@ -348,7 +422,7 @@ async function sendAnnouncement() {
   titleEl.value = '';
   messageEl.value = '';
   showToast(data.message || 'お知らせを送信しました');
-  await loadStats();
+  await Promise.all([loadStats(), loadAdminLogs()]);
 }
 
 async function handleClick(event) {
@@ -360,18 +434,19 @@ async function handleClick(event) {
       if (!confirm('このユーザーの設定を初期化しますか？')) return;
       await api(`/api/admin/users/${target.dataset.userSettings}/settings`, { method: 'DELETE' });
       showToast('設定を初期化しました');
+      await loadAdminLogs();
     }
     if (target.dataset.userHistory) {
       if (!confirm('このユーザーの通知履歴を削除しますか？')) return;
       await api(`/api/admin/users/${target.dataset.userHistory}/notification-history`, { method: 'DELETE' });
       showToast('通知履歴を削除しました');
-      await Promise.all([loadUsers(), loadStats()]);
+      await Promise.all([loadUsers(), loadStats(), loadAdminLogs()]);
     }
     if (target.dataset.userDelete) {
       if (!confirm('このユーザーを削除しますか？関連データも削除されます。')) return;
       await api(`/api/admin/users/${target.dataset.userDelete}`, { method: 'DELETE' });
       showToast('ユーザーを削除しました');
-      await Promise.all([loadUsers(), loadGroups(), loadEvents(), loadStats()]);
+      await Promise.all([loadUsers(), loadGroups(), loadEvents(), loadStats(), loadAdminLogs()]);
     }
     if (target.dataset.groupMembers) {
       await renderMembers(target.dataset.groupMembers);
@@ -380,20 +455,20 @@ async function handleClick(event) {
       if (!confirm('このグループを削除しますか？関連イベントも削除されます。')) return;
       await api(`/api/admin/groups/${target.dataset.groupDelete}`, { method: 'DELETE' });
       showToast('グループを削除しました');
-      await Promise.all([loadGroups(), loadEvents(), loadStats()]);
+      await Promise.all([loadGroups(), loadEvents(), loadStats(), loadAdminLogs()]);
     }
     if (target.dataset.memberRemove) {
       const [groupId, userId] = target.dataset.memberRemove.split(':');
       if (!confirm('このメンバーをグループから削除しますか？')) return;
       await api(`/api/admin/groups/${groupId}/members/${userId}`, { method: 'DELETE' });
       showToast('メンバーを削除しました');
-      await Promise.all([renderMembers(groupId, true), loadGroups()]);
+      await Promise.all([renderMembers(groupId, true), loadGroups(), loadAdminLogs()]);
     }
     if (target.dataset.eventDelete) {
       if (!confirm('このイベントを削除しますか？')) return;
       await api(`/api/admin/events/${encodeURIComponent(target.dataset.eventDelete)}`, { method: 'DELETE' });
       showToast('イベントを削除しました');
-      await Promise.all([loadEvents(), loadStats()]);
+      await Promise.all([loadEvents(), loadStats(), loadAdminLogs()]);
     }
   } catch (err) {
     showToast(err.message);
@@ -410,7 +485,7 @@ async function handleChange(event) {
         body: JSON.stringify({ role: memberSelect.value })
       });
       showToast('グループ権限を更新しました');
-      await renderMembers(groupId, true);
+      await Promise.all([renderMembers(groupId, true), loadAdminLogs()]);
     } catch (err) {
       showToast(err.message);
     }
@@ -426,7 +501,7 @@ async function handleChange(event) {
         body: JSON.stringify({ role: userSelect.value })
       });
       showToast('ユーザー権限を更新しました');
-      await loadUsers();
+      await Promise.all([loadUsers(), loadAdminLogs()]);
     } catch (err) {
       showToast(err.message);
       await loadUsers();
@@ -440,6 +515,9 @@ function bindTabs() {
       document.querySelectorAll('.admin-tab').forEach(item => item.classList.toggle('active', item === button));
       document.querySelectorAll('.panel').forEach(panel => panel.classList.add('hidden'));
       document.getElementById(button.dataset.tab + 'Panel').classList.remove('hidden');
+      if (button.dataset.tab === 'maintenance') {
+        loadAdminLogs().catch(err => showToast(err.message));
+      }
     });
   });
 }
@@ -460,6 +538,8 @@ document.getElementById('eventSearch').addEventListener('input', renderEvents);
 document.getElementById('eventVisibilityFilter').addEventListener('change', renderEvents);
 document.getElementById('eventTypeFilter').addEventListener('change', renderEvents);
 document.getElementById('sendAnnouncementBtn').addEventListener('click', () => sendAnnouncement().catch(err => showToast(err.message)));
+document.getElementById('createBackupBtn').addEventListener('click', () => createBackup().catch(err => showToast(err.message)));
+document.getElementById('refreshLogsBtn').addEventListener('click', () => loadAdminLogs().catch(err => showToast(err.message)));
 document.addEventListener('click', handleClick);
 document.addEventListener('change', handleChange);
 bindTabs();
