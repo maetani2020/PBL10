@@ -636,6 +636,57 @@ function closeSidebar() {
   sidebarOverlay.classList.remove("show");
 }
 
+function closeMobileActionMenu() {
+  const menu = document.getElementById("mobileActionMenu");
+  const button = document.getElementById("mobileActionMenuBtn");
+  if (menu) menu.classList.add("hidden");
+  if (button) button.setAttribute("aria-expanded", "false");
+}
+
+function initMobileActionMenu() {
+  const button = document.getElementById("mobileActionMenuBtn");
+  const menu = document.getElementById("mobileActionMenu");
+  if (!button || !menu) return;
+
+  const actionTargets = {
+    today: "todayBtn",
+    list: "scheduleListBtn",
+    group: "groupManageBtn",
+    history: "notificationHistoryBtn",
+    notificationSettings: "notificationSettingsBtn",
+    ai: "aiScannerTrigger",
+    theme: "themeBtn",
+    account: "userAvatarBtn"
+  };
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const willOpen = menu.classList.contains("hidden");
+    menu.classList.toggle("hidden", !willOpen);
+    button.setAttribute("aria-expanded", String(willOpen));
+  });
+
+  menu.querySelectorAll("[data-mobile-action]").forEach(item => {
+    item.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeMobileActionMenu();
+      const targetId = actionTargets[item.dataset.mobileAction];
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (target) target.click();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!menu.classList.contains("hidden") && !event.target.closest(".mobile-action-menu")) {
+      closeMobileActionMenu();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 768) closeMobileActionMenu();
+  });
+}
+
 // Swipe gestures
 let touchStartX = 0;
 let touchEndX = 0;
@@ -827,6 +878,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeCalendarSettingsModal();
       closeYearJumpModal();
       closeAdminPanel();
+      closeMobileActionMenu();
     }
   });
 
@@ -1064,6 +1116,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initAccountSettings();
   initAdminUI();
   initSidebarNavigation();
+  initMobileActionMenu();
 
   const userAvatarBtn = document.getElementById("userAvatarBtn");
   if (userAvatarBtn) {
