@@ -94,8 +94,17 @@ function createAccessToken(user) {
     );
 }
 
+function formatDbTimestamp(date) {
+    const pad = (num) => String(num).padStart(2, '0');
+    return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate())
+    ].join('-') + ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 function createRefreshTokenExpiry() {
-    return new Date(Date.now() + config.jwt.refreshDays * 24 * 60 * 60 * 1000).toISOString();
+    return formatDbTimestamp(new Date(Date.now() + config.jwt.refreshDays * 24 * 60 * 60 * 1000));
 }
 
 async function ensureUserCanLogin(user) {
@@ -171,6 +180,34 @@ router.post('/register', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = formatDbTimestamp(new Date(Date.now() + 15 * 60 * 1000));
+
+        await query.run('DELETE FROM signup_verifications WHERE email = ?', [normalizedEmail]);
+        await query.run(
+            `INSERT INTO signup_verifications (email, password_hash, display_name, code, expires_at)
+             VALUES (?, ?, ?, ?, ?)`,
+            [normalizedEmail, passwordHash, normalizedDisplayName, code, expiresAt]
+        );
+
+        await sendMail({
+            to: normalizedEmail,
+            subject: 'Shared Calendar 新規登録確認コード',
+            text: [
+                'Shared Calendarの新規登録確認コードです。',
+                '有効期限は15分です。',
+                `確認コード: ${code}`,
+                '',
+                'このメールに心当たりがない場合は破棄してください。'
+            ].join('\n')
+        });
+
+        return res.status(202).json({
+            message: '登録確認コードをメールで送信しました。',
+            requiresVerification: true,
+            email: normalizedEmail
+        });
+
         const result = await query.run(
             'INSERT INTO users (email, password_hash, display_name, role) VALUES (?, ?, ?, ?)',
             [normalizedEmail, passwordHash, normalizedDisplayName, 'user']
@@ -188,6 +225,64 @@ router.post('/register', async (req, res) => {
         });
     } catch (err) {
         console.error('Registration error:', err);
+        res.status(500).json({ error: 'サーバーエラーが発生しました' });
+    }
+});
+
+// POST /api/auth/register/verify - Confirm signup email code
+router.post('/register/verify', async (req, res) => {
+    const { email, code } = req.body;
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedCode = normalizeText(code);
+
+    if (!normalizedEmail || !normalizedCode) {
+        return res.status(400).json({ error: 'メールアドレスと確認コードを入力してください' });
+    }
+
+    try {
+        const verification = await query.get(
+            'SELECT * FROM signup_verifications WHERE email = ?',
+            [normalizedEmail]
+        );
+
+        if (!verification) {
+            return res.status(400).json({ error: '新規登録の確認コードが見つかりません。もう一度登録してください' });
+        }
+
+        if (new Date(verification.expires_at) < new Date()) {
+            await query.run('DELETE FROM signup_verifications WHERE email = ?', [normalizedEmail]);
+            return res.status(400).json({ error: '確認コードの有効期限が切れています。もう一度登録してください' });
+        }
+
+        if (verification.code !== normalizedCode.trim()) {
+            return res.status(400).json({ error: '確認コードが正しくありません' });
+        }
+
+        const existingUser = await query.get('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+        if (existingUser) {
+            await query.run('DELETE FROM signup_verifications WHERE email = ?', [normalizedEmail]);
+            return res.status(400).json({ error: 'このメールアドレスは既に登録されています' });
+        }
+
+        const result = await query.run(
+            'INSERT INTO users (email, password_hash, display_name, role) VALUES (?, ?, ?, ?)',
+            [normalizedEmail, verification.password_hash, verification.display_name, 'user']
+        );
+        const userId = result.lastID;
+
+        await query.run(
+            'INSERT INTO calendars (name, owner_id) VALUES (?, ?)',
+            ['マイカレンダー', userId]
+        );
+
+        await query.run('DELETE FROM signup_verifications WHERE email = ?', [normalizedEmail]);
+
+        res.status(201).json({
+            message: 'メール認証が完了しました。ログインしてください',
+            user: { id: userId, email: normalizedEmail, display_name: verification.display_name }
+        });
+    } catch (err) {
+        console.error('Signup verification error:', err);
         res.status(500).json({ error: 'サーバーエラーが発生しました' });
     }
 });
@@ -407,8 +502,8 @@ router.post('/logout', authenticateToken, async (req, res) => {
             // JWTのペイロードから有効期限を取得してブラックリストに記録
             const decoded = jwt.decode(token);
             const expiresAt = decoded?.exp
-                ? new Date(decoded.exp * 1000).toISOString()
-                : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                ? formatDbTimestamp(new Date(decoded.exp * 1000))
+                : formatDbTimestamp(new Date(Date.now() + 24 * 60 * 60 * 1000));
 
             await query.run(
                 'INSERT INTO blacklisted_tokens (token, expires_at) VALUES (?, ?) ON CONFLICT (token) DO NOTHING',
@@ -416,7 +511,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
             );
 
             // 3. 古い期限切れブラックリストエントリを定期クリーンアップ
-            await query.run('DELETE FROM blacklisted_tokens WHERE expires_at < ?', [new Date().toISOString()]);
+            await query.run('DELETE FROM blacklisted_tokens WHERE expires_at < ?', [formatDbTimestamp(new Date())]);
         }
 
         res.json({ message: 'ログアウトしました' });
@@ -448,7 +543,7 @@ router.post('/password-reset-request', async (req, res) => {
         }
 
         const token = crypto.randomBytes(20).toString('hex');
-        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+        const expiresAt = formatDbTimestamp(new Date(Date.now() + 60 * 60 * 1000)); // 1 hour
 
         // Clear existing reset tokens for this email
         await query.run('DELETE FROM password_resets WHERE email = ?', [normalizedEmail]);

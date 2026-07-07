@@ -103,10 +103,7 @@ import {
 
 import {
   syncHpMotivationStatus,
-  updatePreSavePreview,
-  openCalendarSettingsModal,
-  closeCalendarSettingsModal,
-  saveCalendarSettings
+  updatePreSavePreview
 } from './calendar-hp-motivation.js';
 
 
@@ -747,7 +744,7 @@ function switchPanel(panel) {
   }
 
   if (panel === "settings") {
-    openCalendarSettingsModal();
+    openNotificationSettingsModal();
     closeSidebar();
     return;
   }
@@ -857,7 +854,6 @@ document.addEventListener("DOMContentLoaded", () => {
     { id: "groupModal", close: closeGroupModal },
     { id: "notificationHistoryModal", close: closeNotificationHistoryModal },
     { id: "notificationSettingsModal", close: closeNotificationSettingsModal },
-    { id: "calendarSettingsModal", close: closeCalendarSettingsModal },
     { id: "yearJumpModal", close: closeYearJumpModal }
   ].forEach(m => {
     const el = document.getElementById(m.id);
@@ -877,7 +873,6 @@ document.addEventListener("DOMContentLoaded", () => {
       closeGroupModal();
       closeNotificationHistoryModal();
       closeNotificationSettingsModal();
-      closeCalendarSettingsModal();
       closeYearJumpModal();
       closeAdminPanel();
       closeMobileActionMenu();
@@ -1060,10 +1055,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("notificationSettingsBtn").addEventListener("click", openNotificationSettingsModal);
   document.getElementById("closeNotificationSettingsBtn").addEventListener("click", closeNotificationSettingsModal);
   document.getElementById("saveNotificationSettingsBtn").addEventListener("click", saveNotificationSettingsFromForm);
-
-  // Calendar settings modal triggers
-  document.getElementById("saveCalendarSettingsBtn").addEventListener("click", saveCalendarSettings);
-  document.getElementById("closeCalendarSettingsBtn").addEventListener("click", closeCalendarSettingsModal);
 
   // Modals features logic
   document.getElementById("eventType").addEventListener("change", updateEventOptionVisibility);

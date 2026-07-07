@@ -72,6 +72,10 @@ app.get('/admin/', (req, res) => {
     res.sendFile(path.join(projectRoot, 'admin.html'));
 });
 
+app.get('/reset-password', (req, res) => {
+    res.sendFile(path.join(projectRoot, 'calendar.html'));
+});
+
 // Fallback: serve the main calendar frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(projectRoot, 'calendar.html'));

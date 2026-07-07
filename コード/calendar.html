@@ -60,8 +60,8 @@
         </li>
 
         <li class="sidebar-item" data-nav="settings">
-          <span class="material-icons"> settings </span>
-          設定
+          <span class="material-icons"> tune </span>
+          通知設定
         </li>
 
         <li class="sidebar-item admin-nav hidden" data-nav="admin">
@@ -722,11 +722,30 @@
           <span class="material-icons">lock_reset</span>
           パスワードリセット
         </h3>
-        <p class="auth-sub-desc">登録済みのメールアドレスを入力してください。<br>リセット用のリンクをサーバーログに出力します（開発環境）。</p>
+        <p class="auth-sub-desc">登録済みのメールアドレスを入力してください。<br>パスワード再設定用のリンクをメールで送信します。</p>
         <input type="email" id="resetEmail" class="auth-input-field" placeholder="メールアドレス" />
         <div class="auth-sub-actions">
           <button id="cancelResetBtn" class="auth-sub-cancel-btn">キャンセル</button>
           <button id="sendResetEmailBtn" class="auth-primary-btn" style="flex:1;">送信</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- New Password Modal                         -->
+    <!-- ========================================== -->
+    <div id="newPasswordModal" class="auth-sub-modal hidden">
+      <div class="auth-sub-card">
+        <h3 class="auth-sub-title">
+          <span class="material-icons">password</span>
+          新しいパスワード
+        </h3>
+        <p class="auth-sub-desc">新しいパスワードを入力してください。英字と数字を含む8文字以上で設定できます。</p>
+        <input type="password" id="newResetPassword" class="auth-input-field" maxlength="100" placeholder="新しいパスワード" autocomplete="new-password" />
+        <input type="password" id="confirmResetPassword" class="auth-input-field" maxlength="100" placeholder="新しいパスワード（確認）" autocomplete="new-password" />
+        <div class="auth-sub-actions">
+          <button id="cancelNewPasswordBtn" class="auth-sub-cancel-btn">キャンセル</button>
+          <button id="submitNewPasswordBtn" class="auth-primary-btn" style="flex:1;">変更</button>
         </div>
       </div>
     </div>
@@ -795,41 +814,6 @@
             </div>
             <button id="confirmEmailChangeBtn" class="auth-primary-btn">確認して変更</button>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========================================== -->
-    <!-- Calendar Settings Modal                     -->
-    <!-- ========================================== -->
-    <div id="calendarSettingsModal" class="modal">
-      <div class="modal-content list-modal">
-        <h2>カレンダー設定</h2>
-
-        <div class="modal-body">
-          <div class="settings-field-group">
-            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">最大HP (%)</label>
-            <input type="number" id="calendarSettingsMaxHp" min="1" max="1000" placeholder="100" />
-          </div>
-          <div class="settings-field-group" style="margin-top:10px;">
-            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">最大やる気 (%)</label>
-            <input type="number" id="calendarSettingsMaxMotivation" min="1" max="1000" placeholder="100" />
-          </div>
-          <div class="settings-field-group" style="margin-top:10px;">
-            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">翌日HP回復力 (0.0 〜 2.0)</label>
-            <input type="number" id="calendarSettingsRecoveryRate" min="0" max="2" step="0.1" placeholder="1.0" />
-          </div>
-          <div class="settings-field-group" style="margin-top:10px;">
-            <label class="settings-label" style="display:block; margin-bottom:4px; font-weight:600; font-size:13px;">HP警告閾値 (残%)</label>
-            <input type="number" id="calendarSettingsWarningThreshold" min="0" max="100" placeholder="20" />
-          </div>
-          
-          
-        </div>
-
-        <div class="modal-actions" style="margin-top:12px;">
-          <button id="saveCalendarSettingsBtn" class="primary-btn" style="flex:1; background:var(--primary); color:white;">保存</button>
-          <button id="closeCalendarSettingsBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
         </div>
       </div>
     </div>

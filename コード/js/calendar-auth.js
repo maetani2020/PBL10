@@ -46,6 +46,7 @@ export function isLoggedIn() {
 // -------------------------------------------------------
 let isRefreshing = false;
 let refreshQueue = [];
+let passwordResetToken = '';
 
 export async function apiRequest(endpoint, options = {}, _retry = false) {
   const headers = {
@@ -200,6 +201,8 @@ export function updateUserDisplay() {
 // Auth Form Logic (Login / Register toggle)
 // -------------------------------------------------------
 let isSignupMode = false;
+let signupVerificationPending = false;
+let pendingSignupEmail = '';
 
 export function initAuthForm() {
   const authToggleBtn = document.getElementById('authToggleMode');
@@ -209,12 +212,47 @@ export function initAuthForm() {
   const authDisplayNameContainer = document.getElementById('authDisplayNameContainer');
   const authDisplayNameInput = document.getElementById('authDisplayName');
   const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+  const authInputs = document.querySelector('.auth-inputs');
+  let authVerificationCodeContainer = document.getElementById('authVerificationCodeContainer');
+  let authVerificationCodeInput = document.getElementById('authVerificationCode');
+
+  if (!authVerificationCodeContainer && authInputs) {
+    authVerificationCodeContainer = document.createElement('div');
+    authVerificationCodeContainer.id = 'authVerificationCodeContainer';
+    authVerificationCodeContainer.className = 'hidden';
+    authVerificationCodeInput = document.createElement('input');
+    authVerificationCodeInput.type = 'text';
+    authVerificationCodeInput.id = 'authVerificationCode';
+    authVerificationCodeInput.className = 'auth-input-field';
+    authVerificationCodeInput.inputMode = 'numeric';
+    authVerificationCodeInput.maxLength = 6;
+    authVerificationCodeInput.placeholder = 'メール確認コード（6桁）';
+    authVerificationCodeInput.autocomplete = 'one-time-code';
+    authVerificationCodeContainer.appendChild(authVerificationCodeInput);
+    authInputs.appendChild(authVerificationCodeContainer);
+  }
 
   if (!authToggleBtn || !authPrimaryBtn) return;
+
+  const resetSignupVerification = () => {
+    signupVerificationPending = false;
+    pendingSignupEmail = '';
+    authVerificationCodeContainer?.classList.add('hidden');
+    if (authVerificationCodeInput) authVerificationCodeInput.value = '';
+  };
+
+  const showSignupVerification = (email) => {
+    signupVerificationPending = true;
+    pendingSignupEmail = email;
+    authVerificationCodeContainer?.classList.remove('hidden');
+    authPrimaryBtn.textContent = '確認して登録';
+    authVerificationCodeInput?.focus();
+  };
 
   // Toggle between login / signup
   authToggleBtn.addEventListener('click', () => {
     clearFieldErrors(document.getElementById('authOverlay'));
+    resetSignupVerification();
     isSignupMode = !isSignupMode;
     if (isSignupMode) {
       authDisplayNameContainer?.classList.remove('hidden');
@@ -235,6 +273,7 @@ export function initAuthForm() {
     const email = authEmailInput?.value.trim();
     const password = authPasswordInput?.value;
     const displayName = authDisplayNameInput?.value.trim();
+    const verificationCode = authVerificationCodeInput?.value.trim() || '';
 
     if (isSignupMode && !displayName) return showFieldError(authDisplayNameInput, 'ユーザー名を入力してください');
     if (!email) return showFieldError(authEmailInput, 'メールアドレスを入力してください');
@@ -257,10 +296,38 @@ export function initAuthForm() {
 
     try {
       if (isSignupMode) {
-        await apiRequest('/api/auth/register', {
+        if (signupVerificationPending) {
+          if (!verificationCode) {
+            authPrimaryBtn.disabled = false;
+            authPrimaryBtn.textContent = '確認して登録';
+            return showFieldError(authVerificationCodeInput, 'メールに届いた確認コードを入力してください');
+          }
+          const verifyData = await apiRequest('/api/auth/register/verify', {
+            method: 'POST',
+            body: JSON.stringify({ email: pendingSignupEmail || email, code: verificationCode }),
+          });
+          showToast(verifyData.message || 'メール認証が完了しました。ログインしてください');
+          resetSignupVerification();
+          isSignupMode = false;
+          authDisplayNameContainer?.classList.add('hidden');
+          authToggleBtn.textContent = '譁ｰ隕上い繧ｫ繧ｦ繝ｳ繝医ｒ菴懈・縺吶ｋ';
+          authPrimaryBtn.textContent = '繧ｵ繧､繝ｳ繧､繝ｳ';
+          forgotPasswordLink?.classList.remove('hidden');
+          if (authPasswordInput) authPasswordInput.value = '';
+          authPrimaryBtn.disabled = false;
+          return;
+        }
+
+        const data = await apiRequest('/api/auth/register', {
           method: 'POST',
           body: JSON.stringify({ email, password, display_name: displayName }),
         });
+        if (data.requiresVerification) {
+          showSignupVerification(data.email || email);
+          showToast(data.message || '登録確認コードをメールで送信しました');
+          authPrimaryBtn.disabled = false;
+          return;
+        }
         showToast('登録完了！サインインします。');
         isSignupMode = false;
         authDisplayNameContainer?.classList.add('hidden');
@@ -285,6 +352,10 @@ export function initAuthForm() {
     } catch (err) {
       console.error('Auth error:', err);
       authPrimaryBtn.disabled = false;
+      if (signupVerificationPending) {
+        authPrimaryBtn.textContent = '確認して登録';
+        return;
+      }
       authPrimaryBtn.textContent = isSignupMode ? 'アカウントを作成' : 'サインイン';
     }
   });
@@ -294,8 +365,16 @@ export function initAuthForm() {
     forgotPasswordLink.addEventListener('click', () => showPasswordResetModal());
   }
 
-  // Enter key
   [authEmailInput, authPasswordInput, authDisplayNameInput].forEach(el => {
+    el?.addEventListener('input', () => {
+      if (!signupVerificationPending) return;
+      resetSignupVerification();
+      if (isSignupMode) authPrimaryBtn.textContent = '繧｢繧ｫ繧ｦ繝ｳ繝医ｒ菴懈・';
+    });
+  });
+
+  // Enter key
+  [authEmailInput, authPasswordInput, authDisplayNameInput, authVerificationCodeInput].forEach(el => {
     el?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') authPrimaryBtn.click();
     });
@@ -316,11 +395,52 @@ function hidePasswordResetModal() {
   if (document.getElementById('resetEmail')) document.getElementById('resetEmail').value = '';
 }
 
+function getResetTokenFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('token') || '';
+}
+
+function clearResetTokenFromUrl() {
+  window.history.replaceState({}, document.title, '/');
+}
+
+function returnToCalendarRoot() {
+  clearResetTokenFromUrl();
+  if (window.location.pathname !== '/') {
+    window.location.replace('/');
+  }
+}
+
+function showNewPasswordModal(token) {
+  passwordResetToken = token;
+  const modal = document.getElementById('newPasswordModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  document.getElementById('newResetPassword')?.focus();
+}
+
+function hideNewPasswordModal({ clearToken = false } = {}) {
+  const modal = document.getElementById('newPasswordModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  const passwordInput = document.getElementById('newResetPassword');
+  const confirmInput = document.getElementById('confirmResetPassword');
+  if (passwordInput) passwordInput.value = '';
+  if (confirmInput) confirmInput.value = '';
+  if (clearToken) {
+    passwordResetToken = '';
+    returnToCalendarRoot();
+  }
+}
+
 export function initPasswordResetModal() {
   const sendBtn = document.getElementById('sendResetEmailBtn');
   const cancelBtn = document.getElementById('cancelResetBtn');
+  const submitNewPasswordBtn = document.getElementById('submitNewPasswordBtn');
+  const cancelNewPasswordBtn = document.getElementById('cancelNewPasswordBtn');
 
   cancelBtn?.addEventListener('click', hidePasswordResetModal);
+  cancelNewPasswordBtn?.addEventListener('click', () => hideNewPasswordModal({ clearToken: true }));
 
   sendBtn?.addEventListener('click', async () => {
     clearFieldErrors(document.getElementById('passwordResetModal'));
@@ -343,6 +463,53 @@ export function initPasswordResetModal() {
       sendBtn.textContent = '送信';
     }
   });
+
+  submitNewPasswordBtn?.addEventListener('click', async () => {
+    clearFieldErrors(document.getElementById('newPasswordModal'));
+    const newPassword = document.getElementById('newResetPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmResetPassword')?.value || '';
+
+    if (!passwordResetToken) {
+      showToast('リセット用トークンが見つかりません。もう一度メールを送信してください。');
+      return;
+    }
+    if (!newPassword) return showFieldError('newResetPassword', '新しいパスワードを入力してください');
+    if (newPassword.length < 8 || newPassword.length > 100 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      return showFieldError('newResetPassword', 'パスワードは英字と数字を含む8文字以上・100文字以内で入力してください');
+    }
+    if (newPassword !== confirmPassword) {
+      return showFieldError('confirmResetPassword', '確認用パスワードが一致しません');
+    }
+
+    submitNewPasswordBtn.disabled = true;
+    submitNewPasswordBtn.textContent = '変更中...';
+    try {
+      const data = await apiRequest('/api/auth/password-reset', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: passwordResetToken,
+          new_password: newPassword
+        })
+      });
+      hideNewPasswordModal({ clearToken: true });
+      showAuthOverlay();
+      setTimeout(() => window.location.replace('/'), 600);
+      showToast(data.message || 'パスワードを変更しました。新しいパスワードでログインしてください。');
+    } catch {
+      // error shown by apiRequest
+    } finally {
+      submitNewPasswordBtn.disabled = false;
+      submitNewPasswordBtn.textContent = '変更';
+    }
+  });
+
+  const token = getResetTokenFromUrl();
+  if (token) {
+    showAuthOverlay();
+    showNewPasswordModal(token);
+  } else if (window.location.pathname === '/reset-password') {
+    returnToCalendarRoot();
+  }
 }
 
 // -------------------------------------------------------

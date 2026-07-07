@@ -137,6 +137,19 @@ async function initDb() {
             )
         `);
 
+        // 4. Create Signup Email Verification Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS signup_verifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                code TEXT NOT NULL,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
         // 4. Create Groups Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS groups (
