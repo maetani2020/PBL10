@@ -6,17 +6,23 @@ const http = require('http');
 const os = require('os');
 const { initDb } = require('./db');
 const { initWebSocket } = require('./utils/websocket');
+const config = require('./config');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = config.port;
+const HOST = config.host;
 
 // Initialize Database
 const dbReady = initDb();
 
 // Middleware
 app.use(cors({
-    origin: '*', // Allows access from any Android client / PWA / localhost
+    origin(origin, callback) {
+        if (!origin || config.cors.origins.includes('*') || config.cors.origins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));

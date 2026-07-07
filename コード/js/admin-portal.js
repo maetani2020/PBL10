@@ -35,6 +35,18 @@ function roleLabel(role) {
   return role === 'admin' ? '管理者' : '一般ユーザー';
 }
 
+function userStatusLabel(user) {
+  if (user.account_status === 'banned') return 'BAN中';
+  if (user.account_status === 'timeout') return 'タイムアウト中';
+  return '通常';
+}
+
+function userStatusClass(user) {
+  if (user.account_status === 'banned') return 'chip-danger';
+  if (user.account_status === 'timeout') return 'chip-warning';
+  return 'chip-success';
+}
+
 function groupRoleLabel(role) {
   if (role === 'admin') return '管理者';
   if (role === 'editor') return '編集者';
@@ -70,7 +82,13 @@ function adminActionLabel(action) {
     'event:delete': 'イベント削除',
     'event:restore': 'イベント復元',
     'user_settings:reset': 'ユーザー設定リセット',
-    'notification_history:delete': '通知履歴削除'
+    'notification_history:delete': '通知履歴削除',
+    'user:ban': 'ユーザーBAN',
+    'user:timeout': 'ユーザータイムアウト',
+    'user:unrestrict': 'BAN/タイムアウト解除',
+    'admin:login:success': '管理者ログイン成功',
+    'admin:login:failed': '管理者ログイン失敗',
+    'admin:login:locked': '管理者ログインロック'
   };
   return labels[action] || action || '-';
 }
@@ -209,6 +227,8 @@ async function loadStats() {
     ['メモリ使用率', stats.os?.memoryUsage ?? '-'],
     ['ユーザー', stats.database?.users ?? 0],
     ['管理者', stats.database?.admins ?? 0],
+    ['BAN中', stats.database?.bannedUsers ?? 0],
+    ['タイムアウト中', stats.database?.timeoutUsers ?? 0],
     ['イベント', stats.database?.events ?? 0],
     ['削除済み予定', stats.database?.deletedEvents ?? 0],
     ['今日の予定', stats.database?.todayEvents ?? 0],
@@ -253,14 +273,18 @@ function renderUsers() {
 
   document.getElementById('usersTable').innerHTML = users.map(user => {
     const isSelf = Number(user.id) === Number(adminUser?.id);
+    const isRestricted = ['banned', 'timeout'].includes(user.account_status);
     return `
       <article class="row-card">
         <div class="row-head">
           <div>
             <div class="row-title">${escapeHtml(user.display_name || 'No name')} <span class="row-meta">#${escapeHtml(user.id)}</span></div>
             <div class="row-meta">${escapeHtml(user.email)}</div>
+            ${user.account_status === 'timeout' ? `<div class="row-meta">期限: ${escapeHtml(formatDateTime(user.timeout_until))}</div>` : ''}
+            ${user.restriction_reason ? `<div class="row-meta">理由: ${escapeHtml(user.restriction_reason)}</div>` : ''}
             <div class="chips">
               <span class="chip ${user.role === 'admin' ? 'chip-admin' : ''}">${roleLabel(user.role)}</span>
+              <span class="chip ${userStatusClass(user)}">${userStatusLabel(user)}</span>
               <span class="chip">予定 ${escapeHtml(user.event_count ?? 0)}</span>
               <span class="chip">グループ ${escapeHtml(user.group_count ?? 0)}</span>
               <span class="chip">通知 ${escapeHtml(user.notification_count ?? 0)}</span>
@@ -273,6 +297,10 @@ function renderUsers() {
             </select>
             <button class="primary" data-user-settings="${user.id}">設定リセット</button>
             <button data-user-history="${user.id}">通知履歴削除</button>
+            ${isRestricted
+              ? `<button data-user-unrestrict="${user.id}" ${isSelf ? 'disabled' : ''}>制限解除</button>`
+              : `<button data-user-timeout="${user.id}" ${isSelf ? 'disabled' : ''}>タイムアウト</button>
+                 <button class="danger" data-user-ban="${user.id}" ${isSelf ? 'disabled' : ''}>BAN</button>`}
             <button class="danger" data-user-delete="${user.id}" ${isSelf ? 'disabled' : ''}>ユーザー削除</button>
           </div>
         </div>
@@ -494,6 +522,39 @@ async function handleClick(event) {
       await api(`/api/admin/users/${target.dataset.userDelete}`, { method: 'DELETE' });
       showToast('ユーザーを削除しました');
       await Promise.all([loadUsers(), loadGroups(), loadEvents(), loadStats(), loadAdminLogs()]);
+    }
+    if (target.dataset.userBan) {
+      const reason = prompt('BAN理由を入力してください', '管理者によるBAN');
+      if (reason === null) return;
+      await api(`/api/admin/users/${target.dataset.userBan}/ban`, {
+        method: 'POST',
+        body: JSON.stringify({ reason })
+      });
+      showToast('ユーザーをBANしました');
+      await Promise.all([loadUsers(), loadStats(), loadAdminLogs()]);
+    }
+    if (target.dataset.userTimeout) {
+      const minutesText = prompt('タイムアウト時間を分で入力してください（例: 60）', '60');
+      if (minutesText === null) return;
+      const minutes = Number.parseInt(minutesText, 10);
+      if (!Number.isInteger(minutes) || minutes < 1) {
+        showToast('1以上の分数を入力してください');
+        return;
+      }
+      const reason = prompt('タイムアウト理由を入力してください', '管理者によるタイムアウト');
+      if (reason === null) return;
+      await api(`/api/admin/users/${target.dataset.userTimeout}/timeout`, {
+        method: 'POST',
+        body: JSON.stringify({ minutes, reason })
+      });
+      showToast('ユーザーをタイムアウトしました');
+      await Promise.all([loadUsers(), loadStats(), loadAdminLogs()]);
+    }
+    if (target.dataset.userUnrestrict) {
+      if (!confirm('このユーザーのBAN/タイムアウトを解除しますか？')) return;
+      await api(`/api/admin/users/${target.dataset.userUnrestrict}/unrestrict`, { method: 'POST' });
+      showToast('制限を解除しました');
+      await Promise.all([loadUsers(), loadStats(), loadAdminLogs()]);
     }
     if (target.dataset.groupMembers) {
       await renderMembers(target.dataset.groupMembers);

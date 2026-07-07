@@ -5,47 +5,141 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
+const config = require('../config');
+const {
+    normalizeEmail,
+    validateEmail,
+    isAllowedSchoolEmail,
+    normalizeText,
+    validateDisplayName,
+    validatePassword
+} = require('../utils/validation');
 
 // Temporary memory store for email verification codes
 const emailChangeVerifications = new Map();
+const loginAttempts = new Map();
 
-const ALLOWED_EMAIL_DOMAIN = 'oic-ok.ac.jp';
-
-function normalizeEmail(email) {
-    return String(email || '').trim().toLowerCase();
+function getClientIp(req) {
+    const clientIp = req.ip || req.connection.remoteAddress || '';
+    return clientIp.startsWith('::ffff:') ? clientIp.substring(7) : clientIp;
 }
 
-function isAllowedSchoolEmail(email) {
-    return normalizeEmail(email).endsWith('@' + ALLOWED_EMAIL_DOMAIN);
+function getLoginAttemptKey(req, email) {
+    return `${getClientIp(req)}:${normalizeEmail(email)}`;
 }
 
-function normalizeDisplayName(displayName) {
-    return String(displayName || '').trim();
+function getLoginLockState(req, email) {
+    const key = getLoginAttemptKey(req, email);
+    const entry = loginAttempts.get(key);
+    if (!entry) return null;
+
+    if (entry.lockUntil && entry.lockUntil > Date.now()) {
+        const remainingMinutes = Math.ceil((entry.lockUntil - Date.now()) / 60000);
+        return { key, remainingMinutes };
+    }
+
+    if (entry.lockUntil && entry.lockUntil <= Date.now()) {
+        loginAttempts.delete(key);
+    }
+    return { key };
 }
 
-function isValidDisplayName(displayName) {
-    const name = normalizeDisplayName(displayName);
-    return name.length > 0 && Array.from(name).length <= 10;
+function recordLoginFailure(req, email) {
+    const key = getLoginAttemptKey(req, email);
+    const now = Date.now();
+    const windowMs = config.loginRateLimit.windowMinutes * 60 * 1000;
+    const lockMs = config.loginRateLimit.lockMinutes * 60 * 1000;
+    const current = loginAttempts.get(key);
+    const entry = current && current.firstAttemptAt + windowMs > now
+        ? current
+        : { count: 0, firstAttemptAt: now, lockUntil: null };
+
+    entry.count += 1;
+    if (entry.count >= config.loginRateLimit.maxAttempts) {
+        entry.lockUntil = now + lockMs;
+    }
+    loginAttempts.set(key, entry);
+    return entry;
 }
 
-function validatePassword(password) {
-    if (typeof password !== 'string') return false;
-    if (password.length < 8 || password.length > 100) return false;
-    const hasLetter = /[a-zA-Z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    return hasLetter && hasNumber;
+function clearLoginFailures(req, email) {
+    loginAttempts.delete(getLoginAttemptKey(req, email));
 }
 
-function validateEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(normalizeEmail(email));
+async function logSecurityEvent(req, action, targetId = null, details = {}) {
+    try {
+        await query.run(
+            `INSERT INTO admin_logs (admin_user_id, action, target_type, target_id, details, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+                details.adminUserId || null,
+                action,
+                'auth',
+                targetId == null ? null : String(targetId),
+                JSON.stringify(details),
+                getClientIp(req)
+            ]
+        );
+    } catch (err) {
+        console.error('Security log write error:', err);
+    }
+}
+
+function createAccessToken(user) {
+    return jwt.sign(
+        { id: user.id, email: user.email, role: user.role },
+        config.jwt.secret,
+        { expiresIn: config.jwt.expiresIn }
+    );
+}
+
+function createRefreshTokenExpiry() {
+    return new Date(Date.now() + config.jwt.refreshDays * 24 * 60 * 60 * 1000).toISOString();
+}
+
+async function ensureUserCanLogin(user) {
+    if (user.account_status === 'banned') {
+        return {
+            ok: false,
+            status: 403,
+            message: `このアカウントはBANされています。${user.restriction_reason ? `理由: ${user.restriction_reason}` : ''}`.trim()
+        };
+    }
+
+    if (user.account_status === 'timeout') {
+        const timeoutUntil = user.timeout_until ? new Date(user.timeout_until) : null;
+        if (!timeoutUntil || timeoutUntil > new Date()) {
+            const untilText = timeoutUntil ? timeoutUntil.toLocaleString('ja-JP') : '未定';
+            return {
+                ok: false,
+                status: 403,
+                message: `このアカウントは ${untilText} までタイムアウト中です。${user.restriction_reason ? `理由: ${user.restriction_reason}` : ''}`.trim()
+            };
+        }
+
+        await query.run(
+            `UPDATE users
+             SET account_status = 'active',
+                 timeout_until = NULL,
+                 restriction_reason = NULL,
+                 restricted_at = NULL,
+                 restricted_by = NULL
+             WHERE id = ?`,
+            [user.id]
+        );
+        user.account_status = 'active';
+        user.timeout_until = null;
+        user.restriction_reason = null;
+    }
+
+    return { ok: true };
 }
 
 // POST /api/auth/register - User Registration
 router.post('/register', async (req, res) => {
     const { email, password, display_name } = req.body;
     const normalizedEmail = normalizeEmail(email);
-    const normalizedDisplayName = normalizeDisplayName(display_name);
+    const normalizedDisplayName = normalizeText(display_name);
 
     if (!normalizedEmail || !password || !normalizedDisplayName) {
         return res.status(400).json({ error: 'メールアドレス、パスワード、表示名は必須項目です' });
@@ -59,7 +153,7 @@ router.post('/register', async (req, res) => {
         return res.status(400).json({ error: 'メールアドレスは @oic-ok.ac.jp のみ登録できます' });
     }
 
-    if (!isValidDisplayName(normalizedDisplayName)) {
+    if (!validateDisplayName(normalizedDisplayName)) {
         return res.status(400).json({ error: 'ユーザー名は10文字以内で入力してください' });
     }
 
@@ -100,32 +194,48 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login - User Login
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
         return res.status(400).json({ error: 'メールアドレスとパスワードを入力してください' });
     }
 
+    const lockState = getLoginLockState(req, normalizedEmail);
+    if (lockState?.remainingMinutes) {
+        return res.status(429).json({ error: `ログイン試行回数が多すぎます。${lockState.remainingMinutes}分後に再試行してください。` });
+    }
+
     try {
-        const user = await query.get('SELECT * FROM users WHERE email = ?', [email]);
+        const user = await query.get('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
         if (!user) {
+            recordLoginFailure(req, normalizedEmail);
             return res.status(400).json({ error: 'メールアドレスまたはパスワードが正しくありません' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) {
+            const failure = recordLoginFailure(req, normalizedEmail);
+            if (user.role === 'admin') {
+                await logSecurityEvent(req, failure.lockUntil ? 'admin:login:locked' : 'admin:login:failed', user.id, {
+                    adminUserId: user.id,
+                    email: user.email,
+                    failureCount: failure.count
+                });
+            }
             return res.status(400).json({ error: 'メールアドレスまたはパスワードが正しくありません' });
         }
 
-        // Generate Access Token (24h)
-        const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
-            process.env.JWT_SECRET || 'super_secret_key_for_calendar_jwt',
-            { expiresIn: '24h' }
-        );
+        const loginStatus = await ensureUserCanLogin(user);
+        if (!loginStatus.ok) {
+            return res.status(loginStatus.status).json({ error: loginStatus.message });
+        }
 
-        // Generate Refresh Token (30d)
+        clearLoginFailures(req, normalizedEmail);
+
+        const token = createAccessToken(user);
+
         const refreshToken = crypto.randomBytes(40).toString('hex');
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const expiresAt = createRefreshTokenExpiry();
 
         await query.run(
             'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
@@ -137,6 +247,13 @@ router.post('/login', async (req, res) => {
             'UPDATE users SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?',
             [user.id]
         );
+
+        if (user.role === 'admin') {
+            await logSecurityEvent(req, 'admin:login:success', user.id, {
+                adminUserId: user.id,
+                email: user.email
+            });
+        }
 
         res.json({
             message: 'ログインに成功しました',
@@ -159,7 +276,7 @@ router.post('/login', async (req, res) => {
 router.post('/google-login', async (req, res) => {
     const { email, display_name } = req.body;
     const normalizedEmail = normalizeEmail(email);
-    const normalizedDisplayName = normalizeDisplayName(display_name);
+    const normalizedDisplayName = normalizeText(display_name);
 
     if (!normalizedEmail || !normalizedDisplayName) {
         return res.status(400).json({ error: 'Googleログインに必要な情報が不足しています' });
@@ -169,7 +286,7 @@ router.post('/google-login', async (req, res) => {
         return res.status(400).json({ error: 'Googleログインは @oic-ok.ac.jp のメールアドレスのみ利用できます' });
     }
 
-    if (!isValidDisplayName(normalizedDisplayName)) {
+    if (!validateDisplayName(normalizedDisplayName)) {
         return res.status(400).json({ error: 'ユーザー名は10文字以内で入力してください' });
     }
 
@@ -196,14 +313,15 @@ router.post('/google-login', async (req, res) => {
             user = { id: userId, email: normalizedEmail, display_name: normalizedDisplayName, role: 'user' };
         }
 
-        const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
-            process.env.JWT_SECRET || 'super_secret_key_for_calendar_jwt',
-            { expiresIn: '24h' }
-        );
+        const loginStatus = await ensureUserCanLogin(user);
+        if (!loginStatus.ok) {
+            return res.status(loginStatus.status).json({ error: loginStatus.message });
+        }
+
+        const token = createAccessToken(user);
 
         const refreshToken = crypto.randomBytes(40).toString('hex');
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const expiresAt = createRefreshTokenExpiry();
 
         await query.run(
             'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
@@ -257,11 +375,13 @@ router.post('/refresh', async (req, res) => {
             return res.status(401).json({ error: 'ユーザーが見つかりません' });
         }
 
-        const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
-            process.env.JWT_SECRET || 'super_secret_key_for_calendar_jwt',
-            { expiresIn: '24h' }
-        );
+        const loginStatus = await ensureUserCanLogin(user);
+        if (!loginStatus.ok) {
+            await query.run('DELETE FROM refresh_tokens WHERE token = ?', [refreshToken]);
+            return res.status(loginStatus.status).json({ error: loginStatus.message });
+        }
+
+        const token = createAccessToken(user);
 
         res.json({ token });
     } catch (err) {
@@ -309,13 +429,18 @@ router.post('/logout', authenticateToken, async (req, res) => {
 // POST /api/auth/password-reset-request - Request Password Reset Link
 router.post('/password-reset-request', async (req, res) => {
     const { email } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!email) {
+    if (!normalizedEmail) {
         return res.status(400).json({ error: 'メールアドレスを入力してください' });
     }
 
+    if (!validateEmail(normalizedEmail) || !isAllowedSchoolEmail(normalizedEmail)) {
+        return res.status(400).json({ error: '登録済みの @oic-ok.ac.jp メールアドレスを入力してください' });
+    }
+
     try {
-        const user = await query.get('SELECT * FROM users WHERE email = ?', [email]);
+        const user = await query.get('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
         if (!user) {
             // For security, don't reveal if user exists or not, but for PBL demo it's fine.
             return res.status(404).json({ error: 'このメールアドレスは登録されていません' });
@@ -325,19 +450,19 @@ router.post('/password-reset-request', async (req, res) => {
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
 
         // Clear existing reset tokens for this email
-        await query.run('DELETE FROM password_resets WHERE email = ?', [email]);
+        await query.run('DELETE FROM password_resets WHERE email = ?', [normalizedEmail]);
 
         await query.run(
             'INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)',
-            [email, token, expiresAt]
+            [normalizedEmail, token, expiresAt]
         );
 
         // Simulation: log email contents to console
         console.log(`\n--- [MOCK MAIL SERVER] ---`);
-        console.log(`To: ${email}`);
+        console.log(`To: ${normalizedEmail}`);
         console.log(`Subject: パスワードリセットのリクエスト`);
         console.log(`Content: 以下のリンクからパスワードの再設定を行ってください（有効期限: 1時間）。`);
-        console.log(`Link: http://localhost:3000/reset-password?token=${token}`);
+        console.log(`Link: ${config.appUrl}/reset-password?token=${token}`);
         console.log(`-------------------------\n`);
 
         res.json({ message: 'パスワード再設定用のメールを送信しました（開発環境のためコンソールに出力されました）' });

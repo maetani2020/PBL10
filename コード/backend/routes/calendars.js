@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
+const {
+    normalizeEmail,
+    validateEmail,
+    isAllowedSchoolEmail,
+    normalizeText,
+    validateTextLength
+} = require('../utils/validation');
 
 // GET /api/calendars - Get all calendars user has access to (owned & shared)
 router.get('/', authenticateToken, async (req, res) => {
@@ -47,18 +54,19 @@ router.get('/', authenticateToken, async (req, res) => {
 // POST /api/calendars - Create a new calendar
 router.post('/', authenticateToken, async (req, res) => {
     const { name } = req.body;
-    if (!name) {
-        return res.status(400).json({ error: 'カレンダー名を入力してください' });
+    const calendarName = normalizeText(name);
+    if (!validateTextLength(calendarName, 50)) {
+        return res.status(400).json({ error: 'カレンダー名は1文字以上50文字以内で入力してください' });
     }
 
     try {
         const result = await query.run(
             'INSERT INTO calendars (name, owner_id) VALUES (?, ?)',
-            [name, req.user.id]
+            [calendarName, req.user.id]
         );
         res.status(201).json({
             message: 'カレンダーを作成しました',
-            calendar: { id: result.lastID, name, owner_id: req.user.id, access_level: 'owner' }
+            calendar: { id: result.lastID, name: calendarName, owner_id: req.user.id, access_level: 'owner' }
         });
     } catch (err) {
         console.error('Create calendar error:', err);
@@ -70,9 +78,14 @@ router.post('/', authenticateToken, async (req, res) => {
 router.post('/:id/share', authenticateToken, async (req, res) => {
     const calendarId = req.params.id;
     const { email, access_level } = req.body; // access_level: 'readonly' or 'readwrite'
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!email || !access_level) {
+    if (!normalizedEmail || !access_level) {
         return res.status(400).json({ error: '共有先のメールアドレスと権限を指定してください' });
+    }
+
+    if (!validateEmail(normalizedEmail) || !isAllowedSchoolEmail(normalizedEmail)) {
+        return res.status(400).json({ error: '共有先メールアドレスは @oic-ok.ac.jp の形式で指定してください' });
     }
 
     if (!['readonly', 'readwrite'].includes(access_level)) {
@@ -91,7 +104,7 @@ router.post('/:id/share', authenticateToken, async (req, res) => {
         }
 
         // 2. Find target user by email
-        const targetUser = await query.get('SELECT id, email, display_name FROM users WHERE email = ?', [email]);
+        const targetUser = await query.get('SELECT id, email, display_name FROM users WHERE email = ?', [normalizedEmail]);
         if (!targetUser) {
             return res.status(404).json({ error: '指定されたメールアドレスのユーザーが見つかりません' });
         }

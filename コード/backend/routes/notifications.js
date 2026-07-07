@@ -2,6 +2,26 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
+const { normalizeText, validateTextLength } = require('../utils/validation');
+
+const NOTIFICATION_TYPES = ['event', 'task', 'game', 'email', 'announcement'];
+
+function validateNotificationPayload(body) {
+    const title = normalizeText(body.title);
+    const message = normalizeText(body.message);
+    const type = normalizeText(body.type) || 'event';
+
+    if (!validateTextLength(title, 80)) {
+        return { error: 'タイトルは1文字以上80文字以内で入力してください' };
+    }
+    if (!validateTextLength(message, 1000)) {
+        return { error: 'メッセージは1文字以上1000文字以内で入力してください' };
+    }
+    if (!NOTIFICATION_TYPES.includes(type)) {
+        return { error: '通知種別が正しくありません' };
+    }
+    return { value: { title, message, type } };
+}
 
 // POST /api/notifications/subscribe - Save push subscription JSON
 router.post('/subscribe', authenticateToken, async (req, res) => {
@@ -111,15 +131,15 @@ router.post('/settings', authenticateToken, async (req, res) => {
 
 // POST /api/notifications/trigger-test - Trigger a test notification (useful for testing PWA notifications)
 router.post('/trigger-test', authenticateToken, async (req, res) => {
-    const { title, message, type } = req.body; // type: e.g. 'event', 'task', 'game', 'email'
+    const payload = validateNotificationPayload(req.body);
 
-    if (!title || !message) {
-        return res.status(400).json({ error: 'タイトルとメッセージは必須項目です' });
+    if (payload.error) {
+        return res.status(400).json({ error: payload.error });
     }
 
     try {
         const userId = req.user.id;
-        const finalType = type || 'event';
+        const { title, message, type: finalType } = payload.value;
 
         // Check if notification is enabled for this type
         const user = await query.get('SELECT notification_settings FROM users WHERE id = ?', [userId]);
@@ -181,18 +201,19 @@ router.delete('/history', authenticateToken, async (req, res) => {
 
 // POST /api/notifications/history - Log a custom notification history entry
 router.post('/history', authenticateToken, async (req, res) => {
-    const { title, message, type } = req.body;
-    if (!title || !message) {
-        return res.status(400).json({ error: 'タイトルとメッセージは必須項目です' });
+    const payload = validateNotificationPayload(req.body);
+    if (payload.error) {
+        return res.status(400).json({ error: payload.error });
     }
 
     try {
         const userId = req.user.id;
         const now = new Date().toISOString();
+        const { title, message, type } = payload.value;
         await query.run(
             `INSERT INTO notification_history (user_id, title, message, sent_at, type)
              VALUES (?, ?, ?, ?, ?)`,
-            [userId, title, message, now, type || 'event']
+            [userId, title, message, now, type]
         );
         res.json({ success: true, message: '通知履歴を保存しました' });
     } catch (err) {

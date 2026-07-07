@@ -1,5 +1,6 @@
 const ws = require('ws');
 const jwt = require('jsonwebtoken');
+const config = require('../config');
 
 let wss = null;
 // Map user ID to Set of active socket connections
@@ -24,7 +25,7 @@ function initWebSocket(server) {
 
                 if (data.type === 'auth') {
                     const token = data.token;
-                    jwt.verify(token, process.env.JWT_SECRET || 'super_secret_key_for_calendar_jwt', (err, decoded) => {
+                    jwt.verify(token, config.jwt.secret, (err, decoded) => {
                         if (err) {
                             wsConn.send(JSON.stringify({ type: 'error', message: '認証に失敗しました' }));
                             wsConn.close();

@@ -3,6 +3,103 @@ const router = express.Router();
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
 const { sendToUsers } = require('../utils/websocket');
+const {
+    normalizeEmail,
+    validateEmail,
+    normalizeText,
+    validateTextLength,
+    parseIntegerInRange,
+    isLocalDate,
+    isLocalDateTime,
+    validateReminderMinutes
+} = require('../utils/validation');
+
+const EVENT_TYPES = ['event', 'task', 'mail'];
+const VISIBILITY_TYPES = ['public', 'group', 'private'];
+
+function validateEventPayload(body) {
+    const title = normalizeText(body.title);
+    const start = normalizeText(body.start);
+    const end = normalizeText(body.end);
+    const visibility = body.visibility || 'group';
+    const eventType = body.eventType || 'event';
+
+    if (!validateTextLength(title, 100)) {
+        return { error: 'タイトルは1文字以上100文字以内で指定してください' };
+    }
+    if (!isLocalDateTime(start) || !isLocalDateTime(end)) {
+        return { error: '開始時刻と終了時刻は YYYY-MM-DDTHH:mm 形式で指定してください' };
+    }
+    if (start > end) {
+        return { error: '終了時刻は開始時刻以降にしてください' };
+    }
+    if (!VISIBILITY_TYPES.includes(visibility)) {
+        return { error: '無効な公開範囲設定です' };
+    }
+    if (!EVENT_TYPES.includes(eventType)) {
+        return { error: '無効な予定種別です' };
+    }
+
+    const hpVal = parseIntegerInRange(body.hp_consumption, 0, 0, 100);
+    const motVal = parseIntegerInRange(body.motivation_consumption, 0, 0, 100);
+    if (hpVal === null || motVal === null) {
+        return { error: 'HP消費率とやる気消費率は0から100の範囲で指定してください' };
+    }
+
+    const location = normalizeText(body.location);
+    const memo = normalizeText(body.memo);
+    const recurrence = body.recurrence ? normalizeText(body.recurrence) : null;
+    const color = normalizeText(body.color) || '#007AFF';
+    const mailTo = normalizeEmail(body.mailTo);
+    const mailSubject = normalizeText(body.mailSubject);
+    const mailRemindAt = normalizeText(body.mailRemindAt);
+
+    if (location && Array.from(location).length > 100) {
+        return { error: '場所は100文字以内で指定してください' };
+    }
+    if (memo && Array.from(memo).length > 1000) {
+        return { error: 'メモは1000文字以内で指定してください' };
+    }
+    if (recurrence && Array.from(recurrence).length > 100) {
+        return { error: '繰り返し設定が長すぎます' };
+    }
+    if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
+        return { error: '色は #007AFF のような形式で指定してください' };
+    }
+    if (mailTo && (!validateEmail(mailTo) || Array.from(mailTo).length > 254)) {
+        return { error: 'メール送信先の形式が正しくありません' };
+    }
+    if (mailSubject && Array.from(mailSubject).length > 120) {
+        return { error: 'メール件名は120文字以内で指定してください' };
+    }
+    if (mailRemindAt && !isLocalDateTime(mailRemindAt)) {
+        return { error: 'メール通知時刻は YYYY-MM-DDTHH:mm 形式で指定してください' };
+    }
+
+    return {
+        value: {
+            title,
+            start,
+            end,
+            visibility,
+            eventType,
+            hpVal,
+            motVal,
+            location,
+            memo,
+            recurrence,
+            color,
+            reminderMinutes: validateReminderMinutes(body.reminderMinutes),
+            notifyAtStart: body.notifyAtStart !== false,
+            taskDeadlineNotify: body.taskDeadlineNotify !== false,
+            mailReminderEnabled: !!body.mailReminderEnabled,
+            mailTo,
+            mailSubject,
+            mailRemindAt,
+            mailSent: !!body.mailSent
+        }
+    };
+}
 
 // Helper to format Date objects as 'YYYY-MM-DDTHH:mm'
 function formatLocalDateTime(date) {
@@ -176,19 +273,15 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // POST /api/events - Create a new event
 router.post('/', authenticateToken, async (req, res) => {
-    const { id, calendar_id, title, location, allday, start, end, color, memo, visibility, hp_consumption, motivation_consumption, recurrence, eventType, reminderMinutes, notifyAtStart, taskDeadlineNotify, mailReminderEnabled, mailTo, mailSubject, mailRemindAt, mailSent } = req.body;
-
-    if (!title || !start || !end) {
-        return res.status(400).json({ error: 'タイトル、開始時刻、終了時刻は必須です' });
+    const { id, calendar_id, allday } = req.body;
+    const payload = validateEventPayload(req.body);
+    if (payload.error) {
+        return res.status(400).json({ error: payload.error });
     }
+    const eventData = payload.value;
 
-    if (title.length > 100) {
-        return res.status(400).json({ error: 'タイトルは100文字以内で指定してください' });
-    }
-
-    const vis = visibility || 'group';
-    if (!['public', 'group', 'private'].includes(vis)) {
-        return res.status(400).json({ error: '無効な公開範囲設定です' });
+    if (id && !/^[A-Za-z0-9_-]{1,100}$/.test(String(id))) {
+        return res.status(400).json({ error: 'イベントIDの形式が正しくありません' });
     }
 
     try {
@@ -220,10 +313,8 @@ router.post('/', authenticateToken, async (req, res) => {
         }
 
         // Capacity Warnings Check (based on event start date)
-        const dateStr = start.split('T')[0];
-        const hpVal = parseInt(hp_consumption || 0);
-        const motVal = parseInt(motivation_consumption || 0);
-        const warning = await checkCapacityWarning(userId, dateStr, hpVal, motVal);
+        const dateStr = eventData.start.split('T')[0];
+        const warning = await checkCapacityWarning(userId, dateStr, eventData.hpVal, eventData.motVal);
 
         const eventId = id || 'event_' + Date.now();
         const alldayVal = allday ? 1 : 0;
@@ -231,7 +322,31 @@ router.post('/', authenticateToken, async (req, res) => {
         await query.run(
             `INSERT INTO events (id, calendar_id, creator_id, title, location, allday, start_time, end_time, color, memo, visibility, hp_consumption, motivation_consumption, recurrence, event_type, reminder_minutes, notify_at_start, task_deadline_notify, mail_reminder_enabled, mail_to, mail_subject, mail_remind_at, mail_sent)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [eventId, targetCalendarId, userId, title, location || '', alldayVal, start, end, color || '#007AFF', memo || '', vis, hpVal, motVal, recurrence || null, eventType || 'event', JSON.stringify(reminderMinutes || []), notifyAtStart !== false ? 1 : 0, taskDeadlineNotify !== false ? 1 : 0, mailReminderEnabled ? 1 : 0, mailTo || '', mailSubject || '', mailRemindAt || '', mailSent ? 1 : 0]
+            [
+                eventId,
+                targetCalendarId,
+                userId,
+                eventData.title,
+                eventData.location,
+                alldayVal,
+                eventData.start,
+                eventData.end,
+                eventData.color,
+                eventData.memo,
+                eventData.visibility,
+                eventData.hpVal,
+                eventData.motVal,
+                eventData.recurrence,
+                eventData.eventType,
+                JSON.stringify(eventData.reminderMinutes),
+                eventData.notifyAtStart ? 1 : 0,
+                eventData.taskDeadlineNotify ? 1 : 0,
+                eventData.mailReminderEnabled ? 1 : 0,
+                eventData.mailTo,
+                eventData.mailSubject,
+                eventData.mailRemindAt,
+                eventData.mailSent ? 1 : 0
+            ]
         );
 
         // Broadcast to calendar accessors via WebSocket
@@ -247,7 +362,22 @@ router.post('/', authenticateToken, async (req, res) => {
             message: '予定を追加しました',
             warning: warning ? warning.message : null,
             warningDetail: warning,
-            event: { id: eventId, calendar_id: targetCalendarId, creator_id: userId, title, location, allday: !!allday, start, end, color, memo, visibility: vis, hp_consumption: hpVal, motivation_consumption: motVal, recurrence }
+            event: {
+                id: eventId,
+                calendar_id: targetCalendarId,
+                creator_id: userId,
+                title: eventData.title,
+                location: eventData.location,
+                allday: !!allday,
+                start: eventData.start,
+                end: eventData.end,
+                color: eventData.color,
+                memo: eventData.memo,
+                visibility: eventData.visibility,
+                hp_consumption: eventData.hpVal,
+                motivation_consumption: eventData.motVal,
+                recurrence: eventData.recurrence
+            }
         });
     } catch (err) {
         console.error('Create event error:', err);
@@ -258,20 +388,12 @@ router.post('/', authenticateToken, async (req, res) => {
 // PUT /api/events/:id - Update an existing event
 router.put('/:id', authenticateToken, async (req, res) => {
     const eventId = req.params.id;
-    const { calendar_id, title, location, allday, start, end, color, memo, visibility, hp_consumption, motivation_consumption, recurrence, eventType, reminderMinutes, notifyAtStart, taskDeadlineNotify, mailReminderEnabled, mailTo, mailSubject, mailRemindAt, mailSent } = req.body;
-
-    if (!title || !start || !end) {
-        return res.status(400).json({ error: 'タイトル、開始時刻、終了時刻は必須です' });
+    const { calendar_id, allday } = req.body;
+    const payload = validateEventPayload(req.body);
+    if (payload.error) {
+        return res.status(400).json({ error: payload.error });
     }
-
-    if (title.length > 100) {
-        return res.status(400).json({ error: 'タイトルは100文字以内で指定してください' });
-    }
-
-    const vis = visibility || 'group';
-    if (!['public', 'group', 'private'].includes(vis)) {
-        return res.status(400).json({ error: '無効な公開範囲設定です' });
-    }
+    const eventData = payload.value;
 
     try {
         const userId = req.user.id;
@@ -298,10 +420,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
         }
 
         // Capacity check
-        const dateStr = start.split('T')[0];
-        const hpVal = parseInt(hp_consumption || 0);
-        const motVal = parseInt(motivation_consumption || 0);
-        const warning = await checkCapacityWarning(userId, dateStr, hpVal, motVal, eventId);
+        const dateStr = eventData.start.split('T')[0];
+        const warning = await checkCapacityWarning(userId, dateStr, eventData.hpVal, eventData.motVal, eventId);
 
         const alldayVal = allday ? 1 : 0;
 
@@ -309,7 +429,30 @@ router.put('/:id', authenticateToken, async (req, res) => {
             `UPDATE events 
              SET calendar_id = ?, title = ?, location = ?, allday = ?, start_time = ?, end_time = ?, color = ?, memo = ?, visibility = ?, hp_consumption = ?, motivation_consumption = ?, recurrence = ?, event_type = ?, reminder_minutes = ?, notify_at_start = ?, task_deadline_notify = ?, mail_reminder_enabled = ?, mail_to = ?, mail_subject = ?, mail_remind_at = ?, mail_sent = ?
              WHERE id = ?`,
-            [targetCalendarId, title, location || '', alldayVal, start, end, color || '#007AFF', memo || '', vis, hpVal, motVal, recurrence || null, eventType || 'event', JSON.stringify(reminderMinutes || []), notifyAtStart !== false ? 1 : 0, taskDeadlineNotify !== false ? 1 : 0, mailReminderEnabled ? 1 : 0, mailTo || '', mailSubject || '', mailRemindAt || '', mailSent ? 1 : 0, eventId]
+            [
+                targetCalendarId,
+                eventData.title,
+                eventData.location,
+                alldayVal,
+                eventData.start,
+                eventData.end,
+                eventData.color,
+                eventData.memo,
+                eventData.visibility,
+                eventData.hpVal,
+                eventData.motVal,
+                eventData.recurrence,
+                eventData.eventType,
+                JSON.stringify(eventData.reminderMinutes),
+                eventData.notifyAtStart ? 1 : 0,
+                eventData.taskDeadlineNotify ? 1 : 0,
+                eventData.mailReminderEnabled ? 1 : 0,
+                eventData.mailTo,
+                eventData.mailSubject,
+                eventData.mailRemindAt,
+                eventData.mailSent ? 1 : 0,
+                eventId
+            ]
         );
 
         // Broadcast to original and new calendar accessors
@@ -328,7 +471,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
             message: '予定を更新しました',
             warning: warning ? warning.message : null,
             warningDetail: warning,
-            event: { id: eventId, calendar_id: targetCalendarId, title, location, allday: !!allday, start, end, color, memo, visibility: vis, hp_consumption: hpVal, motivation_consumption: motVal, recurrence }
+            event: {
+                id: eventId,
+                calendar_id: targetCalendarId,
+                title: eventData.title,
+                location: eventData.location,
+                allday: !!allday,
+                start: eventData.start,
+                end: eventData.end,
+                color: eventData.color,
+                memo: eventData.memo,
+                visibility: eventData.visibility,
+                hp_consumption: eventData.hpVal,
+                motivation_consumption: eventData.motVal,
+                recurrence: eventData.recurrence
+            }
         });
     } catch (err) {
         console.error('Update event error:', err);
@@ -380,6 +537,14 @@ router.post('/copy-paste', authenticateToken, async (req, res) => {
 
     if (!eventIds || !Array.isArray(eventIds) || eventIds.length === 0 || !targetDate) {
         return res.status(400).json({ error: 'イベントID配列と貼り付け先の日付(targetDate)は必須項目です' });
+    }
+
+    if (eventIds.length > 50) {
+        return res.status(400).json({ error: '一度にコピーできる予定は50件までです' });
+    }
+
+    if (!isLocalDate(targetDate)) {
+        return res.status(400).json({ error: '貼り付け先の日付は YYYY-MM-DD 形式で指定してください' });
     }
 
     try {

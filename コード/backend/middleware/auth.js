@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { query } = require('../db');
+const config = require('../config');
 
 async function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
@@ -12,7 +13,7 @@ async function authenticateToken(req, res, next) {
     // 1. JWT検証
     let user;
     try {
-        user = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_key_for_calendar_jwt');
+        user = jwt.verify(token, config.jwt.secret);
     } catch (err) {
         return res.status(403).json({ error: '無効または期限切れのトークンです' });
     }
@@ -27,15 +28,48 @@ async function authenticateToken(req, res, next) {
             return res.status(401).json({ error: 'このトークンは無効化されています。再ログインしてください。' });
         }
 
-        // 3. 30分無操作タイムアウト確認
-        const dbUser = await query.get('SELECT last_activity_at FROM users WHERE id = ?', [user.id]);
-        if (dbUser && dbUser.last_activity_at) {
+        // 3. 無操作タイムアウト確認
+        const dbUser = await query.get(
+            'SELECT id, email, display_name, role, account_status, timeout_until, restriction_reason, last_activity_at FROM users WHERE id = ?',
+            [user.id]
+        );
+        if (!dbUser) {
+            return res.status(401).json({ error: 'ユーザーが見つかりません。再ログインしてください。' });
+        }
+
+        if (dbUser.account_status === 'banned') {
+            return res.status(403).json({ error: `このアカウントはBANされています。${dbUser.restriction_reason ? `理由: ${dbUser.restriction_reason}` : ''}`.trim() });
+        }
+
+        if (dbUser.account_status === 'timeout') {
+            const timeoutUntil = dbUser.timeout_until ? new Date(dbUser.timeout_until) : null;
+            if (!timeoutUntil || timeoutUntil > new Date()) {
+                const untilText = timeoutUntil ? timeoutUntil.toLocaleString('ja-JP') : '未定';
+                return res.status(403).json({ error: `このアカウントは ${untilText} までタイムアウト中です。${dbUser.restriction_reason ? `理由: ${dbUser.restriction_reason}` : ''}`.trim() });
+            }
+
+            await query.run(
+                `UPDATE users
+                 SET account_status = 'active',
+                     timeout_until = NULL,
+                     restriction_reason = NULL,
+                     restricted_at = NULL,
+                     restricted_by = NULL
+                 WHERE id = ?`,
+                [dbUser.id]
+            );
+            dbUser.account_status = 'active';
+            dbUser.timeout_until = null;
+            dbUser.restriction_reason = null;
+        }
+
+        if (dbUser.last_activity_at) {
             const now = new Date();
             const lastActivity = new Date(dbUser.last_activity_at);
             const diffMin = (now - lastActivity) / (1000 * 60);
 
-            if (diffMin > 30) {
-                return res.status(401).json({ error: '30分間無操作だったため自動ログアウトされました。再度ログインしてください。' });
+            if (diffMin > config.session.inactivityTimeoutMinutes) {
+                return res.status(401).json({ error: `${config.session.inactivityTimeoutMinutes}分間無操作だったため自動ログアウトされました。再度ログインしてください。` });
             }
         }
 
@@ -45,15 +79,17 @@ async function authenticateToken(req, res, next) {
             [user.id]
         );
 
-        req.user = user;
+        req.user = {
+            id: dbUser.id,
+            email: dbUser.email,
+            display_name: dbUser.display_name,
+            role: dbUser.role
+        };
         req.token = token; // logout時に使用するためリクエストに付加
         next();
     } catch (dbErr) {
         console.error('Middleware database query error:', dbErr);
-        // DB一時エラー時はフォールバックで通過
-        req.user = user;
-        req.token = token;
-        next();
+        return res.status(500).json({ error: '認証状態の確認に失敗しました。時間をおいて再度お試しください。' });
     }
 }
 

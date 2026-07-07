@@ -91,6 +91,11 @@ async function initDb() {
                 recovery_rate REAL DEFAULT 1.0,
                 warning_threshold INTEGER DEFAULT 20,
                 role TEXT DEFAULT 'user',
+                account_status TEXT DEFAULT 'active',
+                timeout_until DATETIME DEFAULT NULL,
+                restriction_reason TEXT DEFAULT NULL,
+                restricted_at DATETIME DEFAULT NULL,
+                restricted_by INTEGER DEFAULT NULL,
                 notification_settings TEXT DEFAULT '{"events":true,"tasks":true,"game":true,"email":true}',
                 last_activity_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -102,6 +107,11 @@ async function initDb() {
         await addColumnIfNotExists('users', 'recovery_rate', 'REAL DEFAULT 1.0');
         await addColumnIfNotExists('users', 'warning_threshold', 'INTEGER DEFAULT 20');
         await addColumnIfNotExists('users', 'role', "TEXT DEFAULT 'user'");
+        await addColumnIfNotExists('users', 'account_status', "TEXT DEFAULT 'active'");
+        await addColumnIfNotExists('users', 'timeout_until', 'TIMESTAMP DEFAULT NULL');
+        await addColumnIfNotExists('users', 'restriction_reason', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('users', 'restricted_at', 'TIMESTAMP DEFAULT NULL');
+        await addColumnIfNotExists('users', 'restricted_by', 'INTEGER DEFAULT NULL');
         await addColumnIfNotExists('users', 'notification_settings', "TEXT DEFAULT '{\"events\":true,\"tasks\":true,\"game\":true,\"email\":true}'");
         await addColumnIfNotExists('users', 'last_activity_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
 

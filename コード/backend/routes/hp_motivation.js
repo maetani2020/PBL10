@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
+const { parseIntegerInRange, parseNumberInRange, isLocalDate } = require('../utils/validation');
 
 // Helper to determine status color based on percentage
 function getGaugeStatus(percentage, threshold) {
@@ -60,6 +61,10 @@ router.get('/status', authenticateToken, async (req, res) => {
     const { date } = req.query; // format: 'YYYY-MM-DD', defaults to today
     const userId = req.user.id;
     const targetDate = date || new Date().toISOString().split('T')[0];
+
+    if (!isLocalDate(targetDate)) {
+        return res.status(400).json({ error: '日付は YYYY-MM-DD 形式で指定してください' });
+    }
 
     try {
         const user = await query.get(
@@ -148,10 +153,14 @@ router.post('/settings', authenticateToken, async (req, res) => {
         const userId = req.user.id;
         const user = await query.get('SELECT * FROM users WHERE id = ?', [userId]);
 
-        const finalMaxHp = max_hp !== undefined ? parseInt(max_hp) : user.max_hp;
-        const finalMaxMot = max_motivation !== undefined ? parseInt(max_motivation) : user.max_motivation;
-        const finalRecovery = recovery_rate !== undefined ? parseFloat(recovery_rate) : user.recovery_rate;
-        const finalThreshold = warning_threshold !== undefined ? parseInt(warning_threshold) : user.warning_threshold;
+        const finalMaxHp = parseIntegerInRange(max_hp, user.max_hp, 1, 300);
+        const finalMaxMot = parseIntegerInRange(max_motivation, user.max_motivation, 1, 300);
+        const finalRecovery = parseNumberInRange(recovery_rate, user.recovery_rate, 0, 1);
+        const finalThreshold = parseIntegerInRange(warning_threshold, user.warning_threshold, 0, 100);
+
+        if (finalMaxHp === null || finalMaxMot === null || finalRecovery === null || finalThreshold === null) {
+            return res.status(400).json({ error: 'HP/やる気設定の値が範囲外です' });
+        }
 
         await query.run(
             `UPDATE users 

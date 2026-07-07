@@ -3,6 +3,15 @@ const router = express.Router();
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
 const { sendToUsers } = require('../utils/websocket');
+const {
+    normalizeEmail,
+    validateEmail,
+    isAllowedSchoolEmail,
+    normalizeText,
+    validateTextLength
+} = require('../utils/validation');
+
+const GROUP_ROLES = ['admin', 'editor', 'viewer'];
 
 // Helper to check user's role in a group
 async function getGroupRole(groupId, userId) {
@@ -126,16 +135,17 @@ router.post('/invitations/:invitationId/respond', authenticateToken, async (req,
 // POST /api/groups - Create a new group
 router.post('/', authenticateToken, async (req, res) => {
     const { name } = req.body;
+    const groupName = normalizeText(name);
 
-    if (!name || !name.trim()) {
-        return res.status(400).json({ error: 'グループ名を入力してください' });
+    if (!validateTextLength(groupName, 50)) {
+        return res.status(400).json({ error: 'グループ名は1文字以上50文字以内で入力してください' });
     }
 
     try {
         // Create Group
         const result = await query.run(
             'INSERT INTO groups (name, owner_id) VALUES (?, ?)',
-            [name.trim(), req.user.id]
+            [groupName, req.user.id]
         );
         const groupId = result.lastID;
 
@@ -148,12 +158,12 @@ router.post('/', authenticateToken, async (req, res) => {
         // Create a Group Calendar associated with this group
         await query.run(
             'INSERT INTO calendars (name, group_id) VALUES (?, ?)',
-            [`${name.trim()}のカレンダー`, groupId]
+            [`${groupName}のカレンダー`, groupId]
         );
 
         res.status(201).json({
             message: 'グループを作成しました',
-            group: { id: groupId, name, owner_id: req.user.id, role: 'admin' }
+            group: { id: groupId, name: groupName, owner_id: req.user.id, role: 'admin' }
         });
     } catch (err) {
         console.error('Create group error:', err);
@@ -223,9 +233,14 @@ router.get('/:id/invitations', authenticateToken, async (req, res) => {
 router.post('/:id/invite', authenticateToken, async (req, res) => {
     const groupId = req.params.id;
     const { user_id, email } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
     if (!user_id && !email) {
         return res.status(400).json({ error: '招待するユーザーのメールアドレスを指定してください' });
+    }
+
+    if (email && (!validateEmail(normalizedEmail) || !isAllowedSchoolEmail(normalizedEmail))) {
+        return res.status(400).json({ error: '招待メールアドレスは @oic-ok.ac.jp の形式で指定してください' });
     }
 
     try {
@@ -247,10 +262,10 @@ router.post('/:id/invite', authenticateToken, async (req, res) => {
 
         // 3. Find user by email first, keeping user_id compatibility for old clients
         let targetUser = null;
-        if (email) {
+        if (normalizedEmail) {
             targetUser = await query.get(
                 'SELECT id, email, display_name FROM users WHERE LOWER(email) = LOWER(?)',
-                [String(email).trim()]
+                [normalizedEmail]
             );
         } else {
             targetUser = await query.get(
@@ -261,6 +276,10 @@ router.post('/:id/invite', authenticateToken, async (req, res) => {
 
         if (!targetUser) {
             return res.status(404).json({ error: '指定されたメールアドレスのユーザーが見つかりません' });
+        }
+
+        if (targetUser.id === req.user.id) {
+            return res.status(400).json({ error: '自分自身は招待できません' });
         }
 
         // 4. Check if already a member
@@ -320,12 +339,13 @@ router.post('/:id/invite', authenticateToken, async (req, res) => {
 router.post('/:id/role', authenticateToken, async (req, res) => {
     const groupId = req.params.id;
     const { target_user_id, role } = req.body;
+    const targetUserId = Number.parseInt(target_user_id, 10);
 
-    if (!target_user_id || !role) {
+    if (!Number.isInteger(targetUserId) || !role) {
         return res.status(400).json({ error: 'ターゲットユーザーIDと役割（role）を指定してください' });
     }
 
-    if (!['admin', 'editor', 'viewer'].includes(role)) {
+    if (!GROUP_ROLES.includes(role)) {
         return res.status(400).json({ error: '無効な役割です。admin, editor, viewer の中から指定してください。' });
     }
 
@@ -337,20 +357,20 @@ router.post('/:id/role', authenticateToken, async (req, res) => {
         }
 
         // Check if target is in group
-        const targetRole = await getGroupRole(groupId, target_user_id);
+        const targetRole = await getGroupRole(groupId, targetUserId);
         if (!targetRole) {
             return res.status(404).json({ error: '指定されたユーザーはこのグループに参加していません' });
         }
 
         // Cannot demote group owner/creator (the owner of the group record)
         const group = await query.get('SELECT owner_id FROM groups WHERE id = ?', [groupId]);
-        if (parseInt(target_user_id) === group.owner_id && role !== 'admin') {
+        if (targetUserId === group.owner_id && role !== 'admin') {
             return res.status(400).json({ error: 'グループオーナーの管理者権限を剥奪することはできません' });
         }
 
         await query.run(
             'UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?',
-            [role, groupId, target_user_id]
+            [role, groupId, targetUserId]
         );
 
         const memberIds = await getGroupMemberIds(groupId);

@@ -2,30 +2,24 @@ require('dotenv').config();
 
 const bcrypt = require('bcryptjs');
 const { initDb, query } = require('../db');
-
-const ALLOWED_EMAIL_DOMAIN = 'oic-ok.ac.jp';
-
-function normalizeEmail(email) {
-  return String(email || '').trim().toLowerCase();
-}
-
-function validatePassword(password) {
-  if (typeof password !== 'string') return false;
-  if (password.length < 8 || password.length > 100) return false;
-  return /[a-zA-Z]/.test(password) && /[0-9]/.test(password);
-}
+const config = require('../config');
+const { normalizeEmail, isAllowedSchoolEmail, validatePassword, validateDisplayName } = require('../utils/validation');
 
 async function main() {
   const email = normalizeEmail(process.env.ADMIN_EMAIL || process.argv[2]);
   const password = process.env.ADMIN_PASSWORD || process.argv[3];
   const displayName = String(process.env.ADMIN_DISPLAY_NAME || 'admin').trim();
 
-  if (!email || !email.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
-    throw new Error(`ADMIN_EMAIL must end with @${ALLOWED_EMAIL_DOMAIN}`);
+  if (!email || !isAllowedSchoolEmail(email)) {
+    throw new Error(`ADMIN_EMAIL must end with @${config.allowedEmailDomain}`);
   }
 
   if (!validatePassword(password)) {
     throw new Error('ADMIN_PASSWORD must be 8-100 chars and include letters and numbers');
+  }
+
+  if (!validateDisplayName(displayName)) {
+    throw new Error('ADMIN_DISPLAY_NAME must be 1-10 chars');
   }
 
   await initDb();

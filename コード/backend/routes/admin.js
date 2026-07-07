@@ -4,6 +4,8 @@ const os = require('os');
 const { query } = require('../db');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 const { sendToUsers } = require('../utils/websocket');
+const config = require('../config');
+const { normalizeText, validateTextLength } = require('../utils/validation');
 
 let previousCpuSnapshot = getCpuSnapshot();
 
@@ -39,6 +41,28 @@ function getCpuUsagePercent() {
 function getClientIp(req) {
     const clientIp = req.ip || req.connection.remoteAddress || '';
     return clientIp.startsWith('::ffff:') ? clientIp.substring(7) : clientIp;
+}
+
+function parseLogDetails(details) {
+    if (!details) return {};
+    try {
+        return JSON.parse(details);
+    } catch (err) {
+        return { raw: String(details) };
+    }
+}
+
+function getUserRestrictionStatus(user) {
+    if (user.account_status === 'banned') return 'banned';
+    if (user.account_status === 'timeout') {
+        const timeoutUntil = user.timeout_until ? new Date(user.timeout_until) : null;
+        if (!timeoutUntil || timeoutUntil > new Date()) return 'timeout';
+    }
+    return 'active';
+}
+
+async function clearUserSessions(userId) {
+    await query.run('DELETE FROM refresh_tokens WHERE user_id = ?', [userId]);
 }
 
 async function logAdminAction(req, action, targetType = null, targetId = null, details = {}) {
@@ -80,12 +104,11 @@ async function getCalendarAccessors(calendarId) {
 
 // IP Whitelist middleware (Optional, recommended)
 function verifyIpWhitelist(req, res, next) {
-    const whitelistStr = process.env.ADMIN_IP_WHITELIST;
-    if (!whitelistStr) {
+    const whitelist = config.admin.ipWhitelist;
+    if (!whitelist.length) {
         return next(); // Whitelist not configured, skip
     }
 
-    const whitelist = whitelistStr.split(',').map(ip => ip.trim());
     const clientIp = req.ip || req.connection.remoteAddress;
 
     // Normalize IPv6 mapped IPv4 addresses (e.g., ::ffff:127.0.0.1)
@@ -107,18 +130,29 @@ router.use(verifyIpWhitelist);
 router.get('/users', async (req, res) => {
     try {
         const users = await query.all(
-            `SELECT u.id, u.email, u.display_name, u.role, u.created_at, u.last_activity_at,
+            `SELECT u.id, u.email, u.display_name, u.role, u.account_status, u.timeout_until,
+                    u.restriction_reason, u.restricted_at, u.restricted_by,
+                    restricted_by_user.display_name AS restricted_by_name,
+                    restricted_by_user.email AS restricted_by_email,
+                    u.created_at, u.last_activity_at,
                     COUNT(DISTINCT e.id) AS event_count,
                     COUNT(DISTINCT gm.group_id) AS group_count,
                     COUNT(DISTINCT nh.id) AS notification_count
              FROM users u
+             LEFT JOIN users restricted_by_user ON restricted_by_user.id = u.restricted_by
              LEFT JOIN events e ON e.creator_id = u.id AND e.deleted_at IS NULL
              LEFT JOIN group_members gm ON gm.user_id = u.id
              LEFT JOIN notification_history nh ON nh.user_id = u.id
-             GROUP BY u.id, u.email, u.display_name, u.role, u.created_at, u.last_activity_at
+             GROUP BY u.id, u.email, u.display_name, u.role, u.account_status, u.timeout_until,
+                      u.restriction_reason, u.restricted_at, u.restricted_by,
+                      restricted_by_user.display_name, restricted_by_user.email,
+                      u.created_at, u.last_activity_at
              ORDER BY u.id ASC`
         );
-        res.json(users);
+        res.json(users.map(user => ({
+            ...user,
+            account_status: getUserRestrictionStatus(user)
+        })));
     } catch (err) {
         console.error('Admin get users error:', err);
         res.status(500).json({ error: 'サーバーエラーが発生しました' });
@@ -189,10 +223,15 @@ router.delete('/users/:id', async (req, res) => {
 
 // POST /api/admin/announcements - Broadcast system announcement to all users
 router.post('/announcements', async (req, res) => {
-    const { title, message } = req.body;
+    const title = normalizeText(req.body.title);
+    const message = normalizeText(req.body.message);
 
-    if (!title || !message) {
-        return res.status(400).json({ error: 'タイトルとお知らせ内容は必須項目です' });
+    if (!validateTextLength(title, 80)) {
+        return res.status(400).json({ error: 'お知らせタイトルは1文字以上80文字以内で入力してください' });
+    }
+
+    if (!validateTextLength(message, 1000)) {
+        return res.status(400).json({ error: 'お知らせ本文は1文字以上1000文字以内で入力してください' });
     }
 
     try {
@@ -204,7 +243,7 @@ router.post('/announcements', async (req, res) => {
             await query.run(
                 `INSERT INTO notification_history (user_id, title, message, sent_at, type)
                  VALUES (?, ?, ?, ?, ?)`,
-                [user.id, `[お知らせ] ${title.trim()}`, message.trim(), now, 'announcement']
+                [user.id, `[お知らせ] ${title}`, message, now, 'announcement']
             );
         }
 
@@ -215,7 +254,7 @@ router.post('/announcements', async (req, res) => {
         console.log(`---------------------------------------\n`);
 
         await logAdminAction(req, 'announcement:send', 'announcement', null, {
-            title: title.trim(),
+            title,
             userCount: users.length
         });
         res.json({ message: `${users.length}名のユーザーにお知らせを配信しました` });
@@ -238,6 +277,10 @@ router.get('/system-stats', async (req, res) => {
 
         const userCount = await query.get('SELECT COUNT(*) as count FROM users');
         const adminCount = await query.get("SELECT COUNT(*) as count FROM users WHERE role = 'admin'");
+        const bannedCount = await query.get("SELECT COUNT(*) as count FROM users WHERE account_status = 'banned'");
+        const timeoutCount = await query.get(
+            "SELECT COUNT(*) as count FROM users WHERE account_status = 'timeout' AND (timeout_until IS NULL OR timeout_until > CURRENT_TIMESTAMP)"
+        );
         const eventCount = await query.get('SELECT COUNT(*) as count FROM events WHERE deleted_at IS NULL');
         const deletedEventCount = await query.get('SELECT COUNT(*) as count FROM events WHERE deleted_at IS NOT NULL');
         const todayEventCount = await query.get(
@@ -287,6 +330,8 @@ router.get('/system-stats', async (req, res) => {
             database: {
                 users: userCount.count,
                 admins: adminCount.count,
+                bannedUsers: bannedCount.count,
+                timeoutUsers: timeoutCount.count,
                 events: eventCount.count,
                 deletedEvents: deletedEventCount.count,
                 todayEvents: todayEventCount.count,
@@ -305,6 +350,140 @@ router.get('/system-stats', async (req, res) => {
     }
 });
 
+// POST /api/admin/users/:id/ban - Permanently ban a user
+router.post('/users/:id/ban', async (req, res) => {
+    const userId = req.params.id;
+    const reason = normalizeText(req.body.reason || '管理者によるBAN');
+
+    if (!validateTextLength(reason, 200)) {
+        return res.status(400).json({ error: 'BAN理由は1文字以上200文字以内で入力してください' });
+    }
+
+    try {
+        if (parseInt(userId, 10) === req.user.id) {
+            return res.status(400).json({ error: '自分自身をBANすることはできません' });
+        }
+
+        const user = await query.get('SELECT id, email, display_name, role, account_status FROM users WHERE id = ?', [userId]);
+        if (!user) {
+            return res.status(404).json({ error: 'ユーザーが見つかりません' });
+        }
+
+        await query.run(
+            `UPDATE users
+             SET account_status = 'banned',
+                 timeout_until = NULL,
+                 restriction_reason = ?,
+                 restricted_at = CURRENT_TIMESTAMP,
+                 restricted_by = ?
+             WHERE id = ?`,
+            [reason, req.user.id, userId]
+        );
+        await clearUserSessions(userId);
+
+        await logAdminAction(req, 'user:ban', 'user', userId, {
+            email: user.email,
+            displayName: user.display_name,
+            beforeStatus: user.account_status || 'active',
+            reason
+        });
+
+        res.json({ message: 'ユーザーをBANしました' });
+    } catch (err) {
+        console.error('Admin ban user error:', err);
+        res.status(500).json({ error: 'ユーザーBANに失敗しました' });
+    }
+});
+
+// POST /api/admin/users/:id/timeout - Temporarily suspend a user
+router.post('/users/:id/timeout', async (req, res) => {
+    const userId = req.params.id;
+    const minutes = Number.parseInt(req.body.minutes, 10);
+    const reason = normalizeText(req.body.reason || '管理者によるタイムアウト');
+
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 43200) {
+        return res.status(400).json({ error: 'タイムアウト時間は1分から43200分（30日）の範囲で指定してください' });
+    }
+
+    if (!validateTextLength(reason, 200)) {
+        return res.status(400).json({ error: 'タイムアウト理由は1文字以上200文字以内で入力してください' });
+    }
+
+    try {
+        if (parseInt(userId, 10) === req.user.id) {
+            return res.status(400).json({ error: '自分自身をタイムアウトすることはできません' });
+        }
+
+        const user = await query.get('SELECT id, email, display_name, role, account_status FROM users WHERE id = ?', [userId]);
+        if (!user) {
+            return res.status(404).json({ error: 'ユーザーが見つかりません' });
+        }
+
+        const timeoutUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+        await query.run(
+            `UPDATE users
+             SET account_status = 'timeout',
+                 timeout_until = ?,
+                 restriction_reason = ?,
+                 restricted_at = CURRENT_TIMESTAMP,
+                 restricted_by = ?
+             WHERE id = ?`,
+            [timeoutUntil, reason, req.user.id, userId]
+        );
+        await clearUserSessions(userId);
+
+        await logAdminAction(req, 'user:timeout', 'user', userId, {
+            email: user.email,
+            displayName: user.display_name,
+            beforeStatus: user.account_status || 'active',
+            minutes,
+            timeoutUntil,
+            reason
+        });
+
+        res.json({ message: 'ユーザーをタイムアウトしました', timeoutUntil });
+    } catch (err) {
+        console.error('Admin timeout user error:', err);
+        res.status(500).json({ error: 'ユーザータイムアウトに失敗しました' });
+    }
+});
+
+// POST /api/admin/users/:id/unrestrict - Remove ban or timeout
+router.post('/users/:id/unrestrict', async (req, res) => {
+    const userId = req.params.id;
+
+    try {
+        const user = await query.get('SELECT id, email, display_name, account_status, timeout_until, restriction_reason FROM users WHERE id = ?', [userId]);
+        if (!user) {
+            return res.status(404).json({ error: 'ユーザーが見つかりません' });
+        }
+
+        await query.run(
+            `UPDATE users
+             SET account_status = 'active',
+                 timeout_until = NULL,
+                 restriction_reason = NULL,
+                 restricted_at = NULL,
+                 restricted_by = NULL
+             WHERE id = ?`,
+            [userId]
+        );
+
+        await logAdminAction(req, 'user:unrestrict', 'user', userId, {
+            email: user.email,
+            displayName: user.display_name,
+            beforeStatus: user.account_status || 'active',
+            beforeTimeoutUntil: user.timeout_until,
+            beforeReason: user.restriction_reason
+        });
+
+        res.json({ message: 'ユーザーのBAN/タイムアウトを解除しました' });
+    } catch (err) {
+        console.error('Admin unrestrict user error:', err);
+        res.status(500).json({ error: 'ユーザー制限の解除に失敗しました' });
+    }
+});
+
 // GET /api/admin/backup - Export safe application data as JSON
 router.get('/backup', async (req, res) => {
     try {
@@ -320,7 +499,9 @@ router.get('/backup', async (req, res) => {
             tables: {
                 users: await query.all(
                     `SELECT id, email, display_name, max_hp, max_motivation, recovery_rate,
-                            warning_threshold, role, notification_settings, last_activity_at, created_at
+                            warning_threshold, role, account_status, timeout_until,
+                            restriction_reason, restricted_at, restricted_by,
+                            notification_settings, last_activity_at, created_at
                      FROM users
                      ORDER BY id ASC`
                 ),
@@ -371,7 +552,7 @@ router.get('/logs', async (req, res) => {
 
         res.json(logs.map(log => ({
             ...log,
-            details: log.details ? JSON.parse(log.details) : {}
+            details: parseLogDetails(log.details)
         })));
     } catch (err) {
         console.error('Admin get logs error:', err);

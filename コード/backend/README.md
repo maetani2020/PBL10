@@ -32,7 +32,21 @@ npm install
 ルートディレクトリに `.env` ファイルを作成し、以下のように設定します（`.env` はgit管理から除外されています）。
 ```env
 PORT=3000
-JWT_SECRET=任意のシークレットキー
+HOST=0.0.0.0
+APP_URL=http://100.88.239.70:3000
+
+# 認証・セキュリティ
+JWT_SECRET=任意の長いシークレットキー
+JWT_EXPIRES_IN=2h
+REFRESH_TOKEN_DAYS=30
+INACTIVITY_TIMEOUT_MINUTES=30
+ALLOWED_EMAIL_DOMAIN=oic-ok.ac.jp
+LOGIN_MAX_ATTEMPTS=5
+LOGIN_WINDOW_MINUTES=15
+LOGIN_LOCK_MINUTES=15
+CORS_ORIGIN=*
+# ADMIN_IP_WHITELIST=127.0.0.1,100.88.94.84
+
 ANTHROPIC_API_KEY=あなたのClaude_APIキー (任意)
 
 # PostgreSQL接続情報 (必須)
@@ -44,6 +58,8 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/calendar
 # PGDATABASE=calendar
 # PGPORT=5432
 ```
+
+`.env` はコードに直接書かず、サーバーごとに変更してください。`APP_URL` はパスワードリセットなどで生成するリンクの基準URLです。学校LANなら `http://192.168.100.106:3000`、Tailscaleなら `http://100.88.239.70:3000` のように設定します。
 
 ### 3. サーバーの起動
 ```bash
