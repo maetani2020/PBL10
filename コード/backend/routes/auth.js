@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
 const config = require('../config');
+const { sendMail } = require('../utils/mailer');
 const {
     normalizeEmail,
     validateEmail,
@@ -457,15 +458,17 @@ router.post('/password-reset-request', async (req, res) => {
             [normalizedEmail, token, expiresAt]
         );
 
-        // Simulation: log email contents to console
-        console.log(`\n--- [MOCK MAIL SERVER] ---`);
-        console.log(`To: ${normalizedEmail}`);
-        console.log(`Subject: パスワードリセットのリクエスト`);
-        console.log(`Content: 以下のリンクからパスワードの再設定を行ってください（有効期限: 1時間）。`);
-        console.log(`Link: ${config.appUrl}/reset-password?token=${token}`);
-        console.log(`-------------------------\n`);
+        await sendMail({
+            to: normalizedEmail,
+            subject: 'パスワードリセットのリクエスト',
+            text: [
+                '以下のリンクからパスワードの再設定を行ってください。',
+                '有効期限は1時間です。',
+                `${config.appUrl}/reset-password?token=${token}`
+            ].join('\n')
+        });
 
-        res.json({ message: 'パスワード再設定用のメールを送信しました（開発環境のためコンソールに出力されました）' });
+        res.json({ message: 'パスワード再設定用のメールを送信しました' });
     } catch (err) {
         console.error('Password reset request error:', err);
         res.status(500).json({ error: 'サーバーエラーが発生しました' });
@@ -531,12 +534,15 @@ router.post('/change-email-request', authenticateToken, async (req, res) => {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         emailChangeVerifications.set(req.user.id, { normalizedNewEmail, code, expires: Date.now() + 15 * 60 * 1000 });
 
-        console.log(`\n--- [MOCK MAIL SERVER] ---`);
-        console.log(`To: ${req.user.email} (現在のメールアドレス)`);
-        console.log(`Subject: メールアドレス変更確認コード`);
-        console.log(`Content: メールアドレスを ${normalizedNewEmail} へ変更するための確認コードです（有効期限: 15分）。`);
-        console.log(`Code: ${code}`);
-        console.log(`-------------------------\n`);
+        await sendMail({
+            to: req.user.email,
+            subject: 'メールアドレス変更確認コード',
+            text: [
+                `メールアドレスを ${normalizedNewEmail} へ変更するための確認コードです。`,
+                '有効期限は15分です。',
+                `確認コード: ${code}`
+            ].join('\n')
+        });
 
         res.json({ message: '現在のメールアドレスに変更用確認コードを送信しました' });
     } catch (err) {

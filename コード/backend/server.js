@@ -6,6 +6,7 @@ const http = require('http');
 const os = require('os');
 const { initDb } = require('./db');
 const { initWebSocket } = require('./utils/websocket');
+const { startNotificationScheduler } = require('./utils/notification-scheduler');
 const config = require('./config');
 
 const app = express();
@@ -103,7 +104,9 @@ function getLocalIPs() {
 }
 
 // Start server after database migrations are ready
-dbReady.then(() => server.listen(PORT, HOST, () => {
+dbReady.then(() => {
+    startNotificationScheduler();
+    server.listen(PORT, HOST, () => {
     const localIPs = getLocalIPs();
     console.log(`==================================================`);
     console.log(`  統合型ライフマネジメントアプリ バックエンドサーバー`);
@@ -117,7 +120,8 @@ dbReady.then(() => server.listen(PORT, HOST, () => {
         });
     }
     console.log(`==================================================`);
-})).catch(err => {
+    });
+}).catch(err => {
     console.error('Failed to initialize database:', err);
     process.exit(1);
 });

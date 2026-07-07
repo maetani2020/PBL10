@@ -319,7 +319,24 @@ async function initDb() {
             )
         `);
 
-        // 15. Create Admin Logs Table
+        // 15. Create Notification Delivery Deduplication Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS notification_deliveries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                event_id TEXT DEFAULT NULL,
+                delivery_key TEXT NOT NULL,
+                channel TEXT NOT NULL CHECK(channel IN ('push', 'email')),
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                scheduled_for TEXT NOT NULL,
+                delivered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, delivery_key, channel),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        `);
+
+        // 16. Create Admin Logs Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS admin_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -334,7 +351,7 @@ async function initDb() {
             )
         `);
 
-        // 16. Create JWT Blacklist Table (for logout token invalidation)
+        // 17. Create JWT Blacklist Table (for logout token invalidation)
         await createTable(`
             CREATE TABLE IF NOT EXISTS blacklisted_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

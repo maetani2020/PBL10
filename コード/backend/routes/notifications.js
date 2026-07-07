@@ -3,6 +3,7 @@ const router = express.Router();
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
 const { normalizeText, validateTextLength } = require('../utils/validation');
+const { getVapidPublicKey, sendWebPushToUser } = require('../utils/push');
 
 const NOTIFICATION_TYPES = ['event', 'task', 'game', 'email', 'announcement'];
 
@@ -23,6 +24,11 @@ function validateNotificationPayload(body) {
     return { value: { title, message, type } };
 }
 
+// GET /api/notifications/vapid-public-key - Public key used by browser PushManager
+router.get('/vapid-public-key', authenticateToken, (req, res) => {
+    res.json({ publicKey: getVapidPublicKey() || '' });
+});
+
 // POST /api/notifications/subscribe - Save push subscription JSON
 router.post('/subscribe', authenticateToken, async (req, res) => {
     const { subscription } = req.body;
@@ -33,7 +39,13 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
 
     try {
         const userId = req.user.id;
-        const subJson = typeof subscription === 'object' ? JSON.stringify(subscription) : subscription;
+        const parsedSubscription = typeof subscription === 'string' ? JSON.parse(subscription) : subscription;
+
+        if (!parsedSubscription.endpoint || !parsedSubscription.keys) {
+            return res.status(400).json({ error: 'Invalid push subscription' });
+        }
+
+        const subJson = JSON.stringify(parsedSubscription);
 
         // Save subscription (preventing duplicates using ON CONFLICT)
         await query.run(
@@ -169,18 +181,19 @@ router.post('/trigger-test', authenticateToken, async (req, res) => {
             [userId, title, message, now, finalType]
         );
 
-        // 2. Simulate push notification log to console
-        console.log(`\n--- [PUSH NOTIFICATION SIMULATED] ---`);
-        console.log(`To User ID: ${userId}`);
-        console.log(`Title: ${title}`);
-        console.log(`Message: ${message}`);
-        console.log(`Type: ${finalType}`);
-        console.log(`Sent At: ${now}`);
-        console.log(`------------------------------------\n`);
+        // 2. Send Web Push to registered browsers.
+        const pushResult = await sendWebPushToUser(userId, {
+            title,
+            message,
+            type: finalType,
+            tag: `manual-test-${userId}`,
+            url: '/calendar.html'
+        });
 
         res.json({
             success: true,
-            message: 'テスト通知を送信しました。履歴に保存され、コンソールにプッシュログが出力されました。'
+            message: 'テスト通知を送信しました。履歴に保存され、登録済みブラウザへPush送信しました。',
+            push: pushResult
         });
     } catch (err) {
         console.error('Trigger test notification error:', err);

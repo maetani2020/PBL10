@@ -6,6 +6,8 @@ import { getEvents, showToast, showFieldError, clearFieldErrors } from './calend
 
 let notificationTimer = null;
 let lastCheckTime = new Date();
+let serviceWorkerRegistrationPromise = null;
+let pushSubscriptionPromise = null;
 const NOTIFIED_KEY = "shared_calendar_notified_flags";
 const LOCAL_SETTINGS_KEY = "shared_calendar_notification_settings_local";
 
@@ -50,6 +52,79 @@ export async function ensureNotificationPermission() {
 
   const permission = await Notification.requestPermission();
   return permission === "granted";
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return null;
+  }
+
+  if (!serviceWorkerRegistrationPromise) {
+    serviceWorkerRegistrationPromise = navigator.serviceWorker.register("/sw.js")
+      .then(() => navigator.serviceWorker.ready);
+  }
+
+  return serviceWorkerRegistrationPromise;
+}
+
+export async function subscribeToPwaPush({ requestPermission = false } = {}) {
+  if (pushSubscriptionPromise) return pushSubscriptionPromise;
+
+  pushSubscriptionPromise = (async () => {
+    if (!("Notification" in window)) return false;
+    if (Notification.permission === "denied") return false;
+    if (Notification.permission !== "granted") {
+      if (!requestPermission) return false;
+      const permitted = await ensureNotificationPermission();
+      if (!permitted) return false;
+    }
+
+    const registration = await registerServiceWorker();
+    if (!registration) return false;
+
+    const keyResponse = await apiRequest("/api/notifications/vapid-public-key");
+    if (!keyResponse.publicKey) {
+      console.info("VAPID public key is not configured. Web Push subscription skipped.");
+      return false;
+    }
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyResponse.publicKey)
+      });
+    }
+
+    await apiRequest("/api/notifications/subscribe", {
+      method: "POST",
+      body: JSON.stringify({ subscription })
+    });
+
+    return true;
+  })();
+
+  try {
+    const result = await pushSubscriptionPromise;
+    if (!result) pushSubscriptionPromise = null;
+    return result;
+  } catch (err) {
+    pushSubscriptionPromise = null;
+    console.error("Failed to subscribe to PWA push:", err);
+    return false;
+  }
 }
 
 // Sync settings from backend
@@ -150,6 +225,10 @@ export async function saveNotificationSettingsFromForm() {
     });
 
     backendSettings = { events: enabled, tasks, game: true, email };
+
+    if (enabled || tasks || email) {
+      await subscribeToPwaPush({ requestPermission: true });
+    }
 
     closeNotificationSettingsModal();
     showToast("通知設定を保存しました ⚙️");
@@ -291,6 +370,7 @@ export function checkEventNotifications() {
 export function startNotificationWatcher() {
   if (notificationTimer) clearInterval(notificationTimer);
   lastCheckTime = new Date();
+  subscribeToPwaPush({ requestPermission: false });
   
   // Watcher runs every 5 seconds
   notificationTimer = setInterval(() => {

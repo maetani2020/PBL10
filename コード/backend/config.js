@@ -45,6 +45,23 @@ module.exports = {
   cors: {
     origins: listEnv('CORS_ORIGIN', ['*'])
   },
+  mail: {
+    mode: process.env.MAIL_MODE || 'mock',
+    host: process.env.SMTP_HOST || '',
+    port: intEnv('SMTP_PORT', 587, 1, 65535),
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.MAIL_FROM || process.env.SMTP_USER || 'Shared Calendar <no-reply@shared-calendar.local>'
+  },
+  webPush: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+    subject: process.env.VAPID_SUBJECT || `mailto:admin@${process.env.ALLOWED_EMAIL_DOMAIN || 'oic-ok.ac.jp'}`
+  },
+  notificationScheduler: {
+    intervalMs: intEnv('NOTIFICATION_SCAN_INTERVAL_MS', 60000, 10000, 3600000)
+  },
   admin: {
     ipWhitelist: listEnv('ADMIN_IP_WHITELIST')
   }
