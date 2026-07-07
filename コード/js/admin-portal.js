@@ -1,6 +1,7 @@
 const TOKEN_KEY = 'pbl_admin_token';
 const USER_KEY = 'pbl_admin_user';
 const STATS_REFRESH_MS = 2000;
+const LOG_FILTER_DEBOUNCE_MS = 300;
 
 let adminToken = localStorage.getItem(TOKEN_KEY) || '';
 let adminUser = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
@@ -9,6 +10,7 @@ let groupsCache = [];
 let eventsCache = [];
 let adminLogsCache = [];
 let statsRefreshTimer = null;
+let adminLogFilterTimer = null;
 
 const loginView = document.getElementById('adminLogin');
 const appView = document.getElementById('adminApp');
@@ -112,6 +114,43 @@ function formatLogDetails(details) {
     .slice(0, 6);
   if (!entries.length) return '-';
   return entries.map(([key, value]) => `${key}: ${value}`).join(' / ');
+}
+
+function getAdminLogFilterParams() {
+  const params = new URLSearchParams();
+  const keyword = document.getElementById('adminLogSearch')?.value.trim();
+  const actionGroup = document.getElementById('adminLogActionFilter')?.value || 'all';
+  const targetType = document.getElementById('adminLogTargetFilter')?.value || 'all';
+  const date = document.getElementById('adminLogDateFilter')?.value || '';
+
+  params.set('limit', '200');
+  if (keyword) params.set('q', keyword);
+  if (actionGroup !== 'all') params.set('action_group', actionGroup);
+  if (targetType !== 'all') params.set('target_type', targetType);
+  if (date) params.set('date', date);
+
+  return params.toString();
+}
+
+function scheduleAdminLogsLoad() {
+  clearTimeout(adminLogFilterTimer);
+  adminLogFilterTimer = setTimeout(() => {
+    loadAdminLogs().catch(err => showToast(err.message));
+  }, LOG_FILTER_DEBOUNCE_MS);
+}
+
+function clearAdminLogFilters() {
+  const search = document.getElementById('adminLogSearch');
+  const action = document.getElementById('adminLogActionFilter');
+  const target = document.getElementById('adminLogTargetFilter');
+  const date = document.getElementById('adminLogDateFilter');
+
+  if (search) search.value = '';
+  if (action) action.value = 'all';
+  if (target) target.value = 'all';
+  if (date) date.value = '';
+
+  loadAdminLogs().catch(err => showToast(err.message));
 }
 
 function downloadJsonFile(data, filename) {
@@ -451,7 +490,7 @@ async function createBackup() {
 }
 
 async function loadAdminLogs() {
-  adminLogsCache = await api('/api/admin/logs?limit=100');
+  adminLogsCache = await api(`/api/admin/logs?${getAdminLogFilterParams()}`);
   renderAdminLogs();
 }
 
@@ -655,6 +694,11 @@ document.getElementById('eventStatusFilter').addEventListener('change', renderEv
 document.getElementById('sendAnnouncementBtn').addEventListener('click', () => sendAnnouncement().catch(err => showToast(err.message)));
 document.getElementById('createBackupBtn').addEventListener('click', () => createBackup().catch(err => showToast(err.message)));
 document.getElementById('refreshLogsBtn').addEventListener('click', () => loadAdminLogs().catch(err => showToast(err.message)));
+document.getElementById('adminLogSearch')?.addEventListener('input', scheduleAdminLogsLoad);
+document.getElementById('adminLogActionFilter')?.addEventListener('change', () => loadAdminLogs().catch(err => showToast(err.message)));
+document.getElementById('adminLogTargetFilter')?.addEventListener('change', () => loadAdminLogs().catch(err => showToast(err.message)));
+document.getElementById('adminLogDateFilter')?.addEventListener('change', () => loadAdminLogs().catch(err => showToast(err.message)));
+document.getElementById('clearLogFiltersBtn')?.addEventListener('click', clearAdminLogFilters);
 document.addEventListener('click', handleClick);
 document.addEventListener('change', handleChange);
 bindTabs();

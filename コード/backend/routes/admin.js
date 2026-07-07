@@ -6,6 +6,7 @@ const { authenticateToken, isAdmin } = require('../middleware/auth');
 const { sendToUsers } = require('../utils/websocket');
 const config = require('../config');
 const { normalizeText, validateTextLength } = require('../utils/validation');
+const { normalizeAdminLogFilters, buildAdminLogWhereClause } = require('../utils/admin-log-filters');
 
 let previousCpuSnapshot = getCpuSnapshot();
 
@@ -537,17 +538,18 @@ router.get('/backup', async (req, res) => {
 // GET /api/admin/logs - List admin operation logs
 router.get('/logs', async (req, res) => {
     try {
-        const requestedLimit = Number(req.query.limit || 100);
-        const limit = Math.max(1, Math.min(300, Number.isFinite(requestedLimit) ? requestedLimit : 100));
+        const filters = normalizeAdminLogFilters(req.query);
+        const where = buildAdminLogWhereClause(filters);
         const logs = await query.all(
             `SELECT al.id, al.admin_user_id, al.action, al.target_type, al.target_id,
                     al.details, al.ip_address, al.created_at,
                     u.email AS admin_email, u.display_name AS admin_name
              FROM admin_logs al
              LEFT JOIN users u ON al.admin_user_id = u.id
+             ${where.sql}
              ORDER BY al.created_at DESC, al.id DESC
              LIMIT ?`,
-            [limit]
+            [...where.params, filters.limit]
         );
 
         res.json(logs.map(log => ({

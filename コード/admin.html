@@ -149,6 +149,30 @@
               <button id="refreshLogsBtn" class="ghost-btn"><span class="material-icons">refresh</span>ログ更新</button>
             </article>
           </div>
+          <div class="toolbar log-filter-toolbar">
+            <input id="adminLogSearch" class="search-input" placeholder="ログを検索（操作・管理者・対象・IP）" />
+            <select id="adminLogActionFilter" class="filter-select">
+              <option value="all">すべての操作</option>
+              <option value="user">ユーザー操作</option>
+              <option value="group">グループ操作</option>
+              <option value="event">イベント操作</option>
+              <option value="announcement">お知らせ</option>
+              <option value="backup">バックアップ</option>
+              <option value="login">ログイン</option>
+              <option value="settings">設定・履歴</option>
+            </select>
+            <select id="adminLogTargetFilter" class="filter-select">
+              <option value="all">すべての対象</option>
+              <option value="user">ユーザー</option>
+              <option value="group">グループ</option>
+              <option value="group_member">グループメンバー</option>
+              <option value="event">イベント</option>
+              <option value="announcement">お知らせ</option>
+              <option value="system">システム</option>
+            </select>
+            <input id="adminLogDateFilter" class="search-input" type="date" />
+            <button id="clearLogFiltersBtn" class="ghost-btn" type="button">条件クリア</button>
+          </div>
           <div id="adminLogsList" class="table-list maintenance-logs"></div>
         </section>
       </section>

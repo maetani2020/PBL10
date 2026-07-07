@@ -291,6 +291,12 @@ select:disabled {
   margin-bottom: 12px;
 }
 
+.log-filter-toolbar {
+  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(130px, auto)) auto;
+  align-items: center;
+  margin-top: 6px;
+}
+
 .search-input,
 .filter-select,
 .actions select {
@@ -507,6 +513,11 @@ select:disabled {
 
   .admin-logo {
     display: none;
+  }
+
+  .toolbar,
+  .log-filter-toolbar {
+    grid-template-columns: 1fr;
   }
 
   .logout-btn {

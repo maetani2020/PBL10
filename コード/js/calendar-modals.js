@@ -57,6 +57,33 @@ export function updateEventOptionVisibility() {
   if (mailOptions) mailOptions.classList.toggle("hidden", eventType !== "mail");
 }
 
+function normalizeAllDayDateRange() {
+  const startInput = document.getElementById("eventStart");
+  const endInput = document.getElementById("eventEnd");
+  if (!startInput || !endInput) return;
+
+  const baseDate = (startInput.value || endInput.value || formatDate(new Date())).slice(0, 10);
+  startInput.value = `${baseDate}T00:00`;
+  endInput.value = `${baseDate}T23:59`;
+}
+
+export function updateAllDayDateTimeVisibility({ normalize = false } = {}) {
+  const allDayInput = document.getElementById("allDay");
+  const startInput = document.getElementById("eventStart");
+  const endInput = document.getElementById("eventEnd");
+  if (!allDayInput || !startInput || !endInput) return;
+
+  if (allDayInput.checked && normalize) {
+    normalizeAllDayDateRange();
+  }
+
+  const startLabel = startInput.previousElementSibling;
+  const endLabel = endInput.previousElementSibling;
+  [startLabel, startInput, endLabel, endInput].forEach(el => {
+    el?.classList.toggle("hidden", allDayInput.checked);
+  });
+}
+
 export function collectEventReminderMinutes() {
   const minutes = [];
   if (document.getElementById("remind30")?.checked) minutes.push(30);
@@ -156,6 +183,7 @@ export function resetForm() {
   document.getElementById("eventVisibility").value = "public";
   document.getElementById("allDay").checked = false;
   document.getElementById("eventType").value = "event";
+  updateAllDayDateTimeVisibility();
 
   if (document.getElementById("taskDeadlineNotify")) {
     document.getElementById("taskDeadlineNotify").checked = true;
@@ -185,6 +213,7 @@ export function openCreateEvent(dateStr) {
   resetForm();
   document.getElementById("eventStart").value = dateStr + "T09:00";
   document.getElementById("eventEnd").value = dateStr + "T10:00";
+  updateAllDayDateTimeVisibility();
   
   if (document.getElementById("mailRemindAt")) {
     document.getElementById("mailRemindAt").value = dateStr + "T09:00";
@@ -213,6 +242,7 @@ export function openCreateEventWithTime(dateStr, hour) {
 
   document.getElementById("eventStart").value = dateStr + "T" + startHourStr;
   document.getElementById("eventEnd").value = endDateStr + "T" + endHourStr;
+  updateAllDayDateTimeVisibility();
   
   if (document.getElementById("mailRemindAt")) {
     document.getElementById("mailRemindAt").value = dateStr + "T" + startHourStr;
@@ -236,6 +266,7 @@ export function openEditEvent(event) {
   document.getElementById("eventEnd").value = event.end;
   document.getElementById("eventVisibility").value = event.visibility;
   document.getElementById("allDay").checked = event.allDay;
+  updateAllDayDateTimeVisibility();
 
   document.getElementById("eventType").value = event.eventType || "event";
   document.getElementById("hpCost").value = event.hp_consumption || 0;

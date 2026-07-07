@@ -42,6 +42,7 @@ import {
   collectEventReminderMinutes,
   renderEventReminderList,
   updateEventOptionVisibility,
+  updateAllDayDateTimeVisibility,
   setEventModalStep
 } from './calendar-modals.js';
 
@@ -289,6 +290,7 @@ function applyEventDraftData(draft) {
   setChecked("mailSent", draft.mailSent);
 
   updateEventOptionVisibility();
+  updateAllDayDateTimeVisibility();
   renderEventReminderList();
   const isGroup = (draft.visibility || "public") === "group";
   document.getElementById("groupSelectWrap")?.classList.toggle("hidden", !isGroup);
@@ -1065,6 +1067,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Modals features logic
   document.getElementById("eventType").addEventListener("change", updateEventOptionVisibility);
+  document.getElementById("allDay")?.addEventListener("change", () => {
+    updateAllDayDateTimeVisibility({ normalize: true });
+    updatePreSavePreview();
+  });
 
   // HP Cost & Motivation Cost previews
   document.getElementById("hpCost").addEventListener("input", updatePreSavePreview);
