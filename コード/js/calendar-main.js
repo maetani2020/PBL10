@@ -4,7 +4,6 @@
 import {
   currentDate,
   currentView,
-  currentFilter,
   selectedEventId,
   currentAttachments,
   setCurrentAttachments,
@@ -17,6 +16,7 @@ import {
   showFormError,
   clearFormError,
   getAllEvents,
+  getCurrentFilterVisibility,
   saveEvents,
   normalizeEvent
 } from './calendar-state.js';
@@ -420,14 +420,6 @@ function updateLocalEventCache(savedEvent) {
   const normalized = normalizeEvent(savedEvent);
   if (!normalized.id) return;
 
-  if (currentFilter !== "all" && normalized.visibility !== currentFilter) {
-    setCurrentFilter("all");
-    document.querySelectorAll(".sidebar-item").forEach(item => {
-      item.classList.toggle("active", item.dataset.nav === "calendar");
-    });
-    document.getElementById("filterBanner")?.classList.add("hidden");
-  }
-
   const currentEvents = getAllEvents();
   const index = currentEvents.findIndex(event => event.id === normalized.id);
   const nextEvents = [...currentEvents];
@@ -470,7 +462,10 @@ async function saveEvent() {
   }
 
   const memo = document.getElementById("eventMemo").value;
-  const visibility = document.getElementById("eventVisibility").value;
+  const visibility = getCurrentFilterVisibility();
+  const visibilityEl = document.getElementById("eventVisibility");
+  if (visibilityEl) visibilityEl.value = visibility;
+  document.getElementById("groupSelectWrap")?.classList.toggle("hidden", visibility !== "group");
   const allDay = document.getElementById("allDay").checked;
 
   if (!isNumberInRange("hpCost", 0, 100)) {
@@ -1070,7 +1065,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Visibility select -> show/hide group dropdown
   document.getElementById("eventVisibility").addEventListener("change", (e) => {
-    const isGroup = e.target.value === "group";
+    const forcedVisibility = getCurrentFilterVisibility();
+    if (e.target.value !== forcedVisibility) {
+      e.target.value = forcedVisibility;
+    }
+    const isGroup = forcedVisibility === "group";
     document.getElementById("groupSelectWrap").classList.toggle("hidden", !isGroup);
   });
 

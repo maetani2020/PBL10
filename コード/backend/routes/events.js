@@ -212,7 +212,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
         // Fetch events linked to user's owned, shared, or group calendars
         const events = await query.all(
-            `SELECT DISTINCT e.*, c.name as calendar_name,
+            `SELECT DISTINCT e.*, c.name as calendar_name, c.group_id as group_id,
                 (CASE 
                     WHEN c.owner_id = ? THEN 'owner' 
                     WHEN gm.role = 'admin' THEN 'owner'
@@ -239,6 +239,7 @@ router.get('/', authenticateToken, async (req, res) => {
         }).map(e => ({
             id: e.id,
             calendar_id: e.calendar_id,
+            group_id: e.group_id,
             calendar_name: e.calendar_name,
             creator_id: e.creator_id,
             title: e.title,

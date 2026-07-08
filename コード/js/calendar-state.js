@@ -29,6 +29,7 @@ export function normalizeEvent(event) {
     date: event?.date || (start ? start.substring(0, 10) : ""),
     allDay: !!allDay,
     allday: !!allDay,
+    group_id: event?.group_id ?? event?.calendar_group_id ?? null,
     color: event?.color || "#007AFF",
     visibility: event?.visibility || "public",
     hp_consumption: Number(event?.hp_consumption || 0),
@@ -63,14 +64,29 @@ export function setEvents(events) {
   eventsCache = Array.isArray(events) ? events.map(normalizeEvent) : [];
 }
 
+export function getCurrentFilterVisibility() {
+  if (currentFilter === "group" || currentFilter === "private") {
+    return currentFilter;
+  }
+  return "public";
+}
+
+function isGroupEvent(event) {
+  return event.visibility === "group" || !!event.group_id;
+}
+
+function isPrivateEvent(event) {
+  return event.visibility === "private";
+}
+
 // Memory cache helpers
 export function getEvents() {
   if (currentFilter === "group") {
-    return eventsCache.filter(e => e.visibility === "group");
+    return eventsCache.filter(isGroupEvent);
   } else if (currentFilter === "private") {
-    return eventsCache.filter(e => e.visibility === "private");
+    return eventsCache.filter(isPrivateEvent);
   }
-  return eventsCache;
+  return eventsCache.filter(e => !isGroupEvent(e) && !isPrivateEvent(e));
 }
 
 export function getAllEvents() {

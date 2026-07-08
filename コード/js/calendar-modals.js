@@ -1,7 +1,13 @@
 // calendar-modals.js
 // Modal control functions (Open, Close, Reset, Populating inputs)
 
-import { setSelectedEventId, formatDate, clearFieldErrors, clearFormError } from './calendar-state.js';
+import {
+  setSelectedEventId,
+  formatDate,
+  clearFieldErrors,
+  clearFormError,
+  getCurrentFilterVisibility
+} from './calendar-state.js';
 import { getLocalSettings } from './calendar-notification.js';
 
 export const eventModal = document.getElementById("eventModal");
@@ -172,6 +178,21 @@ export function setEventReminderControls(minutes, atStart) {
   renderEventReminderList();
 }
 
+function applyCurrentCalendarModeToEventForm() {
+  const visibility = getCurrentFilterVisibility();
+  const visibilityEl = document.getElementById("eventVisibility");
+  const groupWrap = document.getElementById("groupSelectWrap");
+  const groupSelect = document.getElementById("eventGroupId");
+
+  if (visibilityEl) visibilityEl.value = visibility;
+  groupWrap?.classList.toggle("hidden", visibility !== "group");
+
+  if (visibility === "group" && groupSelect && !groupSelect.value) {
+    const firstGroupOption = Array.from(groupSelect.options).find(option => option.value);
+    if (firstGroupOption) groupSelect.value = firstGroupOption.value;
+  }
+}
+
 export function resetForm() {
   const settings = getLocalSettings();
 
@@ -205,6 +226,8 @@ export function resetForm() {
   document.getElementById("restSuggestions").classList.add("hidden");
   document.getElementById("groupSelectWrap").classList.add("hidden");
   document.getElementById("eventGroupId").value = "";
+
+  applyCurrentCalendarModeToEventForm();
 
   updateEventOptionVisibility();
 }
