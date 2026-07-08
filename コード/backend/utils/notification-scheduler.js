@@ -16,6 +16,15 @@ function formatLocalDateTime(date) {
     ].join('-') + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function formatLocalDate(date) {
+    const pad = (num) => String(num).padStart(2, '0');
+    return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate())
+    ].join('-');
+}
+
 function parseLocalDateTime(value) {
     if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(value))) {
         return null;
@@ -30,6 +39,12 @@ function addMinutes(date, minutes) {
 
 function isDue(targetDate, now) {
     return targetDate && targetDate.getTime() <= now.getTime();
+}
+
+function isScheduleDateBeforeToday(value, now) {
+    const datePart = String(value || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
+    return datePart < formatLocalDate(now);
 }
 
 function parseReminderMinutes(value) {
@@ -147,6 +162,7 @@ async function handleEventPushReminder(event, now) {
 
     const baseTime = parseLocalDateTime(type === 'task' ? event.end_time : event.start_time);
     if (!baseTime) return;
+    if (isScheduleDateBeforeToday(type === 'task' ? event.end_time : event.start_time, now)) return;
 
     const userIds = await getCalendarAccessors(event.calendar_id, event.creator_id, event.visibility);
     if (userIds.length === 0) return;
@@ -204,6 +220,7 @@ async function handleMailReminder(event, now) {
 
     const scheduledDate = parseLocalDateTime(event.mail_remind_at);
     if (!isDue(scheduledDate, now)) return;
+    if (isScheduleDateBeforeToday(event.start_time, now)) return;
 
     const creator = event.creator_id
         ? await query.get('SELECT id, email, notification_settings FROM users WHERE id = ?', [event.creator_id])

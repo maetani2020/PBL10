@@ -64,6 +64,11 @@
           通知設定
         </li>
 
+        <li class="sidebar-item" data-nav="announcements">
+          <span class="material-icons"> campaign </span>
+          管理者からのお知らせ
+        </li>
+
         <li class="sidebar-item admin-nav hidden" data-nav="admin">
           <span class="material-icons"> admin_panel_settings </span>
           管理者
@@ -151,6 +156,11 @@
           <span class="material-icons"> history </span>
         </button>
 
+        <!-- 管理者からのお知らせ -->
+        <button id="adminAnnouncementsBtn" class="icon-btn" title="管理者からのお知らせ">
+          <span class="material-icons"> campaign </span>
+        </button>
+
         <!-- 通知設定 -->
         <button id="notificationSettingsBtn" class="icon-btn" title="通知設定">
           <span class="material-icons"> tune </span>
@@ -199,6 +209,10 @@
             <button type="button" class="mobile-action-item" data-mobile-action="history" role="menuitem">
               <span class="material-icons"> history </span>
               <span>通知履歴</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="announcements" role="menuitem">
+              <span class="material-icons"> campaign </span>
+              <span>管理者からのお知らせ</span>
             </button>
             <button type="button" class="mobile-action-item" data-mobile-action="notificationSettings" role="menuitem">
               <span class="material-icons"> tune </span>
@@ -904,6 +918,25 @@
         <div class="modal-actions" style="margin-top: 10px;">
           <button id="clearNotificationHistoryBtn" class="danger-btn" style="flex:1;">履歴を全削除</button>
           <button id="closeNotificationHistoryBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 管理者からのお知らせモーダル                 -->
+    <!-- ========================================== -->
+    <div id="adminAnnouncementsModal" class="modal">
+      <div class="modal-content list-modal admin-mailbox-modal">
+        <h2>メールボックス</h2>
+        <p class="admin-mailbox-subtitle">管理者からのお知らせ</p>
+
+        <div class="modal-body">
+          <div id="adminAnnouncementsList" class="admin-announcement-list"></div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 10px;">
+          <button id="reloadAdminAnnouncementsBtn" class="primary-btn" style="flex:1;">再読み込み</button>
+          <button id="closeAdminAnnouncementsBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
         </div>
       </div>
     </div>

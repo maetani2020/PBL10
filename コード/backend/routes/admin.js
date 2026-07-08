@@ -254,6 +254,13 @@ router.post('/announcements', async (req, res) => {
         console.log(`Sent to ${users.length} users.`);
         console.log(`---------------------------------------\n`);
 
+        sendToUsers(users.map(user => user.id), {
+            type: 'announcement_sync',
+            title,
+            message,
+            sentAt: now
+        });
+
         await logAdminAction(req, 'announcement:send', 'announcement', null, {
             title,
             userCount: users.length

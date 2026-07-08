@@ -93,11 +93,15 @@ import {
   openNotificationHistoryModal,
   closeNotificationHistoryModal,
   clearNotificationHistory,
+  openAdminAnnouncementsModal,
+  closeAdminAnnouncementsModal,
+  syncAdminAnnouncements,
   openNotificationSettingsModal,
   closeNotificationSettingsModal,
   saveNotificationSettingsFromForm,
   renderSettingsReminderList,
   startNotificationWatcher,
+  startAdminAnnouncementWatcher,
   syncNotificationSettings
 } from './calendar-notification.js';
 
@@ -647,6 +651,7 @@ function initMobileActionMenu() {
     list: "scheduleListBtn",
     group: "groupManageBtn",
     history: "notificationHistoryBtn",
+    announcements: "adminAnnouncementsBtn",
     notificationSettings: "notificationSettingsBtn",
     ai: "aiScannerTrigger",
     theme: "themeBtn",
@@ -744,6 +749,12 @@ function switchPanel(panel) {
     return;
   }
 
+  if (panel === "announcements") {
+    openAdminAnnouncementsModal();
+    closeSidebar();
+    return;
+  }
+
 
   if (panel === "admin") {
     closeSidebar();
@@ -797,6 +808,7 @@ async function init() {
     await syncNotificationSettings();
     updateAdminNavVisibility();
     startNotificationWatcher();
+    startAdminAnnouncementWatcher();
   }
 
   switchView("month");
@@ -848,6 +860,7 @@ document.addEventListener("DOMContentLoaded", () => {
     { id: "listModal", close: closeListModal },
     { id: "groupModal", close: closeGroupModal },
     { id: "notificationHistoryModal", close: closeNotificationHistoryModal },
+    { id: "adminAnnouncementsModal", close: closeAdminAnnouncementsModal },
     { id: "notificationSettingsModal", close: closeNotificationSettingsModal },
     { id: "yearJumpModal", close: closeYearJumpModal }
   ].forEach(m => {
@@ -867,6 +880,7 @@ document.addEventListener("DOMContentLoaded", () => {
       closeListModal();
       closeGroupModal();
       closeNotificationHistoryModal();
+      closeAdminAnnouncementsModal();
       closeNotificationSettingsModal();
       closeYearJumpModal();
       closeAdminPanel();
@@ -1045,6 +1059,13 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("notificationHistoryBtn").addEventListener("click", openNotificationHistoryModal);
   document.getElementById("closeNotificationHistoryBtn").addEventListener("click", closeNotificationHistoryModal);
   document.getElementById("clearNotificationHistoryBtn").addEventListener("click", clearNotificationHistory);
+
+  // Admin announcements modal triggers
+  document.getElementById("adminAnnouncementsBtn").addEventListener("click", openAdminAnnouncementsModal);
+  document.getElementById("closeAdminAnnouncementsBtn").addEventListener("click", closeAdminAnnouncementsModal);
+  document.getElementById("reloadAdminAnnouncementsBtn").addEventListener("click", () => {
+    syncAdminAnnouncements({ silent: true });
+  });
 
   // Notification settings modal triggers
   document.getElementById("notificationSettingsBtn").addEventListener("click", openNotificationSettingsModal);

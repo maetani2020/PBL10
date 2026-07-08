@@ -8,8 +8,12 @@ let notificationTimer = null;
 let lastCheckTime = new Date();
 let serviceWorkerRegistrationPromise = null;
 let pushSubscriptionPromise = null;
+let adminAnnouncementTimer = null;
+let adminAnnouncementInitialCheckDone = false;
 const NOTIFIED_KEY = "shared_calendar_notified_flags";
 const LOCAL_SETTINGS_KEY = "shared_calendar_notification_settings_local";
+const ADMIN_ANNOUNCEMENT_LAST_KEY = "shared_calendar_last_admin_announcement";
+const ADMIN_ANNOUNCEMENT_CHECK_MS = 30000;
 
 // Default settings if not in LocalStorage
 const DEFAULT_LOCAL_SETTINGS = {
@@ -272,6 +276,19 @@ export async function triggerNotification(title, message, type = 'event') {
   }
 }
 
+function formatDateOnly(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function isScheduleDateBeforeToday(value, now) {
+  const datePart = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
+  return datePart < formatDateOnly(now);
+}
+
 // Notification watcher core scanning loop
 export function checkEventNotifications() {
   // If global notifications are disabled
@@ -290,6 +307,11 @@ export function checkEventNotifications() {
     const type = event.eventType || 'event';
     const reminderMinutes = event.reminderMinutes || local.eventBeforeMinutes;
     const notifyAtStart = (event.notifyAtStart !== undefined) ? event.notifyAtStart : local.eventAtStart;
+    const scheduleDateSource = type === 'task' ? event.end : event.start;
+
+    if (isScheduleDateBeforeToday(scheduleDateSource, now)) {
+      return;
+    }
 
     // Standard event alerts
     if (type === 'event' && !event.allday && event.start) {
@@ -443,6 +465,180 @@ export function openNotificationHistoryModal() {
 export function closeNotificationHistoryModal() {
   const modal = document.getElementById("notificationHistoryModal");
   if (modal) modal.style.display = "none";
+}
+
+function normalizeAnnouncementTitle(title) {
+  return String(title || "お知らせ")
+    .replace(/^\[(お知らせ|縺顔衍繧峨○)\]\s*/, "")
+    .trim() || "お知らせ";
+}
+
+function formatAnnouncementTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+async function fetchAdminAnnouncements() {
+  const logs = await apiRequest("/api/notifications/history");
+  return Array.isArray(logs)
+    ? logs.filter(log => log.type === "announcement")
+    : [];
+}
+
+function renderAdminAnnouncements(logs) {
+  const container = document.getElementById("adminAnnouncementsList");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (!logs.length) {
+    const empty = document.createElement("p");
+    empty.className = "admin-announcement-empty";
+    empty.textContent = "管理者からのお知らせはまだありません";
+    container.appendChild(empty);
+    return;
+  }
+
+  const mailbox = document.createElement("div");
+  mailbox.className = "admin-mailbox";
+
+  const list = document.createElement("div");
+  list.className = "admin-mailbox-list";
+
+  const detail = document.createElement("article");
+  detail.className = "admin-mailbox-detail";
+
+  function showMail(log, selectedButton) {
+    list.querySelectorAll(".admin-mailbox-item").forEach(button => {
+      button.classList.toggle("active", button === selectedButton);
+    });
+
+    detail.innerHTML = "";
+
+    const fromRow = document.createElement("div");
+    fromRow.className = "admin-mailbox-from";
+
+    const avatar = document.createElement("span");
+    avatar.className = "admin-mailbox-avatar";
+    avatar.textContent = "管";
+
+    const sender = document.createElement("div");
+    const senderName = document.createElement("strong");
+    senderName.textContent = "管理者";
+    const senderMeta = document.createElement("span");
+    senderMeta.textContent = "管理者からのお知らせ";
+    sender.appendChild(senderName);
+    sender.appendChild(senderMeta);
+
+    const time = document.createElement("time");
+    time.textContent = formatAnnouncementTime(log.sent_at);
+
+    const subject = document.createElement("h3");
+    subject.textContent = normalizeAnnouncementTitle(log.title);
+
+    const message = document.createElement("p");
+    message.className = "admin-mailbox-message";
+    message.textContent = log.message || "";
+
+    fromRow.appendChild(avatar);
+    fromRow.appendChild(sender);
+    fromRow.appendChild(time);
+    detail.appendChild(fromRow);
+    detail.appendChild(subject);
+    detail.appendChild(message);
+  }
+
+  logs.forEach((log, index) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "admin-mailbox-item";
+
+    const head = document.createElement("span");
+    head.className = "admin-mailbox-item-head";
+
+    const title = document.createElement("strong");
+    title.textContent = normalizeAnnouncementTitle(log.title);
+
+    const time = document.createElement("time");
+    time.textContent = formatAnnouncementTime(log.sent_at);
+
+    const preview = document.createElement("span");
+    preview.className = "admin-mailbox-preview";
+    preview.textContent = log.message || "";
+
+    head.appendChild(title);
+    head.appendChild(time);
+    item.appendChild(head);
+    item.appendChild(preview);
+    item.addEventListener("click", () => showMail(log, item));
+
+    list.appendChild(item);
+    if (index === 0) {
+      requestAnimationFrame(() => showMail(log, item));
+    }
+  });
+
+  mailbox.appendChild(list);
+  mailbox.appendChild(detail);
+  container.appendChild(mailbox);
+}
+
+export async function syncAdminAnnouncements({ silent = true } = {}) {
+  const logs = await fetchAdminAnnouncements();
+  renderAdminAnnouncements(logs);
+
+  const latestKey = logs[0] ? String(logs[0].id || logs[0].sent_at || "") : "";
+  const previousKey = localStorage.getItem(ADMIN_ANNOUNCEMENT_LAST_KEY) || "";
+
+  if (latestKey) {
+    if (adminAnnouncementInitialCheckDone && latestKey !== previousKey && !silent) {
+      showToast("管理者からのお知らせが届きました");
+    }
+    localStorage.setItem(ADMIN_ANNOUNCEMENT_LAST_KEY, latestKey);
+  }
+
+  adminAnnouncementInitialCheckDone = true;
+  return logs;
+}
+
+export function openAdminAnnouncementsModal() {
+  syncAdminAnnouncements({ silent: true }).catch(err => {
+    console.error("Failed to sync admin announcements:", err);
+    const container = document.getElementById("adminAnnouncementsList");
+    if (container) {
+      container.innerHTML = '<p class="admin-announcement-empty error">管理者からのお知らせの読み込みに失敗しました</p>';
+    }
+  });
+
+  const modal = document.getElementById("adminAnnouncementsModal");
+  if (modal) modal.style.display = "flex";
+}
+
+export function closeAdminAnnouncementsModal() {
+  const modal = document.getElementById("adminAnnouncementsModal");
+  if (modal) modal.style.display = "none";
+}
+
+export function startAdminAnnouncementWatcher() {
+  if (adminAnnouncementTimer) clearInterval(adminAnnouncementTimer);
+
+  syncAdminAnnouncements({ silent: true }).catch(err => {
+    console.warn("Initial admin announcement sync failed:", err);
+  });
+
+  adminAnnouncementTimer = setInterval(() => {
+    syncAdminAnnouncements({ silent: false }).catch(err => {
+      console.warn("Admin announcement sync failed:", err);
+    });
+  }, ADMIN_ANNOUNCEMENT_CHECK_MS);
 }
 
 // Reminder Chips UI helper in settings modal

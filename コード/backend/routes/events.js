@@ -205,6 +205,30 @@ async function checkCapacityWarning(userId, dateStr, additionalHp = 0, additiona
     return null;
 }
 
+function getClientIp(req) {
+    const clientIp = req.ip || req.connection.remoteAddress || '';
+    return clientIp.startsWith('::ffff:') ? clientIp.substring(7) : clientIp;
+}
+
+async function logEventAction(req, action, targetId, details = {}) {
+    try {
+        await query.run(
+            `INSERT INTO admin_logs (admin_user_id, action, target_type, target_id, details, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+                req.user?.id || null,
+                action,
+                'event',
+                targetId == null ? null : String(targetId),
+                JSON.stringify(details || {}),
+                getClientIp(req)
+            ]
+        );
+    } catch (err) {
+        console.error('Event admin log write error:', err);
+    }
+}
+
 // GET /api/events - Get all events user is authorized to view
 router.get('/', authenticateToken, async (req, res) => {
     try {
@@ -350,6 +374,17 @@ router.post('/', authenticateToken, async (req, res) => {
             ]
         );
 
+        await logEventAction(req, 'event:create', eventId, {
+            title: eventData.title,
+            calendarId: targetCalendarId,
+            creatorId: userId,
+            visibility: eventData.visibility,
+            eventType: eventData.eventType,
+            startTime: eventData.start,
+            endTime: eventData.end,
+            allday: !!allday
+        });
+
         // Broadcast to calendar accessors via WebSocket
         const accessors = await getCalendarAccessors(targetCalendarId);
         sendToUsers(accessors, {
@@ -456,6 +491,22 @@ router.put('/:id', authenticateToken, async (req, res) => {
             ]
         );
 
+        await logEventAction(req, 'event:update', eventId, {
+            titleBefore: existingEvent.title,
+            titleAfter: eventData.title,
+            calendarIdBefore: existingEvent.calendar_id,
+            calendarIdAfter: targetCalendarId,
+            visibilityBefore: existingEvent.visibility,
+            visibilityAfter: eventData.visibility,
+            eventTypeBefore: existingEvent.event_type || 'event',
+            eventTypeAfter: eventData.eventType,
+            startTimeBefore: existingEvent.start_time,
+            startTimeAfter: eventData.start,
+            endTimeBefore: existingEvent.end_time,
+            endTimeAfter: eventData.end,
+            updatedBy: userId
+        });
+
         // Broadcast to original and new calendar accessors
         const oldAccessors = await getCalendarAccessors(existingEvent.calendar_id);
         const newAccessors = await getCalendarAccessors(targetCalendarId);
@@ -515,6 +566,17 @@ router.delete('/:id', authenticateToken, async (req, res) => {
             'UPDATE events SET deleted_at = CURRENT_TIMESTAMP, deleted_by = ? WHERE id = ?',
             [userId, eventId]
         );
+
+        await logEventAction(req, 'event:delete', eventId, {
+            title: existingEvent.title,
+            calendarId: existingEvent.calendar_id,
+            creatorId: existingEvent.creator_id,
+            visibility: existingEvent.visibility,
+            eventType: existingEvent.event_type || 'event',
+            startTime: existingEvent.start_time,
+            endTime: existingEvent.end_time,
+            deletedBy: userId
+        });
 
         // Broadcast removal
         const accessors = await getCalendarAccessors(existingEvent.calendar_id);
@@ -580,6 +642,18 @@ router.post('/copy-paste', authenticateToken, async (req, res) => {
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [newEventId, event.calendar_id, userId, event.title, event.location, event.allday, startStr, endStr, event.color, event.memo, event.visibility, event.hp_consumption, event.motivation_consumption, event.recurrence]
             );
+
+            await logEventAction(req, 'event:copy', newEventId, {
+                sourceEventId: event.id,
+                sourceTitle: event.title,
+                newEventId,
+                calendarId: event.calendar_id,
+                creatorId: userId,
+                visibility: event.visibility,
+                targetDate,
+                startTime: startStr,
+                endTime: endStr
+            });
 
             pastedEvents.push({
                 id: newEventId,
