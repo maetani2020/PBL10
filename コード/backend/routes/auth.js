@@ -679,6 +679,35 @@ router.post('/change-email-confirm', authenticateToken, async (req, res) => {
     }
 });
 
+// POST /api/auth/change-display-name - Change display name (requires JWT)
+router.post('/change-display-name', authenticateToken, async (req, res) => {
+    const normalizedDisplayName = normalizeText(req.body.display_name);
+
+    if (!validateDisplayName(normalizedDisplayName)) {
+        return res.status(400).json({ error: 'ユーザー名は1文字以上、10文字以内で入力してください' });
+    }
+
+    try {
+        await query.run(
+            'UPDATE users SET display_name = ? WHERE id = ?',
+            [normalizedDisplayName, req.user.id]
+        );
+
+        const user = await query.get(
+            'SELECT id, email, display_name, max_hp, max_motivation, recovery_rate, warning_threshold, role FROM users WHERE id = ?',
+            [req.user.id]
+        );
+
+        res.json({
+            message: 'ユーザー名を変更しました',
+            user
+        });
+    } catch (err) {
+        console.error('Display name change error:', err);
+        res.status(500).json({ error: 'サーバーエラーが発生しました' });
+    }
+});
+
 // POST /api/auth/change-password - Change password (requires JWT)
 router.post('/change-password', authenticateToken, async (req, res) => {
     const { current_password, new_password } = req.body;
