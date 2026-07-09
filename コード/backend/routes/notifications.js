@@ -88,6 +88,30 @@ router.get('/history', authenticateToken, async (req, res) => {
     }
 });
 
+// PATCH /api/notifications/history/:id/read - Mark one history item as read
+router.patch('/history/:id/read', authenticateToken, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: '通知履歴IDが正しくありません' });
+    }
+
+    try {
+        const result = await query.run(
+            "UPDATE notification_history SET status = 'read' WHERE id = ? AND user_id = ?",
+            [id, req.user.id]
+        );
+
+        if (!result.changes) {
+            return res.status(404).json({ error: '通知履歴が見つかりません' });
+        }
+
+        res.json({ success: true, message: '既読にしました' });
+    } catch (err) {
+        console.error('Mark notification history read error:', err);
+        res.status(500).json({ error: 'サーバーエラーが発生しました' });
+    }
+});
+
 // GET /api/notifications/settings - Get user's notification toggles
 router.get('/settings', authenticateToken, async (req, res) => {
     try {

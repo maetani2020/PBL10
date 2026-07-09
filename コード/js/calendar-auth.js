@@ -310,8 +310,8 @@ export function initAuthForm() {
           resetSignupVerification();
           isSignupMode = false;
           authDisplayNameContainer?.classList.add('hidden');
-          authToggleBtn.textContent = '譁ｰ隕上い繧ｫ繧ｦ繝ｳ繝医ｒ菴懈・縺吶ｋ';
-          authPrimaryBtn.textContent = '繧ｵ繧､繝ｳ繧､繝ｳ';
+          authToggleBtn.textContent = '新規アカウントを作成する';
+          authPrimaryBtn.textContent = 'サインイン';
           forgotPasswordLink?.classList.remove('hidden');
           if (authPasswordInput) authPasswordInput.value = '';
           authPrimaryBtn.disabled = false;
@@ -369,7 +369,7 @@ export function initAuthForm() {
     el?.addEventListener('input', () => {
       if (!signupVerificationPending) return;
       resetSignupVerification();
-      if (isSignupMode) authPrimaryBtn.textContent = '繧｢繧ｫ繧ｦ繝ｳ繝医ｒ菴懈・';
+      if (isSignupMode) authPrimaryBtn.textContent = 'アカウントを作成';
     });
   });
 

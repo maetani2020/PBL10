@@ -328,9 +328,12 @@ async function initDb() {
                 message TEXT NOT NULL,
                 sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 type TEXT NOT NULL,
+                status TEXT DEFAULT 'unread' CHECK(status IN ('unread', 'read')),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         `);
+        await addColumnIfNotExists('notification_history', 'status', "TEXT DEFAULT 'unread' CHECK(status IN ('unread', 'read'))");
+        await query.run("UPDATE notification_history SET status = 'unread' WHERE status IS NULL");
 
         // 15. Create Notification Delivery Deduplication Table
         await createTable(`

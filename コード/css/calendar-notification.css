@@ -600,13 +600,58 @@ body.dark .admin-user-table select option {
   color: #ffffff !important;
 }
 
+.icon-btn {
+  position: relative;
+}
+
+.sidebar-item,
+.mobile-action-item {
+  position: relative;
+}
+
+.admin-unread-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ff3b30;
+  color: #ffffff;
+  border: 2px solid var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(255, 59, 48, 0.28);
+}
+
+.admin-unread-badge-inline {
+  position: static;
+  margin-left: auto;
+  border-color: transparent;
+}
+
+.admin-unread-badge.hidden {
+  display: none !important;
+}
+
 .admin-announcement-list {
   display: grid;
   gap: 10px;
 }
 
 .admin-mailbox-modal {
-  max-width: 760px;
+  width: min(92vw, 780px) !important;
+  max-width: 780px !important;
+}
+
+.admin-mailbox-modal .modal-body {
+  overflow: hidden;
+  padding-right: 0;
 }
 
 .admin-mailbox-subtitle {
@@ -618,8 +663,9 @@ body.dark .admin-user-table select option {
 
 .admin-mailbox {
   display: grid;
-  grid-template-columns: minmax(210px, 0.42fr) minmax(0, 0.58fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   min-height: 360px;
+  max-height: 60vh;
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
@@ -628,6 +674,7 @@ body.dark .admin-user-table select option {
 
 .admin-mailbox-list {
   overflow-y: auto;
+  max-height: 60vh;
   border-right: 1px solid var(--border);
   background: var(--bg);
 }
@@ -647,6 +694,20 @@ body.dark .admin-user-table select option {
 .admin-mailbox-item:hover,
 .admin-mailbox-item.active {
   background: var(--hover);
+}
+
+.admin-mailbox-item.unread {
+  box-shadow: inset 4px 0 0 #ff3b30;
+}
+
+.admin-mailbox-item.unread .admin-mailbox-item-head strong {
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.admin-mailbox-item.unread .admin-mailbox-preview {
+  color: var(--text);
+  font-weight: 700;
 }
 
 .admin-mailbox-item-head {
@@ -685,6 +746,8 @@ body.dark .admin-user-table select option {
 .admin-mailbox-detail {
   min-width: 0;
   padding: 18px;
+  overflow-y: auto;
+  max-height: 60vh;
   background: var(--surface);
 }
 
@@ -699,21 +762,29 @@ body.dark .admin-user-table select option {
 }
 
 .admin-mailbox-avatar {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 36px;
   width: 36px;
   height: 36px;
   border-radius: 50%;
   background: var(--primary);
-  color: #ffffff;
+  color: #ffffff !important;
   font-size: 14px;
   font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  overflow: hidden;
 }
 
 .admin-mailbox-from strong,
 .admin-mailbox-from span {
   display: block;
+}
+
+.admin-mailbox-from > div {
+  min-width: 0;
 }
 
 .admin-mailbox-from span,
@@ -842,10 +913,16 @@ body.dark .admin-announcement-empty {
   color: rgba(255, 255, 255, 0.7);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 700px) {
+  .admin-mailbox-modal {
+    width: 92vw !important;
+    max-width: 520px !important;
+  }
+
   .admin-mailbox {
     grid-template-columns: 1fr;
     min-height: 0;
+    max-height: none;
   }
 
   .admin-mailbox-list {
@@ -855,6 +932,7 @@ body.dark .admin-announcement-empty {
   }
 
   .admin-mailbox-detail {
+    max-height: 42vh;
     padding: 14px;
   }
 
@@ -865,7 +943,9 @@ body.dark .admin-announcement-empty {
   .admin-mailbox-from time {
     grid-column: 2;
   }
+}
 
+@media (max-width: 768px) {
   #eventModal .modal-content {
     max-height: 94dvh;
   }

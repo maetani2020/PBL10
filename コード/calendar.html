@@ -67,6 +67,7 @@
         <li class="sidebar-item" data-nav="announcements">
           <span class="material-icons"> campaign </span>
           管理者からのお知らせ
+          <span id="sidebarAdminAnnouncementUnreadBadge" class="admin-unread-badge admin-unread-badge-inline hidden">0</span>
         </li>
 
         <li class="sidebar-item admin-nav hidden" data-nav="admin">
@@ -159,6 +160,7 @@
         <!-- 管理者からのお知らせ -->
         <button id="adminAnnouncementsBtn" class="icon-btn" title="管理者からのお知らせ">
           <span class="material-icons"> campaign </span>
+          <span id="adminAnnouncementUnreadBadge" class="admin-unread-badge hidden">0</span>
         </button>
 
         <!-- 通知設定 -->
@@ -213,6 +215,7 @@
             <button type="button" class="mobile-action-item" data-mobile-action="announcements" role="menuitem">
               <span class="material-icons"> campaign </span>
               <span>管理者からのお知らせ</span>
+              <span id="mobileAdminAnnouncementUnreadBadge" class="admin-unread-badge admin-unread-badge-inline hidden">0</span>
             </button>
             <button type="button" class="mobile-action-item" data-mobile-action="notificationSettings" role="menuitem">
               <span class="material-icons"> tune </span>

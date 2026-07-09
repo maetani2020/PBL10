@@ -10,6 +10,7 @@ let serviceWorkerRegistrationPromise = null;
 let pushSubscriptionPromise = null;
 let adminAnnouncementTimer = null;
 let adminAnnouncementInitialCheckDone = false;
+let latestAdminAnnouncementLogs = [];
 const NOTIFIED_KEY = "shared_calendar_notified_flags";
 const LOCAL_SETTINGS_KEY = "shared_calendar_notification_settings_local";
 const ADMIN_ANNOUNCEMENT_LAST_KEY = "shared_calendar_last_admin_announcement";
@@ -493,6 +494,53 @@ async function fetchAdminAnnouncements() {
     : [];
 }
 
+function isUnreadAnnouncement(log) {
+  return log && log.status !== "read";
+}
+
+function getAdminAnnouncementUnreadCount(logs = latestAdminAnnouncementLogs) {
+  return logs.filter(isUnreadAnnouncement).length;
+}
+
+function updateAdminAnnouncementUnreadBadge(logs = latestAdminAnnouncementLogs) {
+  const count = getAdminAnnouncementUnreadCount(logs);
+  const label = count > 99 ? "99+" : String(count);
+  const badgeIds = [
+    "adminAnnouncementUnreadBadge",
+    "mobileAdminAnnouncementUnreadBadge",
+    "sidebarAdminAnnouncementUnreadBadge"
+  ];
+
+  badgeIds.forEach(id => {
+    const badge = document.getElementById(id);
+    if (!badge) return;
+    badge.textContent = label;
+    badge.classList.toggle("hidden", count <= 0);
+  });
+}
+
+function isAdminAnnouncementsModalOpen() {
+  const modal = document.getElementById("adminAnnouncementsModal");
+  return !!modal && modal.style.display === "flex";
+}
+
+function markAdminAnnouncementRead(log, selectedButton) {
+  if (!isUnreadAnnouncement(log) || !log.id) return;
+
+  log.status = "read";
+  selectedButton?.classList.remove("unread");
+  updateAdminAnnouncementUnreadBadge();
+
+  apiRequest(`/api/notifications/history/${encodeURIComponent(log.id)}/read`, {
+    method: "PATCH"
+  }).catch(err => {
+    console.error("Failed to mark admin announcement as read:", err);
+    log.status = "unread";
+    selectedButton?.classList.add("unread");
+    updateAdminAnnouncementUnreadBadge();
+  });
+}
+
 function renderAdminAnnouncements(logs) {
   const container = document.getElementById("adminAnnouncementsList");
   if (!container) return;
@@ -526,7 +574,7 @@ function renderAdminAnnouncements(logs) {
     const fromRow = document.createElement("div");
     fromRow.className = "admin-mailbox-from";
 
-    const avatar = document.createElement("span");
+    const avatar = document.createElement("div");
     avatar.className = "admin-mailbox-avatar";
     avatar.textContent = "管";
 
@@ -554,12 +602,14 @@ function renderAdminAnnouncements(logs) {
     detail.appendChild(fromRow);
     detail.appendChild(subject);
     detail.appendChild(message);
+    markAdminAnnouncementRead(log, selectedButton);
   }
 
   logs.forEach((log, index) => {
     const item = document.createElement("button");
     item.type = "button";
     item.className = "admin-mailbox-item";
+    if (isUnreadAnnouncement(log)) item.classList.add("unread");
 
     const head = document.createElement("span");
     head.className = "admin-mailbox-item-head";
@@ -593,7 +643,11 @@ function renderAdminAnnouncements(logs) {
 
 export async function syncAdminAnnouncements({ silent = true } = {}) {
   const logs = await fetchAdminAnnouncements();
-  renderAdminAnnouncements(logs);
+  latestAdminAnnouncementLogs = logs;
+  updateAdminAnnouncementUnreadBadge(logs);
+  if (isAdminAnnouncementsModalOpen()) {
+    renderAdminAnnouncements(logs);
+  }
 
   const latestKey = logs[0] ? String(logs[0].id || logs[0].sent_at || "") : "";
   const previousKey = localStorage.getItem(ADMIN_ANNOUNCEMENT_LAST_KEY) || "";
@@ -610,6 +664,9 @@ export async function syncAdminAnnouncements({ silent = true } = {}) {
 }
 
 export function openAdminAnnouncementsModal() {
+  const modal = document.getElementById("adminAnnouncementsModal");
+  if (modal) modal.style.display = "flex";
+
   syncAdminAnnouncements({ silent: true }).catch(err => {
     console.error("Failed to sync admin announcements:", err);
     const container = document.getElementById("adminAnnouncementsList");
@@ -618,8 +675,6 @@ export function openAdminAnnouncementsModal() {
     }
   });
 
-  const modal = document.getElementById("adminAnnouncementsModal");
-  if (modal) modal.style.display = "flex";
 }
 
 export function closeAdminAnnouncementsModal() {
