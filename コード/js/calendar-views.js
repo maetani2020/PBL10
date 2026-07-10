@@ -23,6 +23,7 @@ import {
 
 // We import triggerAIDailyAdvice from calendar-ai.js for the Day View banner action
 import { triggerAIDailyAdvice } from './calendar-ai.js';
+import { getJapaneseHoliday } from './calendar-holidays.js';
 
 export const monthView = document.getElementById("monthView");
 export const weekView = document.getElementById("weekView");
@@ -33,6 +34,21 @@ function applyEventColor(element, event) {
   const color = event.color || "#007AFF";
   element.style.backgroundColor = color;
   element.style.borderColor = color;
+}
+
+function appendHolidayLabel(parent, holiday, className = "holiday-name") {
+  if (!holiday) return;
+  const label = document.createElement(className === "day-holiday-name" ? "span" : "div");
+  label.className = className;
+  label.textContent = holiday.name;
+  label.title = holiday.name;
+  parent.appendChild(label);
+}
+
+function applyHolidayClass(element, holiday) {
+  if (!holiday) return;
+  element.classList.add("holiday");
+  element.title = holiday.name;
 }
 
 export function openYearJumpModal() {
@@ -154,10 +170,13 @@ export function renderMonthView() {
     cell.classList.add("day-cell");
 
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const weekday = new Date(year, month, day).getDay();
+    const cellDate = new Date(year, month, day);
+    const weekday = cellDate.getDay();
+    const holiday = getJapaneseHoliday(cellDate);
 
     if (weekday === 0) cell.classList.add("sunday");
     if (weekday === 6) cell.classList.add("saturday");
+    applyHolidayClass(cell, holiday);
 
     if (isToday(year, month, day)) {
       cell.classList.add("today");
@@ -167,6 +186,7 @@ export function renderMonthView() {
     dayNumber.className = "day-number";
     dayNumber.textContent = day;
     cell.appendChild(dayNumber);
+    appendHolidayLabel(cell, holiday);
 
     const dayEvents = events.filter((event) => event.date === dateStr);
 
@@ -243,13 +263,16 @@ export function renderWeekView() {
     date.setDate(start.getDate() + i);
 
     const div = document.createElement("div");
+    const holiday = getJapaneseHoliday(date);
     div.innerHTML = `
-      ${date.getMonth() + 1}/${date.getDate()}
+      <span>${date.getMonth() + 1}/${date.getDate()}</span>
     `;
+    appendHolidayLabel(div, holiday, "week-holiday-name");
 
     const weekday = date.getDay();
     if (weekday === 0) div.classList.add("sun");
     if (weekday === 6) div.classList.add("sat");
+    applyHolidayClass(div, holiday);
 
     header.appendChild(div);
   }
@@ -331,7 +354,9 @@ export function renderDayView() {
 
   const title = document.createElement("h3");
   title.style.padding = "15px";
+  const holiday = getJapaneseHoliday(currentDate);
   title.textContent = formatDate(currentDate);
+  appendHolidayLabel(title, holiday, "day-holiday-name");
   dayView.appendChild(title);
 
   const targetDate = formatDate(currentDate);

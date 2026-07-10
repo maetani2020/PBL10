@@ -121,8 +121,39 @@ calendar-views.css
   color: var(--sunday);
 }
 
+.holiday {
+  color: var(--sunday);
+}
+
 .saturday {
   color: var(--saturday);
+}
+
+.holiday-name,
+.week-holiday-name,
+.day-holiday-name {
+  color: var(--sunday);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holiday-name {
+  margin: 1px 0 2px;
+}
+
+.week-holiday-name {
+  display: block;
+  margin-top: 2px;
+}
+
+.day-holiday-name {
+  display: inline-block;
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 /* ==========================
