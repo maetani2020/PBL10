@@ -837,19 +837,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("saveDraftEventBtn")?.addEventListener("click", saveEventDraft);
   document.getElementById("loadDraftEventBtn")?.addEventListener("click", () => loadEventDraft());
   document.getElementById("clearDraftEventBtn")?.addEventListener("click", clearEventDraft);
-  document.getElementById("nextEventStepBtn")?.addEventListener("click", () => {
-    clearFieldErrors(eventModal);
-    clearFormError("preSaveWarning");
-    const title = document.getElementById("eventTitle")?.value.trim();
-    const start = document.getElementById("eventStart")?.value;
-    const end = document.getElementById("eventEnd")?.value;
-    if (!title) return showFieldError("eventTitle", "タイトルを入力してください");
-    if (!start || !end) return showFieldError(!start ? "eventStart" : "eventEnd", "日時を入力してください");
-    if (start > end) return showFieldError("eventEnd", "終了日時が開始日時より前です");
+  document.getElementById("eventStepBasicTab")?.addEventListener("click", () => setEventModalStep("basic"));
+  document.getElementById("eventStepDetailsTab")?.addEventListener("click", () => {
     setEventModalStep("details");
     updatePreSavePreview();
   });
-  document.getElementById("prevEventStepBtn")?.addEventListener("click", () => setEventModalStep("basic"));
   document.getElementById("closeDraftListBtn")?.addEventListener("click", closeDraftListModal);
   document.getElementById("clearAllDraftsBtn")?.addEventListener("click", clearEventDraft);
 

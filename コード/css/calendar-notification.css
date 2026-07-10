@@ -365,14 +365,18 @@ body.dark #saveEventBtn:hover {
 }
 
 .event-step-pill {
+  appearance: none;
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 8px 10px;
   text-align: center;
   font-size: 13px;
   font-weight: 700;
+  font-family: inherit;
   color: var(--text-muted, rgba(60, 60, 67, 0.72));
   background: var(--surface);
+  cursor: pointer;
+  width: 100%;
 }
 
 .event-step-pill.active {
