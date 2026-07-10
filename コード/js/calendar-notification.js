@@ -470,7 +470,7 @@ export function closeNotificationHistoryModal() {
 
 function normalizeAnnouncementTitle(title) {
   return String(title || "お知らせ")
-    .replace(/^\[(お知らせ|縺顔衍繧峨○)\]\s*/, "")
+    .replace(/^\[お知らせ\]\s*/, "")
     .trim() || "お知らせ";
 }
 
