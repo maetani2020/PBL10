@@ -9,6 +9,7 @@ calendar-views.css
 
 .view-switch {
   display: flex;
+  flex: 0 0 auto;
 
   background: var(--surface);
 
@@ -39,6 +40,7 @@ calendar-views.css
 
 .week-header {
   display: grid;
+  flex: 0 0 auto;
 
   grid-template-columns: repeat(7, 1fr);
 
@@ -72,9 +74,12 @@ calendar-views.css
 
   grid-template-columns: repeat(7, 1fr);
 
-  grid-auto-rows: 1fr;
+  grid-auto-rows: minmax(0, 1fr);
 
-  height: calc(100vh - 64px - 60px - 45px - 45px);
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  padding-bottom: 6px;
 
   overflow: hidden;
 }
@@ -85,6 +90,7 @@ calendar-views.css
   padding: 4px;
 
   position: relative;
+  min-height: 0;
 
   overflow: hidden;
 }
@@ -204,7 +210,9 @@ calendar-views.css
 ========================== */
 
 .week-view {
-  height: calc(100vh - 214px);
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
 
   overflow-y: auto;
 }
@@ -285,7 +293,9 @@ body.dark .week-day-column:hover {
 ========================== */
 
 .day-view {
-  height: calc(100vh - 214px);
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
 
   overflow-y: auto;
 }
@@ -367,8 +377,9 @@ body.dark .week-day-column:hover {
   }
 
   .month-view {
-    height: calc(100dvh - 56px - 54px - 40px - 34px - 34px);
-    min-height: 420px;
+    height: auto;
+    min-height: 0;
+    padding-bottom: 6px;
   }
 
   .day-cell {
@@ -396,7 +407,8 @@ body.dark .week-day-column:hover {
 
   .week-view,
   .day-view {
-    height: calc(100dvh - 184px);
+    height: auto;
+    min-height: 0;
   }
 
   .week-view .week-header {

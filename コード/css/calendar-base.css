@@ -81,6 +81,10 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -143,6 +147,7 @@ button:active,
 
 .header {
   height: 64px;
+  flex: 0 0 auto;
 
   display: flex;
 
@@ -277,6 +282,7 @@ button {
 
 .calendar-nav {
   height: 60px;
+  flex: 0 0 auto;
 
   display: flex;
 
@@ -343,7 +349,7 @@ FAB
 .fab {
   position: fixed;
 
-  bottom: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom));
 
   right: 20px;
 

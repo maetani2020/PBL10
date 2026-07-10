@@ -74,6 +74,7 @@
 .display-options {
   padding: 12px 16px;
   display: flex;
+  flex: 0 0 auto;
   justify-content: flex-end;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -89,6 +90,7 @@
 
 /* Filter Banner */
 .filter-banner {
+  flex: 0 0 auto;
   padding: 8px 16px;
   background: var(--primary-light);
   color: var(--primary);

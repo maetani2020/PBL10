@@ -28,6 +28,7 @@ calendar-ai.css
 
 /* AI Daily advice summary banner */
 .ai-summary-container {
+  flex: 0 0 auto;
   margin: 10px 15px;
   padding: 12px 16px;
   border-radius: 12px;
