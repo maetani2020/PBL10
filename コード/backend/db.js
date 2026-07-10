@@ -136,6 +136,10 @@ async function initDb() {
                 expires_at DATETIME NOT NULL
             )
         `);
+        await addColumnIfNotExists('password_resets', 'email', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('password_resets', 'token', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('password_resets', 'expires_at', 'TIMESTAMP DEFAULT NULL');
+        await query.run('DELETE FROM password_resets WHERE email IS NULL OR token IS NULL OR expires_at IS NULL');
 
         // 4. Create Signup Email Verification Table
         await createTable(`
@@ -149,6 +153,13 @@ async function initDb() {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        await addColumnIfNotExists('signup_verifications', 'email', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('signup_verifications', 'password_hash', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('signup_verifications', 'display_name', "TEXT DEFAULT ''");
+        await addColumnIfNotExists('signup_verifications', 'code', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('signup_verifications', 'expires_at', 'TIMESTAMP DEFAULT NULL');
+        await addColumnIfNotExists('signup_verifications', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+        await query.run('DELETE FROM signup_verifications WHERE email IS NULL OR password_hash IS NULL OR code IS NULL OR expires_at IS NULL');
 
         // 4. Create Groups Table
         await createTable(`

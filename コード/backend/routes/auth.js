@@ -190,17 +190,23 @@ router.post('/register', async (req, res) => {
             [normalizedEmail, passwordHash, normalizedDisplayName, code, expiresAt]
         );
 
-        await sendMail({
-            to: normalizedEmail,
-            subject: 'Shared Calendar 新規登録確認コード',
-            text: [
-                'Shared Calendarの新規登録確認コードです。',
-                '有効期限は15分です。',
-                `確認コード: ${code}`,
-                '',
-                'このメールに心当たりがない場合は破棄してください。'
-            ].join('\n')
-        });
+        try {
+            await sendMail({
+                to: normalizedEmail,
+                subject: 'Shared Calendar 新規登録確認コード',
+                text: [
+                    'Shared Calendarの新規登録確認コードです。',
+                    '有効期限は15分です。',
+                    `確認コード: ${code}`,
+                    '',
+                    'このメールに心当たりがない場合は破棄してください。'
+                ].join('\n')
+            });
+        } catch (mailErr) {
+            console.error('Signup verification mail error:', mailErr);
+            await query.run('DELETE FROM signup_verifications WHERE email = ?', [normalizedEmail]);
+            return res.status(500).json({ error: '確認メールの送信に失敗しました。メール設定を確認してください。' });
+        }
 
         return res.status(202).json({
             message: '登録確認コードをメールで送信しました。',
@@ -553,15 +559,21 @@ router.post('/password-reset-request', async (req, res) => {
             [normalizedEmail, token, expiresAt]
         );
 
-        await sendMail({
-            to: normalizedEmail,
-            subject: 'パスワードリセットのリクエスト',
-            text: [
-                '以下のリンクからパスワードの再設定を行ってください。',
-                '有効期限は1時間です。',
-                `${config.appUrl}/reset-password?token=${token}`
-            ].join('\n')
-        });
+        try {
+            await sendMail({
+                to: normalizedEmail,
+                subject: 'パスワードリセットのリクエスト',
+                text: [
+                    '以下のリンクからパスワードの再設定を行ってください。',
+                    '有効期限は1時間です。',
+                    `${config.appUrl}/reset-password?token=${token}`
+                ].join('\n')
+            });
+        } catch (mailErr) {
+            console.error('Password reset mail error:', mailErr);
+            await query.run('DELETE FROM password_resets WHERE email = ?', [normalizedEmail]);
+            return res.status(500).json({ error: 'パスワード再設定メールの送信に失敗しました。メール設定を確認してください。' });
+        }
 
         res.json({ message: 'パスワード再設定用のメールを送信しました' });
     } catch (err) {
@@ -596,7 +608,11 @@ router.post('/password-reset', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(new_password, salt);
 
-        await query.run('UPDATE users SET password_hash = ? WHERE email = ?', [passwordHash, resetInfo.email]);
+        const updateResult = await query.run('UPDATE users SET password_hash = ? WHERE email = ?', [passwordHash, resetInfo.email]);
+        if (updateResult.changes === 0) {
+            await query.run('DELETE FROM password_resets WHERE email = ?', [resetInfo.email]);
+            return res.status(404).json({ error: '対象のユーザーが見つかりません。もう一度登録状態を確認してください。' });
+        }
         await query.run('DELETE FROM password_resets WHERE email = ?', [resetInfo.email]);
 
         res.json({ message: 'パスワードの再設定が完了しました' });
@@ -722,6 +738,9 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 
     try {
         const user = await query.get('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
+        if (!user) {
+            return res.status(404).json({ error: 'ユーザーが見つかりません。もう一度ログインしてください。' });
+        }
         const isMatch = await bcrypt.compare(current_password, user.password_hash);
         if (!isMatch) {
             return res.status(400).json({ error: '現在のパスワードが正しくありません' });

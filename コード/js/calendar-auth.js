@@ -60,24 +60,28 @@ export async function apiRequest(endpoint, options = {}, _retry = false) {
 
   try {
     const res = await fetch(endpoint, { ...options, headers });
+    const data = await res.json().catch(() => ({}));
 
-    // Access token expired → try refresh once
+    // Access token expired: try refresh once.
     if (res.status === 401 && !_retry && refreshTokenStr) {
       const refreshed = await tryRefreshToken();
       if (refreshed) {
         return apiRequest(endpoint, options, true); // retry with new token
       } else {
         logout();
-        throw new Error('セッションの期限が切れました。再ログインしてください。');
+        throw new Error(data.error || 'ログインの有効期限が切れました。もう一度ログインしてください。');
       }
     }
 
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       logout();
-      throw new Error('セッションの期限が切れました。再ログインしてください。');
+      throw new Error(data.error || 'ログインの有効期限が切れました。もう一度ログインしてください。');
     }
 
-    const data = await res.json().catch(() => ({}));
+    if (res.status === 403) {
+      throw new Error(data.error || 'この操作を行う権限がありません。');
+    }
+
     if (!res.ok) {
       throw new Error(data.error || '通信エラーが発生しました');
     }

@@ -3,6 +3,74 @@ const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const authenticateToken = require('../middleware/auth');
 
+const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+function getGeminiApiKey() {
+    return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
+}
+
+function normalizeGeminiModel(model) {
+    const value = String(model || DEFAULT_GEMINI_MODEL).trim().replace(/^models\//, '');
+    return /^[A-Za-z0-9._:-]+$/.test(value) ? value : DEFAULT_GEMINI_MODEL;
+}
+
+async function callGeminiGenerateContent(payload, model) {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        const err = new Error('GEMINI_API_KEY is not set');
+        err.statusCode = 503;
+        throw err;
+    }
+
+    const selectedModel = normalizeGeminiModel(model);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent`;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const message = data?.error?.message || `Gemini API request failed (${response.status})`;
+        const err = new Error(message);
+        err.statusCode = response.status;
+        err.details = data;
+        throw err;
+    }
+
+    return data;
+}
+
+// POST /api/ai/gemini - Proxy Gemini requests so the API key stays on the server
+router.post('/gemini', authenticateToken, async (req, res) => {
+    const { payload, model } = req.body || {};
+
+    if (!payload || !Array.isArray(payload.contents)) {
+        return res.status(400).json({ error: 'Geminiに送る内容が正しくありません' });
+    }
+
+    try {
+        const data = await callGeminiGenerateContent(payload, model);
+        res.json(data);
+    } catch (err) {
+        console.error('Gemini API proxy error:', err);
+        const upstreamStatus = err.statusCode || 500;
+        const clientStatus = upstreamStatus === 503 ? 503 : (upstreamStatus === 429 ? 429 : 502);
+        res.status(clientStatus).json({
+            error: err.statusCode === 503
+                ? 'Gemini APIキーが設定されていません'
+                : 'Gemini APIの呼び出しに失敗しました',
+            upstreamStatus,
+            details: err.message
+        });
+    }
+});
+
 // POST /api/ai/parse-shift - Parse shift text using Claude API
 router.post('/parse-shift', authenticateToken, async (req, res) => {
     const { text } = req.body;

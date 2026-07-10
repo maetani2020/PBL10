@@ -15,7 +15,7 @@ async function authenticateToken(req, res, next) {
     try {
         user = jwt.verify(token, config.jwt.secret);
     } catch (err) {
-        return res.status(403).json({ error: '無効または期限切れのトークンです' });
+        return res.status(401).json({ error: 'ログインの有効期限が切れました。もう一度お試しください。' });
     }
 
     try {
