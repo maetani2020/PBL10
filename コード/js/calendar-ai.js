@@ -27,6 +27,7 @@ import {
 
 // Circular imports are resolved correctly in ES modules
 import { refreshCalendar, switchView } from './calendar-views.js';
+import { showHpMotivationRecalculation } from './calendar-hp-motivation.js';
 
 export const scannerSheet = document.getElementById("scannerSheet");
 export const scannerBackdrop = document.getElementById("scannerBackdrop");
@@ -945,6 +946,7 @@ window.registerProposalEvent = async function(encodedEvent, uniquePropId) {
       setCurrentDate(startObj);
     }
     refreshCalendar();
+    await showHpMotivationRecalculation(newEvent.start?.substring(0, 10), "AI予定追加");
 
   } catch (err) {
     console.error("Failed to add proposal event", err);

@@ -110,7 +110,8 @@ import {
   syncHpMotivationStatus,
   updatePreSavePreview,
   showRestSuggestions,
-  preSaveCheck
+  preSaveCheck,
+  showHpMotivationRecalculation
 } from './calendar-hp-motivation.js';
 
 
@@ -604,7 +605,8 @@ async function saveEvent() {
 
   try {
     let savedEvent = null;
-    if (selectedEventId) {
+    const isEditing = !!selectedEventId;
+    if (isEditing) {
       const data = await apiRequest(`/api/events/${selectedEventId}`, {
         method: 'PUT',
         body: JSON.stringify(eventData)
@@ -634,6 +636,7 @@ async function saveEvent() {
     updateLocalEventCache(savedEvent);
     closeModal();
     await syncEvents();
+    await showHpMotivationRecalculation(savedEvent.start?.substring(0, 10) || start.substring(0, 10), isEditing ? "予定更新" : "予定追加");
   } catch (err) {
     console.error('Failed to save event:', err);
     showToast(err.message || "予定の保存に失敗しました");
@@ -647,12 +650,16 @@ async function deleteEvent() {
   if (!result) return;
 
   try {
+    const deletingEvent = getAllEvents().find(e => String(e.id) === String(selectedEventId));
+    const recalculationDate = deletingEvent?.start?.substring(0, 10) || formatDate(currentDate);
+
     await apiRequest(`/api/events/${selectedEventId}`, {
       method: 'DELETE'
     });
     showToast("予定を削除しました 🗑️");
     closeModal();
     await syncEvents();
+    await showHpMotivationRecalculation(recalculationDate, "予定削除");
   } catch (err) {
     console.error('Failed to delete event:', err);
     showToast(err.message || "予定の削除に失敗しました");

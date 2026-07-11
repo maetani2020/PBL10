@@ -11,6 +11,7 @@ let limitsCache = {
   warning_threshold: 20
 };
 
+let recalculationNoticeTimer = null;
 
 const DEFAULT_EVENT_COST_KEY = "shared_calendar_default_event_costs";
 
@@ -39,20 +40,27 @@ export function getLimits() {
   return limitsCache;
 }
 
+async function fetchHpMotivationStatus(dateStr) {
+  const date = dateStr || new Date().toISOString().split('T')[0];
+  const data = await apiRequest(`/api/hp-motivation/status?date=${date}`);
+
+  if (data.limits) {
+    limitsCache = data.limits;
+  }
+
+  return data;
+}
+
 // Fetch status from backend and update header gauges
 export async function syncHpMotivationStatus(dateStr) {
   try {
-    const date = dateStr || new Date().toISOString().split('T')[0];
-    const data = await apiRequest(`/api/hp-motivation/status?date=${date}`);
-    
-    if (data.limits) {
-      limitsCache = data.limits;
-    }
-
+    const data = await fetchHpMotivationStatus(dateStr);
     updateGaugesUI(data);
     updateNextDayAlertUI(data.nextDayAlert);
+    return data;
   } catch (err) {
     console.error('Failed to sync HP/Motivation status:', err);
+    return null;
   }
 }
 
@@ -114,6 +122,63 @@ function updateHpZeroAlertUI(data) {
   const shouldShow = hpPct <= 0 || remainingHp <= 0;
 
   alert.classList.toggle("hidden", !shouldShow);
+}
+
+function formatNoticeDate(dateStr) {
+  if (!dateStr) return "";
+  const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dateStr;
+  return `${Number(match[2])}月${Number(match[3])}日`;
+}
+
+function ensureRecalculationNoticeElement() {
+  let notice = document.getElementById("hpRecalculationNotice");
+  if (notice) return notice;
+
+  const header = document.querySelector(".header");
+  if (!header) return null;
+
+  notice = document.createElement("div");
+  notice.id = "hpRecalculationNotice";
+  notice.className = "hp-recalculation-notice hidden";
+  notice.setAttribute("role", "status");
+
+  const hpAlert = document.getElementById("hpZeroAlert");
+  (hpAlert || header).insertAdjacentElement("afterend", notice);
+  return notice;
+}
+
+export async function showHpMotivationRecalculation(dateStr, actionLabel = "予定変更") {
+  try {
+    const data = await fetchHpMotivationStatus(dateStr);
+    const notice = ensureRecalculationNoticeElement();
+    if (!notice || !data?.percentages) return data;
+
+    const hpPct = Number(data.percentages.hp ?? 0);
+    const motPct = Number(data.percentages.motivation ?? 0);
+    const hpConsumed = Number(data.consumed?.hp ?? 0);
+    const motConsumed = Number(data.consumed?.motivation ?? 0);
+    const labelDate = formatNoticeDate(data.date || dateStr);
+
+    notice.innerHTML = `
+      <span class="material-icons">calculate</span>
+      <div>
+        <strong>${actionLabel}後のHP・やる気を再計算しました</strong>
+        <span>${labelDate}：残りHP ${hpPct}% / 残りやる気 ${motPct}%（消費 HP ${hpConsumed}%・やる気 ${motConsumed}%）</span>
+      </div>
+    `;
+    notice.classList.remove("hidden");
+
+    clearTimeout(recalculationNoticeTimer);
+    recalculationNoticeTimer = setTimeout(() => {
+      notice.classList.add("hidden");
+    }, 5500);
+
+    return data;
+  } catch (err) {
+    console.error('Failed to show HP/Motivation recalculation:', err);
+    return null;
+  }
 }
 
 // Update warning alerts in event edit modal if today's fatigue is too high
