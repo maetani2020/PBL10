@@ -109,7 +109,8 @@ import {
 import {
   syncHpMotivationStatus,
   updatePreSavePreview,
-  showRestSuggestions
+  showRestSuggestions,
+  preSaveCheck
 } from './calendar-hp-motivation.js';
 
 
@@ -532,6 +533,14 @@ async function saveEvent() {
   const hp_consumption = readPercentInput("hpCost");
   const motivation_consumption = readPercentInput("motivationCost");
   const eventType = document.getElementById("eventType").value;
+
+  const capacityCheck = preSaveCheck(start.substring(0, 10), hp_consumption, motivation_consumption, selectedEventId);
+  if (!capacityCheck.canSave) {
+    setEventModalStep("details");
+    showFormError("preSaveWarning", capacityCheck.message);
+    document.getElementById("preSaveWarning")?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    return;
+  }
 
   const reminderMinutes = collectEventReminderMinutes();
   const notifyAtStart = document.getElementById("remindStart")?.checked ?? true;

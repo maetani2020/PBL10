@@ -267,17 +267,19 @@ export function preSaveCheck(dateStr, hpCost, motivationCost, excludeId) {
   const projectedHp = currentHpSum + hpCost;
   const projectedMotivation = currentMotivationSum + motivationCost;
 
-  if (projectedHp > limitsCache.max_hp) {
+  const hpOverflow = projectedHp - limitsCache.max_hp;
+  const motivationOverflow = projectedMotivation - limitsCache.max_motivation;
+  if (hpOverflow > 0 || motivationOverflow > 0) {
+    const details = [];
+    if (hpOverflow > 0) {
+      details.push(`HPは残り${Math.max(0, limitsCache.max_hp - currentHpSum)}%に対して${hpCost}%必要です（${hpOverflow}%超過）`);
+    }
+    if (motivationOverflow > 0) {
+      details.push(`やる気は残り${Math.max(0, limitsCache.max_motivation - currentMotivationSum)}%に対して${motivationCost}%必要です（${motivationOverflow}%超過）`);
+    }
     return {
       canSave: false,
-      message: `HP上限を超えています。本日残り: ${Math.max(0, limitsCache.max_hp - currentHpSum)}% ですが、${hpCost}% 必要です。`
-    };
-  }
-
-  if (projectedMotivation > limitsCache.max_motivation) {
-    return {
-      canSave: false,
-      message: `やる気上限を超えています。本日残り: ${Math.max(0, limitsCache.max_motivation - currentMotivationSum)}% ですが、${motivationCost}% 必要です。`
+      message: `上限を超えるため保存できません。${details.join(" / ")}。消費率を下げるか、別日に移動してください。`
     };
   }
 

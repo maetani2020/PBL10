@@ -192,6 +192,13 @@ async function checkCapacityWarning(userId, dateStr, additionalHp = 0, additiona
     const totalMot = (current.mot || 0) + additionalMot;
 
     if (totalHp > user.max_hp || totalMot > user.max_motivation) {
+        const detailParts = [];
+        if (totalHp > user.max_hp) {
+            detailParts.push(`HPが${totalHp - user.max_hp}%超過`);
+        }
+        if (totalMot > user.max_motivation) {
+            detailParts.push(`やる気が${totalMot - user.max_motivation}%超過`);
+        }
         return {
             hpExceeded: totalHp > user.max_hp,
             motExceeded: totalMot > user.max_motivation,
@@ -199,7 +206,7 @@ async function checkCapacityWarning(userId, dateStr, additionalHp = 0, additiona
             maxHp: user.max_hp,
             totalMot,
             maxMot: user.max_motivation,
-            message: `注意: ${dateStr} の予定消費量が上限を超えています（HP: ${totalHp}/${user.max_hp}, やる気: ${totalMot}/${user.max_motivation}）`
+            message: `上限を超えるため保存できません（${detailParts.join(' / ')}、HP: ${totalHp}/${user.max_hp}、やる気: ${totalMot}/${user.max_motivation}）。消費率を下げるか、別日に移動してください。`
         };
     }
     return null;
@@ -340,6 +347,12 @@ router.post('/', authenticateToken, async (req, res) => {
         // Capacity Warnings Check (based on event start date)
         const dateStr = eventData.start.split('T')[0];
         const warning = await checkCapacityWarning(userId, dateStr, eventData.hpVal, eventData.motVal);
+        if (warning) {
+            return res.status(400).json({
+                error: warning.message,
+                warningDetail: warning
+            });
+        }
 
         const eventId = id || 'event_' + Date.now();
         const alldayVal = allday ? 1 : 0;
@@ -458,6 +471,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
         // Capacity check
         const dateStr = eventData.start.split('T')[0];
         const warning = await checkCapacityWarning(userId, dateStr, eventData.hpVal, eventData.motVal, eventId);
+        if (warning) {
+            return res.status(400).json({
+                error: warning.message,
+                warningDetail: warning
+            });
+        }
 
         const alldayVal = allday ? 1 : 0;
 
