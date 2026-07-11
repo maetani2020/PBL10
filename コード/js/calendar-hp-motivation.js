@@ -184,21 +184,50 @@ export async function showRestSuggestions(dateStr) {
       body: JSON.stringify({ date: dateStr })
     });
 
-    if (data.lowFatigue || !data.suggestions || data.suggestions.length === 0) {
+    if (data.lowFatigue) {
       container.classList.add("hidden");
       return;
     }
 
     container.classList.remove("hidden");
-    container.innerHTML = `<strong>💡 休息提案:</strong>` + data.suggestions.map(s => {
+
+    if (!data.suggestions || data.suggestions.length === 0) {
+      container.innerHTML = `
+        <div class="rest-suggestion-card rest-suggestion-empty">
+          <div class="rest-suggestion-title">
+            <span class="material-icons">hotel</span>
+            <strong>HPが少なくなっています</strong>
+          </div>
+          <p>休憩をおすすめしますが、9:00〜20:00の間に空き時間が見つかりませんでした。</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="rest-suggestion-card">
+        <div class="rest-suggestion-title">
+          <span class="material-icons">hotel</span>
+          <strong>HP不足のため休憩候補があります</strong>
+        </div>
+        <p>${data.message || "空き時間に休憩予定を入れることをおすすめします。"}</p>
+        <div class="rest-suggestion-list">
+          ${data.suggestions.map(s => {
       const startTime = s.start.substring(11, 16);
       const endTime = s.end.substring(11, 16);
       return `
         <div class="rest-item" data-start="${s.start}" data-end="${s.end}">
-          ${startTime}〜${endTime} (${s.hp_recovery} HP回復) — ${s.memo}
+          <span class="material-icons">add_circle</span>
+          <div>
+            <strong>${startTime}〜${endTime}</strong>
+            <span>${s.hp_recovery} HP回復 / ${s.memo}</span>
+          </div>
         </div>
       `;
-    }).join("");
+    }).join("")}
+        </div>
+      </div>
+    `;
 
     // Bind suggestion click listeners to autofill the form
     container.querySelectorAll(".rest-item").forEach(item => {
@@ -209,6 +238,7 @@ export async function showRestSuggestions(dateStr) {
         document.getElementById("hpCost").value = "0";
         document.getElementById("motivationCost").value = "0";
         document.getElementById("eventVisibility").value = "private";
+        showToast("休憩予定を入力しました");
         updatePreSavePreview();
       });
     });

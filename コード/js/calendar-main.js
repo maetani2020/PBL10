@@ -108,7 +108,8 @@ import {
 
 import {
   syncHpMotivationStatus,
-  updatePreSavePreview
+  updatePreSavePreview,
+  showRestSuggestions
 } from './calendar-hp-motivation.js';
 
 
@@ -1118,7 +1119,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // HP Cost & Motivation Cost previews
   document.getElementById("hpCost").addEventListener("input", updatePreSavePreview);
   document.getElementById("motivationCost").addEventListener("input", updatePreSavePreview);
-  document.getElementById("eventStart").addEventListener("change", updatePreSavePreview);
+  document.getElementById("eventStart").addEventListener("change", (event) => {
+    updatePreSavePreview();
+    const dateStr = event.target.value.substring(0, 10);
+    if (dateStr) showRestSuggestions(dateStr);
+  });
 
   // Visibility select -> show/hide group dropdown
   document.getElementById("eventVisibility").addEventListener("change", (e) => {

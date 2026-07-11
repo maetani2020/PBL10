@@ -277,26 +277,93 @@ body.dark .hp-zero-alert span:not(.material-icons) {
 }
 
 .rest-suggestions {
-  margin: 12px 0;
+  margin: 0 0 14px;
+}
+
+.rest-suggestion-card {
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(52, 199, 89, 0.12), rgba(26, 115, 232, 0.08));
+  border: 1px solid rgba(52, 199, 89, 0.3);
+  border-radius: 14px;
+  color: var(--text);
+}
+
+.rest-suggestion-card.rest-suggestion-empty {
+  background: rgba(255, 149, 0, 0.08);
+  border-color: rgba(255, 149, 0, 0.28);
+}
+
+.rest-suggestion-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: #188038;
+}
+
+.rest-suggestion-title .material-icons {
+  font-size: 21px;
+}
+
+.rest-suggestion-card p {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.rest-suggestion-list {
+  display: grid;
+  gap: 8px;
 }
 
 .rest-item {
-  padding: 12px;
-  background: rgba(52, 199, 89, 0.08);
-  border: 1px solid rgba(52, 199, 89, 0.2);
-  color: #34c759;
-  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  background: var(--surface);
+  border: 1px solid rgba(52, 199, 89, 0.28);
+  color: var(--text);
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 500;
-  margin-bottom: 8px;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.rest-item .material-icons {
+  color: #34c759;
+  font-size: 22px;
+}
+
+.rest-item strong,
+.rest-item span {
+  display: block;
+}
+
+.rest-item span:not(.material-icons) {
+  margin-top: 2px;
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 .rest-item:hover {
-  background: rgba(52, 199, 89, 0.14);
+  background: rgba(52, 199, 89, 0.1);
+  border-color: rgba(52, 199, 89, 0.52);
+  box-shadow: 0 6px 16px rgba(52, 199, 89, 0.14);
 }
 
 .rest-item:active {
   transform: scale(0.98);
+}
+
+body.dark .rest-suggestion-card {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.16), rgba(96, 165, 250, 0.1));
+  border-color: rgba(52, 211, 153, 0.34);
+}
+
+body.dark .rest-suggestion-title,
+body.dark .rest-item .material-icons {
+  color: #6ee7b7;
 }
