@@ -10,6 +10,11 @@ export let authToken = localStorage.getItem('ios_calendar_token') || '';
 export let refreshTokenStr = localStorage.getItem('ios_calendar_refresh_token') || '';
 export let currentUser = JSON.parse(localStorage.getItem('ios_calendar_user')) || null;
 
+function notifyAuthUserUpdated(user) {
+  if (typeof document === 'undefined') return;
+  document.dispatchEvent(new CustomEvent('auth:user-updated', { detail: { user } }));
+}
+
 export function setAuthToken(token) {
   authToken = token;
   if (token) {
@@ -35,6 +40,7 @@ export function setCurrentUser(user) {
   } else {
     localStorage.removeItem('ios_calendar_user');
   }
+  notifyAuthUserUpdated(user);
 }
 
 export function isLoggedIn() {
@@ -79,6 +85,7 @@ export async function apiRequest(endpoint, options = {}, _retry = false) {
     }
 
     if (res.status === 403) {
+      await refreshCurrentUser({ silent: true });
       throw new Error(data.error || 'この操作を行う権限がありません。');
     }
 
@@ -199,6 +206,43 @@ export function updateUserDisplay() {
   if (userNameEl) userNameEl.textContent = currentUser.display_name || '';
   if (userEmailEl) userEmailEl.textContent = currentUser.email || '';
   if (userAvatarLarge) userAvatarLarge.textContent = currentUser.display_name?.charAt(0).toUpperCase() || 'U';
+}
+
+export async function refreshCurrentUser({ silent = false } = {}) {
+  if (!authToken) return null;
+
+  const fetchMe = () => fetch('/api/auth/me', {
+    headers: { 'Authorization': `Bearer ${authToken}` },
+  });
+
+  try {
+    let res = await fetchMe();
+
+    if (res.status === 401 && refreshTokenStr) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) {
+        res = await fetchMe();
+      }
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      if (!silent) await logout();
+      return null;
+    }
+
+    if (!res.ok) {
+      if (!silent) console.warn('Failed to refresh current user:', res.status);
+      return currentUser;
+    }
+
+    const user = await res.json();
+    setCurrentUser(user);
+    updateUserDisplay();
+    return user;
+  } catch (err) {
+    if (!silent) console.warn('Failed to refresh current user:', err);
+    return currentUser;
+  }
 }
 
 // -------------------------------------------------------
@@ -683,6 +727,7 @@ export function initAccountPanel() {
 // -------------------------------------------------------
 export async function checkAuth() {
   if (isLoggedIn()) {
+    await refreshCurrentUser({ silent: true });
     hideAuthOverlay();
     updateUserDisplay();
     return true;

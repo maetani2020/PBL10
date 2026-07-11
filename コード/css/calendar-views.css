@@ -215,6 +215,28 @@ calendar-views.css
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
+.month-cell-events {
+  position: relative;
+  z-index: 2;
+}
+
+.month-event-span {
+  position: relative;
+  z-index: 5;
+  align-self: start;
+  min-height: 19px;
+  line-height: 19px;
+  margin: calc(40px + (var(--month-event-lane, 0) * 22px)) 4px 0;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.month-event-span:hover {
+  transform: translateY(-1px);
+}
+
 .public {
   background: var(--public);
 }
@@ -430,6 +452,14 @@ body.dark .week-day-column:hover {
     padding: 2px 4px;
     margin-top: 3px;
     max-width: 100%;
+  }
+
+  .month-event-span {
+    min-height: 16px;
+    line-height: 16px;
+    margin: calc(33px + (var(--month-event-lane, 0) * 18px)) 2px 0;
+    padding: 0 5px;
+    font-size: 10px;
   }
 
   .event-badge {

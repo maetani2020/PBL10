@@ -70,6 +70,47 @@
   text-align: right;
 }
 
+.hp-zero-alert {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(255, 59, 48, 0.1);
+  border-bottom: 1px solid rgba(255, 59, 48, 0.28);
+  color: #d93025;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.hp-zero-alert .material-icons {
+  flex: 0 0 auto;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.hp-zero-alert strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.hp-zero-alert span:not(.material-icons) {
+  display: block;
+  color: rgba(217, 48, 37, 0.9);
+  font-weight: 500;
+}
+
+body.dark .hp-zero-alert {
+  background: rgba(248, 113, 113, 0.16);
+  border-bottom-color: rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+}
+
+body.dark .hp-zero-alert span:not(.material-icons) {
+  color: rgba(254, 202, 202, 0.92);
+}
+
 /* Display Options Section */
 .display-options {
   padding: 12px 16px;

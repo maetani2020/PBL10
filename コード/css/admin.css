@@ -119,9 +119,11 @@ select:disabled {
 }
 
 .admin-shell {
+  height: 100vh;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 230px 1fr;
+  overflow: hidden;
 }
 
 .admin-sidebar {
@@ -131,6 +133,10 @@ select:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .admin-logo {
@@ -178,6 +184,8 @@ select:disabled {
 
 .admin-content {
   padding: 24px;
+  min-width: 0;
+  height: 100vh;
   overflow: auto;
 }
 
@@ -501,14 +509,19 @@ select:disabled {
 @media (max-width: 860px) {
   .admin-shell {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
   }
 
   .admin-sidebar {
     position: sticky;
     top: 0;
     z-index: 10;
+    height: auto;
     flex-direction: row;
     overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .admin-logo {
@@ -527,6 +540,8 @@ select:disabled {
 
   .admin-content {
     padding: 14px;
+    height: auto;
+    overflow: visible;
   }
 
   .toolbar {

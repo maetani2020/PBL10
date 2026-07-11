@@ -13,6 +13,10 @@ import { getLocalSettings } from './calendar-notification.js';
 export const eventModal = document.getElementById("eventModal");
 export const listModal = document.getElementById("listModal");
 
+function notifyDraftDetached() {
+  document.dispatchEvent(new CustomEvent("event-form:draft-detached"));
+}
+
 export function setEventModalStep(step = "basic") {
   const isDetails = step === "details";
   const basicPanel = document.getElementById("eventStepBasic");
@@ -188,6 +192,7 @@ function applyCurrentCalendarModeToEventForm() {
 }
 
 export function resetForm() {
+  notifyDraftDetached();
   const settings = getLocalSettings();
 
   setSelectedEventId(null);
@@ -274,6 +279,7 @@ export function openCreateEventWithTime(dateStr, hour) {
 }
 
 export function openEditEvent(event) {
+  notifyDraftDetached();
   setSelectedEventId(event.id);
   window.editingEventId = event.id;
   

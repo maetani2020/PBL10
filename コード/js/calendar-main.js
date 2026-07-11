@@ -34,6 +34,7 @@ import {
 import {
   eventModal,
   listModal,
+  openModal,
   closeModal,
   openListModal,
   closeListModal,
@@ -143,6 +144,8 @@ export async function syncEvents() {
 const EVENT_DRAFT_STORAGE_KEY = "shared_calendar_event_draft";
 const EVENT_DRAFTS_STORAGE_KEY = "shared_calendar_event_drafts";
 const MAX_EVENT_DRAFTS = 30;
+let draftListMode = "load";
+let activeDraftId = null;
 
 function setValue(id, value) {
   const el = document.getElementById(id);
@@ -299,20 +302,49 @@ function applyEventDraftData(draft) {
 }
 
 function saveEventDraft() {
-  const draft = {
+  const draftData = {
     ...collectEventDraftData(),
-    id: createDraftId(),
     savedAt: new Date().toISOString()
   };
   const drafts = readDraftsFromStorage();
-  drafts.unshift(draft);
-  writeDraftsToStorage(drafts);
+  const existingIndex = activeDraftId
+    ? drafts.findIndex(draft => draft.id === activeDraftId)
+    : -1;
+
+  if (existingIndex >= 0) {
+    const updatedDraft = {
+      ...drafts[existingIndex],
+      ...draftData,
+      id: activeDraftId
+    };
+    const nextDrafts = [
+      updatedDraft,
+      ...drafts.filter(draft => draft.id !== activeDraftId)
+    ];
+    writeDraftsToStorage(nextDrafts);
+    showToast("下書きを上書き保存しました");
+  } else {
+    const draft = {
+      ...draftData,
+      id: createDraftId()
+    };
+    activeDraftId = draft.id;
+    drafts.unshift(draft);
+    writeDraftsToStorage(drafts);
+    showToast(`下書きを保存しました（${Math.min(drafts.length, MAX_EVENT_DRAFTS)}件）`);
+  }
+
   renderDraftList();
-  showToast(`下書きを保存しました（${Math.min(drafts.length, MAX_EVENT_DRAFTS)}件）`);
+  closeModal();
 }
 
-function openDraftListModal() {
+function openDraftListModal(mode = "load") {
+  draftListMode = mode === "delete" ? "delete" : "load";
   renderDraftList();
+  const title = document.getElementById("draftListTitle");
+  if (title) title.textContent = draftListMode === "delete" ? "下書き削除" : "下書き読込";
+  const clearAllBtn = document.getElementById("clearAllDraftsBtn");
+  if (clearAllBtn) clearAllBtn.classList.toggle("hidden", draftListMode !== "delete");
   const modal = document.getElementById("draftListModal");
   if (modal) modal.style.display = "flex";
 }
@@ -330,7 +362,7 @@ function loadEventDraft(draftId) {
   }
 
   if (!draftId) {
-    openDraftListModal();
+    openDraftListModal("load");
     return;
   }
 
@@ -341,9 +373,11 @@ function loadEventDraft(draftId) {
     return;
   }
 
+  resetForm();
+  activeDraftId = draft.id;
   applyEventDraftData(draft);
-  setEventModalStep("basic");
   closeDraftListModal();
+  openModal();
   showToast("下書きを読み込みました");
 }
 
@@ -351,6 +385,7 @@ function deleteEventDraft(draftId) {
   const drafts = readDraftsFromStorage();
   const nextDrafts = drafts.filter(draft => draft.id !== draftId);
   writeDraftsToStorage(nextDrafts);
+  if (activeDraftId === draftId) activeDraftId = null;
   renderDraftList();
   showToast("下書きを削除しました");
 }
@@ -366,6 +401,7 @@ function clearEventDraft() {
 
   writeDraftsToStorage([]);
   localStorage.removeItem(EVENT_DRAFT_STORAGE_KEY);
+  activeDraftId = null;
   renderDraftList();
   showToast("下書きをすべて削除しました");
 }
@@ -400,19 +436,21 @@ function renderDraftList() {
     const actions = document.createElement("div");
     actions.className = "draft-item-actions";
 
-    const loadBtn = document.createElement("button");
-    loadBtn.type = "button";
-    loadBtn.className = "primary-btn";
-    loadBtn.textContent = "読込";
-    loadBtn.addEventListener("click", () => loadEventDraft(draft.id));
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "danger-btn";
-    deleteBtn.textContent = "削除";
-    deleteBtn.addEventListener("click", () => deleteEventDraft(draft.id));
-
-    actions.append(loadBtn, deleteBtn);
+    if (draftListMode === "delete") {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "danger-btn";
+      deleteBtn.textContent = "削除";
+      deleteBtn.addEventListener("click", () => deleteEventDraft(draft.id));
+      actions.append(deleteBtn);
+    } else {
+      const loadBtn = document.createElement("button");
+      loadBtn.type = "button";
+      loadBtn.className = "primary-btn";
+      loadBtn.textContent = "読込";
+      loadBtn.addEventListener("click", () => loadEventDraft(draft.id));
+      actions.append(loadBtn);
+    }
     item.append(title, meta, actions);
     container.appendChild(item);
   });
@@ -649,6 +687,8 @@ function initMobileActionMenu() {
   const actionTargets = {
     today: "todayBtn",
     list: "scheduleListBtn",
+    draftList: "draftListBtn",
+    clearDrafts: "clearDraftsToolbarBtn",
     group: "groupManageBtn",
     history: "notificationHistoryBtn",
     announcements: "adminAnnouncementsBtn",
@@ -830,13 +870,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  document.addEventListener("event-form:draft-detached", () => {
+    activeDraftId = null;
+  });
+
   // Save / Delete / Close Modals
   document.getElementById("saveEventBtn").addEventListener("click", saveEvent);
   document.getElementById("deleteEventBtn").addEventListener("click", deleteEvent);
   document.getElementById("closeModalBtn").addEventListener("click", closeModal);
   document.getElementById("saveDraftEventBtn")?.addEventListener("click", saveEventDraft);
-  document.getElementById("loadDraftEventBtn")?.addEventListener("click", () => loadEventDraft());
-  document.getElementById("clearDraftEventBtn")?.addEventListener("click", clearEventDraft);
+  document.getElementById("draftListBtn")?.addEventListener("click", () => loadEventDraft());
+  document.getElementById("clearDraftsToolbarBtn")?.addEventListener("click", () => openDraftListModal("delete"));
   document.getElementById("eventStepBasicTab")?.addEventListener("click", () => setEventModalStep("basic"));
   document.getElementById("eventStepDetailsTab")?.addEventListener("click", () => {
     setEventModalStep("details");
@@ -1142,6 +1186,17 @@ document.addEventListener("DOMContentLoaded", () => {
     await syncNotificationSettings();
     updateAdminNavVisibility();
     startNotificationWatcher();
+  });
+
+  document.addEventListener("auth:user-updated", () => {
+    updateAdminNavVisibility();
+    const adminNav = document.querySelector('[data-nav="admin"]');
+    if (adminNav?.classList.contains("hidden")) {
+      closeAdminPanel();
+      if (adminNav.classList.contains("active")) {
+        switchPanel("calendar");
+      }
+    }
   });
 });
 

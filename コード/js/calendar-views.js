@@ -51,6 +51,58 @@ function applyHolidayClass(element, holiday) {
   element.title = holiday.name;
 }
 
+function getEventStartDate(event) {
+  return String(event.start || event.date || "").slice(0, 10);
+}
+
+function getEventEndDate(event) {
+  return String(event.end || event.start || event.date || "").slice(0, 10);
+}
+
+function toLocalDate(dateStr) {
+  const [year, month, day] = String(dateStr).split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function isMultiDayEvent(event) {
+  const start = getEventStartDate(event);
+  const end = getEventEndDate(event);
+  return Boolean(start && end && start !== end);
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function minDate(a, b) {
+  return a <= b ? a : b;
+}
+
+function maxDate(a, b) {
+  return a >= b ? a : b;
+}
+
+function allocateMonthEventLane(rowLanes, row, startCol, endCol) {
+  const lanes = rowLanes.get(row) || [];
+
+  for (let lane = 0; lane < lanes.length; lane += 1) {
+    const overlaps = lanes[lane].some(span => (
+      startCol < span.endCol && endCol > span.startCol
+    ));
+    if (!overlaps) {
+      lanes[lane].push({ startCol, endCol });
+      rowLanes.set(row, lanes);
+      return lane;
+    }
+  }
+
+  lanes.push([{ startCol, endCol }]);
+  rowLanes.set(row, lanes);
+  return lanes.length - 1;
+}
+
 export function openYearJumpModal() {
   const modal = document.getElementById("yearJumpModal");
   const yearInput = document.getElementById("jumpYearInput");
@@ -149,28 +201,26 @@ export function renderMonthView() {
   const startWeek = firstDay.getDay();
   const totalDays = lastDay.getDate();
 
-  const prevMonthLastDay = new Date(year, month, 0).getDate();
   const events = getEvents();
+  const totalCells = startWeek + totalDays;
+  const weekRows = Math.ceil(totalCells / 7);
+  const targetCells = weekRows * 7;
+  const firstVisibleDate = addDays(firstDay, -startWeek);
+  const lastVisibleDate = addDays(firstVisibleDate, targetCells - 1);
+  const cellInfoByDate = new Map();
+  const cellInfos = [];
 
-  // 前月セル
-  for (let i = startWeek - 1; i >= 0; i--) {
+  for (let index = 0; index < targetCells; index += 1) {
+    const row = Math.floor(index / 7) + 1;
+    const col = (index % 7) + 1;
+    const cellDate = addDays(firstVisibleDate, index);
+    const dateStr = formatDate(cellDate);
+    const isCurrentMonth = cellDate.getMonth() === month;
     const cell = document.createElement("div");
-    cell.className = "day-cell other-month";
-    cell.innerHTML = `
-      <div class="day-number">
-        ${prevMonthLastDay - i}
-      </div>
-    `;
-    monthView.appendChild(cell);
-  }
+    cell.className = isCurrentMonth ? "day-cell" : "day-cell other-month";
+    cell.style.gridColumn = String(col);
+    cell.style.gridRow = String(row);
 
-  // 当月セル
-  for (let day = 1; day <= totalDays; day++) {
-    const cell = document.createElement("div");
-    cell.classList.add("day-cell");
-
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const cellDate = new Date(year, month, day);
     const weekday = cellDate.getDay();
     const holiday = getJapaneseHoliday(cellDate);
 
@@ -178,17 +228,88 @@ export function renderMonthView() {
     if (weekday === 6) cell.classList.add("saturday");
     applyHolidayClass(cell, holiday);
 
-    if (isToday(year, month, day)) {
+    if (isToday(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate())) {
       cell.classList.add("today");
     }
 
     const dayNumber = document.createElement("div");
     dayNumber.className = "day-number";
-    dayNumber.textContent = day;
+    dayNumber.textContent = cellDate.getDate();
     cell.appendChild(dayNumber);
     appendHolidayLabel(cell, holiday);
 
-    const dayEvents = events.filter((event) => event.date === dateStr);
+    const eventContainer = document.createElement("div");
+    eventContainer.className = "month-cell-events";
+    cell.appendChild(eventContainer);
+
+    const info = { cell, eventContainer, date: cellDate, dateStr, row, col, index };
+    cellInfos.push(info);
+    cellInfoByDate.set(dateStr, info);
+
+    cell.addEventListener("click", () => {
+      openCreateEvent(dateStr);
+    });
+
+    monthView.appendChild(cell);
+  }
+
+  const multiDayEvents = events.filter(isMultiDayEvent);
+  const rowLanes = new Map();
+
+  multiDayEvents.forEach((event) => {
+    const eventStartDate = toLocalDate(getEventStartDate(event));
+    const eventEndDate = toLocalDate(getEventEndDate(event));
+    if (Number.isNaN(eventStartDate.getTime()) || Number.isNaN(eventEndDate.getTime())) return;
+    if (eventEndDate < firstVisibleDate || eventStartDate > lastVisibleDate) return;
+
+    let segmentStart = maxDate(eventStartDate, firstVisibleDate);
+    const visibleEnd = minDate(eventEndDate, lastVisibleDate);
+
+    while (segmentStart <= visibleEnd) {
+      const startInfo = cellInfoByDate.get(formatDate(segmentStart));
+      if (!startInfo) {
+        segmentStart = addDays(segmentStart, 1);
+        continue;
+      }
+
+      const rowEndIndex = (startInfo.row * 7) - 1;
+      const rowEndDate = cellInfos[rowEndIndex]?.date || visibleEnd;
+      const segmentEnd = minDate(visibleEnd, rowEndDate);
+      const endInfo = cellInfoByDate.get(formatDate(segmentEnd));
+      if (!endInfo) break;
+
+      const gridEndCol = endInfo.col + 1;
+      const lane = allocateMonthEventLane(rowLanes, startInfo.row, startInfo.col, gridEndCol);
+      const span = document.createElement("div");
+      span.className = `event month-event-span ${event.visibility}`;
+      span.style.gridColumn = `${startInfo.col} / ${gridEndCol}`;
+      span.style.gridRow = String(startInfo.row);
+      span.style.setProperty("--month-event-lane", String(lane));
+      applyEventColor(span, event);
+      span.textContent = `${event.allDay ? "📌 " : ""}${event.title}`;
+      span.title = `${event.title} (${getEventStartDate(event)} - ${getEventEndDate(event)})`;
+
+      span.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openEditEvent(event);
+      });
+
+      monthView.appendChild(span);
+      segmentStart = addDays(segmentEnd, 1);
+    }
+  });
+
+  cellInfos.forEach((info) => {
+    const laneCount = rowLanes.get(info.row)?.length || 0;
+    if (laneCount > 0) {
+      info.cell.classList.add("has-multiday");
+      info.eventContainer.style.marginTop = `${laneCount * 22 + 4}px`;
+    }
+
+    const dayEvents = events.filter((event) => {
+      if (isMultiDayEvent(event)) return false;
+      return event.date === info.dateStr || getEventStartDate(event) === info.dateStr;
+    });
 
     dayEvents.forEach((event) => {
       const eventDiv = document.createElement("div");
@@ -211,30 +332,9 @@ export function renderMonthView() {
         openEditEvent(event);
       });
 
-      cell.appendChild(eventDiv);
+      info.eventContainer.appendChild(eventDiv);
     });
-
-    cell.addEventListener("click", () => {
-      openCreateEvent(dateStr);
-    });
-
-    monthView.appendChild(cell);
-  }
-
-  // 翌月セル
-  const totalCells = startWeek + totalDays;
-  const weekRows = Math.ceil(totalCells / 7);
-  const targetCells = weekRows * 7;
-  const nextDays = targetCells - totalCells;
-
-  for (let i = 1; i <= nextDays; i++) {
-    const cell = document.createElement("div");
-    cell.className = "day-cell other-month";
-    cell.innerHTML = `
-      <div class="day-number">${i}</div>
-    `;
-    monthView.appendChild(cell);
-  }
+  });
 }
 
 // ----------------------------------------------------

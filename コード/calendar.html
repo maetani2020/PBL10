@@ -60,7 +60,7 @@
         </li>
 
         <li class="sidebar-item" data-nav="settings">
-          <span class="material-icons"> tune </span>
+          <span class="material-icons"> notifications </span>
           通知設定
         </li>
 
@@ -147,6 +147,16 @@
           <span class="material-icons"> list </span>
         </button>
 
+        <!-- 下書き読込 -->
+        <button id="draftListBtn" class="icon-btn" title="下書き読込">
+          <span class="material-icons"> edit </span>
+        </button>
+
+        <!-- 下書き削除 -->
+        <button id="clearDraftsToolbarBtn" class="icon-btn" title="下書き削除">
+          <span class="material-icons"> delete_sweep </span>
+        </button>
+
         <!-- グループ管理 -->
         <button id="groupManageBtn" class="icon-btn" title="グループ管理">
           <span class="material-icons"> group_add </span>
@@ -165,7 +175,7 @@
 
         <!-- 通知設定 -->
         <button id="notificationSettingsBtn" class="icon-btn" title="通知設定">
-          <span class="material-icons"> tune </span>
+          <span class="material-icons"> notifications </span>
         </button>
 
         <!-- AIアシスタント -->
@@ -204,6 +214,14 @@
               <span class="material-icons"> list </span>
               <span>予定一覧</span>
             </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="draftList" role="menuitem">
+              <span class="material-icons"> edit </span>
+              <span>下書き読込</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="clearDrafts" role="menuitem">
+              <span class="material-icons"> delete_sweep </span>
+              <span>下書き削除</span>
+            </button>
             <button type="button" class="mobile-action-item" data-mobile-action="group" role="menuitem">
               <span class="material-icons"> group_add </span>
               <span>グループ管理</span>
@@ -218,7 +236,7 @@
               <span id="mobileAdminAnnouncementUnreadBadge" class="admin-unread-badge admin-unread-badge-inline hidden">0</span>
             </button>
             <button type="button" class="mobile-action-item" data-mobile-action="notificationSettings" role="menuitem">
-              <span class="material-icons"> tune </span>
+              <span class="material-icons"> notifications </span>
               <span>通知設定</span>
             </button>
             <button type="button" class="mobile-action-item" data-mobile-action="ai" role="menuitem">
@@ -522,8 +540,6 @@
 
         <div class="modal-actions">
           <button id="saveDraftEventBtn" type="button" class="secondary-btn">下書き保存</button>
-          <button id="loadDraftEventBtn" type="button" class="secondary-btn">下書き読込</button>
-          <button id="clearDraftEventBtn" type="button" class="danger-btn">下書き削除</button>
           <button id="saveEventBtn">保存</button>
           <button id="deleteEventBtn">削除</button>
           <button id="closeModalBtn">閉じる</button>
@@ -533,7 +549,7 @@
 
     <div id="draftListModal" class="modal">
       <div class="modal-content draft-list-modal">
-        <h2>下書き一覧</h2>
+        <h2 id="draftListTitle">下書き一覧</h2>
         <div class="modal-body">
           <div id="draftListContainer" class="draft-list-container"></div>
         </div>

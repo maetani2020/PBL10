@@ -78,6 +78,42 @@ function updateGaugesUI(data) {
     // Update color classes based on backend statusColors
     motBar.className = `gauge-fill motivation-${data.statusColors.motivation}`;
   }
+
+  updateHpZeroAlertUI(data);
+}
+
+function ensureHpZeroAlertElement() {
+  let alert = document.getElementById("hpZeroAlert");
+  if (alert) return alert;
+
+  const header = document.querySelector(".header");
+  if (!header) return null;
+
+  alert = document.createElement("div");
+  alert.id = "hpZeroAlert";
+  alert.className = "hp-zero-alert hidden";
+  alert.setAttribute("role", "status");
+  alert.innerHTML = `
+    <span class="material-icons">warning</span>
+    <div>
+      <strong>HPが0%です。</strong>
+      <span>これ以上HPを消費する予定は登録できません。休憩予定を入れることをおすすめします。</span>
+    </div>
+  `;
+
+  header.insertAdjacentElement("afterend", alert);
+  return alert;
+}
+
+function updateHpZeroAlertUI(data) {
+  const alert = ensureHpZeroAlertElement();
+  if (!alert) return;
+
+  const hpPct = Number(data?.percentages?.hp ?? 100);
+  const remainingHp = Number(data?.remaining?.hp ?? 1);
+  const shouldShow = hpPct <= 0 || remainingHp <= 0;
+
+  alert.classList.toggle("hidden", !shouldShow);
 }
 
 // Update warning alerts in event edit modal if today's fatigue is too high
@@ -218,6 +254,14 @@ export function preSaveCheck(dateStr, hpCost, motivationCost, excludeId) {
   // Warning thresholds check (remaining percentage below threshold)
   const remainingHpPct = Math.round(((limitsCache.max_hp - projectedHp) / limitsCache.max_hp) * 100);
   const remainingMotPct = Math.round(((limitsCache.max_motivation - projectedMotivation) / limitsCache.max_motivation) * 100);
+
+  if (remainingHpPct <= 0) {
+    return {
+      canSave: true,
+      isWarning: true,
+      message: "保存後HPが0%になります。休憩予定を入れることをおすすめします。"
+    };
+  }
 
   if (remainingHpPct < limitsCache.warning_threshold || remainingMotPct < limitsCache.warning_threshold) {
     return {
