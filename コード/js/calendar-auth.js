@@ -2,6 +2,7 @@
 // Authentication state management, API helpers, and auth UI logic
 
 import { showToast, showFieldError, clearFieldErrors } from './calendar-state.js';
+import { getUiSizeSetting, initUiSizeControl, updateUiSizeControl } from './calendar-ui-settings.js';
 
 // -------------------------------------------------------
 // Auth State
@@ -572,6 +573,8 @@ export function initAccountSettings() {
   openSettingsBtn?.addEventListener('click', () => {
     const nameInput = document.getElementById('newDisplayName');
     if (nameInput) nameInput.value = currentUser?.display_name || '';
+    initUiSizeControl();
+    updateUiSizeControl(getUiSizeSetting());
     settingsModal?.classList.remove('hidden');
   });
 
@@ -591,8 +594,14 @@ export function initAccountSettings() {
       btn.classList.add('active');
       const target = btn.dataset.tab;
       document.getElementById(`settingsTab_${target}`)?.classList.remove('hidden');
+      if (target === 'display') {
+        initUiSizeControl();
+        updateUiSizeControl(getUiSizeSetting());
+      }
     });
   });
+
+  initUiSizeControl();
 
   // パスワード変更
 

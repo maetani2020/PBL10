@@ -19,11 +19,13 @@ calendar-views.css
 .view-btn {
   flex: 1;
 
-  padding: 12px;
+  padding: var(--ui-view-padding);
 
   background: transparent;
 
   color: var(--text);
+
+  font-size: var(--ui-view-font-size);
 
   font-weight: 600;
 }
@@ -52,7 +54,9 @@ calendar-views.css
 .week-header div {
   text-align: center;
 
-  padding: 10px;
+  padding: var(--ui-week-header-padding);
+
+  font-size: var(--ui-week-header-font-size);
 
   font-weight: bold;
 }
@@ -100,9 +104,9 @@ calendar-views.css
 }
 
 .day-number {
-  width: 32px;
+  width: var(--ui-day-number-size);
 
-  height: 32px;
+  height: var(--ui-day-number-size);
 
   display: flex;
 
@@ -112,7 +116,7 @@ calendar-views.css
 
   border-radius: 50%;
 
-  font-size: 16px;
+  font-size: var(--ui-day-number-font-size);
 
   font-weight: 600;
 }
@@ -133,7 +137,7 @@ calendar-views.css
 .week-holiday-name,
 .day-holiday-name {
   color: var(--sunday);
-  font-size: 10px;
+  font-size: var(--ui-holiday-font-size);
   font-weight: 700;
   line-height: 1.2;
   overflow: hidden;
@@ -197,7 +201,7 @@ calendar-views.css
 
   color: white;
 
-  font-size: 11px;
+  font-size: var(--ui-event-font-size);
 
   overflow: hidden;
 
@@ -229,7 +233,7 @@ calendar-views.css
   margin: calc(40px + (var(--month-event-lane, 0) * 22px)) 4px 0;
   padding: 0 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--ui-month-event-font-size);
   font-weight: 700;
 }
 
@@ -282,7 +286,8 @@ calendar-views.css
 
 .week-view .week-header div {
   text-align: center;
-  padding: 10px;
+  padding: var(--ui-week-header-padding);
+  font-size: var(--ui-week-header-font-size);
   font-weight: bold;
   border-right: 1px solid var(--border);
 }

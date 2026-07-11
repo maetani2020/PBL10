@@ -228,7 +228,6 @@ export async function saveNotificationSettingsFromForm() {
       eventAtStart,
       historyRetentionDays
     });
-
     backendSettings = { events: enabled, tasks, game: true, email };
 
     if (enabled || tasks || email) {

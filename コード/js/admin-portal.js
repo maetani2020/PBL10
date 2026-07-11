@@ -75,6 +75,7 @@ function formatDateTime(value) {
 function adminActionLabel(action) {
   const labels = {
     'backup:create': 'バックアップ作成',
+    'backup:restore': 'バックアップ復元',
     'user:role:update': 'ユーザー権限変更',
     'user:delete': 'ユーザー削除',
     'announcement:send': 'お知らせ送信',
@@ -492,6 +493,91 @@ async function createBackup() {
   await Promise.all([loadAdminLogs(), loadStats()]);
 }
 
+function readBackupJsonFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        resolve(JSON.parse(reader.result));
+      } catch {
+        reject(new Error('JSONファイルの読み込みに失敗しました'));
+      }
+    };
+    reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'));
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+function validateBackupPreview(file, backup) {
+  if (!file || !file.name.toLowerCase().endsWith('.json')) {
+    throw new Error('アップロードできるファイルは .json のみです');
+  }
+  if (!backup || typeof backup !== 'object') {
+    throw new Error('バックアップJSONの形式が正しくありません');
+  }
+  if (backup.backup_version !== 1) {
+    throw new Error('backup_version が正しくありません。新しく作成したバックアップを選択してください');
+  }
+  if (!backup.exported_at || Number.isNaN(Date.parse(backup.exported_at))) {
+    throw new Error('exported_at が存在しない、または日時形式が正しくありません');
+  }
+}
+
+async function restoreBackup() {
+  const fileInput = document.getElementById('backupImportFile');
+  const passwordInput = document.getElementById('backupRestorePassword');
+  const restoreBtn = document.getElementById('restoreBackupBtn');
+  const file = fileInput?.files?.[0];
+  const password = passwordInput?.value || '';
+
+  if (!file) {
+    showToast('復元するバックアップJSONを選択してください');
+    return;
+  }
+  if (!password) {
+    showToast('管理者パスワードを入力してください');
+    return;
+  }
+
+  const backup = await readBackupJsonFile(file);
+  validateBackupPreview(file, backup);
+
+  const exportedAt = formatDateTime(backup.exported_at);
+  const warning = [
+    'バックアップを復元します。',
+    '',
+    `ファイル: ${file.name}`,
+    `作成日時: ${exportedAt}`,
+    '',
+    '現在のグループ・予定・通知などはバックアップ内容に置き換わります。',
+    '復元前に現在データの自動バックアップを作成します。',
+    '',
+    '続行しますか？'
+  ].join('\n');
+
+  if (!confirm(warning)) return;
+
+  restoreBtn.disabled = true;
+  restoreBtn.innerHTML = '<span class="material-icons">hourglass_top</span>復元中...';
+  try {
+    const data = await api('/api/admin/backup/import', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: file.name,
+        admin_password: password,
+        backup
+      })
+    });
+    fileInput.value = '';
+    passwordInput.value = '';
+    showToast(data.message || 'バックアップを復元しました');
+    await loadAll();
+  } finally {
+    restoreBtn.disabled = false;
+    restoreBtn.innerHTML = '<span class="material-icons">upload_file</span>バックアップを復元';
+  }
+}
+
 async function loadAdminLogs() {
   adminLogsCache = await api(`/api/admin/logs?${getAdminLogFilterParams()}`);
   renderAdminLogs();
@@ -696,6 +782,7 @@ document.getElementById('eventTypeFilter').addEventListener('change', renderEven
 document.getElementById('eventStatusFilter').addEventListener('change', renderEvents);
 document.getElementById('sendAnnouncementBtn').addEventListener('click', () => sendAnnouncement().catch(err => showToast(err.message)));
 document.getElementById('createBackupBtn').addEventListener('click', () => createBackup().catch(err => showToast(err.message)));
+document.getElementById('restoreBackupBtn')?.addEventListener('click', () => restoreBackup().catch(err => showToast(err.message)));
 document.getElementById('refreshLogsBtn').addEventListener('click', () => loadAdminLogs().catch(err => showToast(err.message)));
 document.getElementById('adminLogSearch')?.addEventListener('input', scheduleAdminLogsLoad);
 document.getElementById('adminLogActionFilter')?.addEventListener('change', () => loadAdminLogs().catch(err => showToast(err.message)));

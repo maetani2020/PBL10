@@ -143,6 +143,17 @@
               <p>パスワードや認証トークンを除いたJSONバックアップを作成します。</p>
               <button id="createBackupBtn" class="primary-wide"><span class="material-icons">download</span>バックアップを作成</button>
             </article>
+            <article class="maintenance-card restore-card">
+              <h3>バックアップ復元</h3>
+              <p>復元前に現在データを自動バックアップし、管理者パスワードを再確認します。</p>
+              <div class="restore-warning">
+                <span class="material-icons">warning</span>
+                <span>現在のグループ・予定・通知などがバックアップ内容に置き換わります。</span>
+              </div>
+              <input id="backupImportFile" type="file" accept=".json,application/json" />
+              <input id="backupRestorePassword" type="password" maxlength="100" autocomplete="current-password" placeholder="管理者パスワードを再入力" />
+              <button id="restoreBackupBtn" class="danger-wide"><span class="material-icons">upload_file</span>バックアップを復元</button>
+            </article>
             <article class="maintenance-card">
               <h3>管理者操作ログ</h3>
               <p>直近の管理者操作を表示します。</p>

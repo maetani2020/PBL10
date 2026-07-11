@@ -24,8 +24,8 @@ function convertSqlPlaceholders(sql) {
     return sql.replace(/\?/g, () => `$${index++}`);
 }
 
-// Helper functions for Promise-based operations
-const query = {
+function createQueryExecutor(execute) {
+    return {
     async run(sql, params = []) {
         const pgSql = convertSqlPlaceholders(sql);
         let executeSql = pgSql;
@@ -33,21 +33,41 @@ const query = {
         if (isInsert && !pgSql.toUpperCase().includes('RETURNING')) {
             executeSql = pgSql.trim().replace(/;?$/, ' RETURNING id');
         }
-        const res = await pgPool.query(executeSql, params);
+        const res = await execute(executeSql, params);
         const lastID = res.rows[0] ? res.rows[0].id : null;
         return { lastID, changes: res.rowCount };
     },
     async get(sql, params = []) {
         const pgSql = convertSqlPlaceholders(sql);
-        const res = await pgPool.query(pgSql, params);
+        const res = await execute(pgSql, params);
         return res.rows[0];
     },
     async all(sql, params = []) {
         const pgSql = convertSqlPlaceholders(sql);
-        const res = await pgPool.query(pgSql, params);
+        const res = await execute(pgSql, params);
         return res.rows;
     }
-};
+    };
+}
+
+// Helper functions for Promise-based operations
+const query = createQueryExecutor((sql, params) => pgPool.query(sql, params));
+
+async function withTransaction(callback) {
+    const client = await pgPool.connect();
+    const txQuery = createQueryExecutor((sql, params) => client.query(sql, params));
+    try {
+        await client.query('BEGIN');
+        const result = await callback(txQuery);
+        await client.query('COMMIT');
+        return result;
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+}
 
 // Auto-convert SQLite syntax to Postgres syntax for table creations
 async function createTable(sql) {
@@ -397,6 +417,7 @@ async function initDb() {
 
 module.exports = {
     query,
+    withTransaction,
     initDb,
     isPostgres: true
 };

@@ -5,29 +5,29 @@
 
 .header-gauges {
   display: flex;
-  gap: 16px;
-  margin-left: 20px;
+  gap: 22px;
+  margin-left: 24px;
   align-items: center;
 }
 
 .gauge-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .gauge-label {
   opacity: 0.8;
-  min-width: 32px;
+  min-width: 42px;
 }
 
 .gauge-bar {
-  width: 80px;
-  height: 8px;
+  width: 128px;
+  height: 12px;
   background: var(--border);
-  border-radius: 4px;
+  border-radius: 999px;
   overflow: hidden;
   position: relative;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
@@ -35,7 +35,7 @@
 
 .gauge-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 999px;
   width: 0%;
   transition: width 0.4s cubic-bezier(0.1, 0.8, 0.3, 1);
 }
@@ -66,7 +66,9 @@
 
 .gauge-value {
   font-family: monospace;
-  min-width: 35px;
+  min-width: 44px;
+  font-size: 15px;
+  font-weight: 800;
   text-align: right;
 }
 
@@ -109,6 +111,32 @@ body.dark .hp-zero-alert {
 
 body.dark .hp-zero-alert span:not(.material-icons) {
   color: rgba(254, 202, 202, 0.92);
+}
+
+@media (max-width: 768px) {
+  .header-gauges {
+    gap: 10px;
+    margin-left: 8px;
+  }
+
+  .gauge-item {
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .gauge-label {
+    min-width: 28px;
+  }
+
+  .gauge-bar {
+    width: 68px;
+    height: 9px;
+  }
+
+  .gauge-value {
+    min-width: 34px;
+    font-size: 12px;
+  }
 }
 
 .hp-recalculation-notice {

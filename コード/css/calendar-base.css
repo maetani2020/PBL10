@@ -30,6 +30,23 @@ calendar-base.css
 
   --hover: #f1f3f4;
   --active: #e8f0fe;
+
+  --ui-font-size: 14px;
+  --ui-title-size: 18px;
+  --ui-icon-btn-size: 40px;
+  --ui-icon-font-size: 22px;
+  --ui-today-font-size: 14px;
+  --ui-sidebar-font-size: 16px;
+  --ui-view-font-size: 14px;
+  --ui-view-padding: 12px;
+  --ui-week-header-font-size: 14px;
+  --ui-week-header-padding: 10px;
+  --ui-day-number-size: 32px;
+  --ui-day-number-font-size: 16px;
+  --ui-holiday-font-size: 10px;
+  --ui-event-font-size: 11px;
+  --ui-month-event-font-size: 12px;
+  --ui-modal-font-size: 14px;
 }
 
 /* ==========================
@@ -81,11 +98,202 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", sans-serif;
+  font-size: var(--ui-font-size);
   display: flex;
   flex-direction: column;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
+}
+
+body.ui-size-1 {
+  --ui-font-size: 12px;
+  --ui-title-size: 15px;
+  --ui-icon-btn-size: 34px;
+  --ui-icon-font-size: 18px;
+  --ui-today-font-size: 12px;
+  --ui-sidebar-font-size: 13px;
+  --ui-view-font-size: 12px;
+  --ui-view-padding: 8px;
+  --ui-week-header-font-size: 12px;
+  --ui-week-header-padding: 7px;
+  --ui-day-number-size: 25px;
+  --ui-day-number-font-size: 12px;
+  --ui-holiday-font-size: 8px;
+  --ui-event-font-size: 8px;
+  --ui-month-event-font-size: 9px;
+  --ui-modal-font-size: 12px;
+}
+
+body.ui-size-2 {
+  --ui-font-size: 12.5px;
+  --ui-title-size: 16px;
+  --ui-icon-btn-size: 35px;
+  --ui-icon-font-size: 19px;
+  --ui-today-font-size: 12.5px;
+  --ui-sidebar-font-size: 14px;
+  --ui-view-font-size: 12.5px;
+  --ui-view-padding: 9px;
+  --ui-week-header-font-size: 12.5px;
+  --ui-week-header-padding: 8px;
+  --ui-day-number-size: 27px;
+  --ui-day-number-font-size: 13px;
+  --ui-holiday-font-size: 8.5px;
+  --ui-event-font-size: 9px;
+  --ui-month-event-font-size: 10px;
+  --ui-modal-font-size: 12.5px;
+}
+
+body.ui-size-3 {
+  --ui-font-size: 13px;
+  --ui-title-size: 16.5px;
+  --ui-icon-btn-size: 37px;
+  --ui-icon-font-size: 20px;
+  --ui-today-font-size: 13px;
+  --ui-sidebar-font-size: 14.5px;
+  --ui-view-font-size: 13px;
+  --ui-view-padding: 10px;
+  --ui-week-header-font-size: 13px;
+  --ui-week-header-padding: 8px;
+  --ui-day-number-size: 29px;
+  --ui-day-number-font-size: 14px;
+  --ui-holiday-font-size: 9px;
+  --ui-event-font-size: 10px;
+  --ui-month-event-font-size: 11px;
+  --ui-modal-font-size: 13px;
+}
+
+body.ui-size-4 {
+  --ui-font-size: 13.5px;
+  --ui-title-size: 17px;
+  --ui-icon-btn-size: 38px;
+  --ui-icon-font-size: 21px;
+  --ui-today-font-size: 13.5px;
+  --ui-sidebar-font-size: 15px;
+  --ui-view-font-size: 13.5px;
+  --ui-view-padding: 11px;
+  --ui-week-header-font-size: 13.5px;
+  --ui-week-header-padding: 9px;
+  --ui-day-number-size: 30px;
+  --ui-day-number-font-size: 15px;
+  --ui-holiday-font-size: 9.5px;
+  --ui-event-font-size: 10.5px;
+  --ui-month-event-font-size: 11.5px;
+  --ui-modal-font-size: 13.5px;
+}
+
+body.ui-size-5 {
+  --ui-font-size: 14px;
+  --ui-title-size: 18px;
+  --ui-icon-btn-size: 40px;
+  --ui-icon-font-size: 22px;
+  --ui-today-font-size: 14px;
+  --ui-sidebar-font-size: 16px;
+  --ui-view-font-size: 14px;
+  --ui-view-padding: 12px;
+  --ui-week-header-font-size: 14px;
+  --ui-week-header-padding: 10px;
+  --ui-day-number-size: 32px;
+  --ui-day-number-font-size: 16px;
+  --ui-holiday-font-size: 10px;
+  --ui-event-font-size: 11px;
+  --ui-month-event-font-size: 12px;
+  --ui-modal-font-size: 14px;
+}
+
+body.ui-size-6 {
+  --ui-font-size: 14.5px;
+  --ui-title-size: 19px;
+  --ui-icon-btn-size: 42px;
+  --ui-icon-font-size: 23px;
+  --ui-today-font-size: 14.5px;
+  --ui-sidebar-font-size: 16.5px;
+  --ui-view-font-size: 14.5px;
+  --ui-view-padding: 13px;
+  --ui-week-header-font-size: 14.5px;
+  --ui-week-header-padding: 11px;
+  --ui-day-number-size: 34px;
+  --ui-day-number-font-size: 17px;
+  --ui-holiday-font-size: 10.5px;
+  --ui-event-font-size: 12px;
+  --ui-month-event-font-size: 13px;
+  --ui-modal-font-size: 14.5px;
+}
+
+body.ui-size-7 {
+  --ui-font-size: 15px;
+  --ui-title-size: 20px;
+  --ui-icon-btn-size: 44px;
+  --ui-icon-font-size: 24px;
+  --ui-today-font-size: 15px;
+  --ui-sidebar-font-size: 17px;
+  --ui-view-font-size: 15px;
+  --ui-view-padding: 14px;
+  --ui-week-header-font-size: 15px;
+  --ui-week-header-padding: 12px;
+  --ui-day-number-size: 36px;
+  --ui-day-number-font-size: 18px;
+  --ui-holiday-font-size: 11px;
+  --ui-event-font-size: 12.5px;
+  --ui-month-event-font-size: 13.5px;
+  --ui-modal-font-size: 15px;
+}
+
+body.ui-size-8 {
+  --ui-font-size: 15.5px;
+  --ui-title-size: 21px;
+  --ui-icon-btn-size: 46px;
+  --ui-icon-font-size: 25px;
+  --ui-today-font-size: 15.5px;
+  --ui-sidebar-font-size: 17.5px;
+  --ui-view-font-size: 15.5px;
+  --ui-view-padding: 15px;
+  --ui-week-header-font-size: 15.5px;
+  --ui-week-header-padding: 13px;
+  --ui-day-number-size: 38px;
+  --ui-day-number-font-size: 19px;
+  --ui-holiday-font-size: 11.5px;
+  --ui-event-font-size: 13px;
+  --ui-month-event-font-size: 14px;
+  --ui-modal-font-size: 15.5px;
+}
+
+body.ui-size-9 {
+  --ui-font-size: 16px;
+  --ui-title-size: 22px;
+  --ui-icon-btn-size: 48px;
+  --ui-icon-font-size: 26px;
+  --ui-today-font-size: 16px;
+  --ui-sidebar-font-size: 18px;
+  --ui-view-font-size: 16px;
+  --ui-view-padding: 16px;
+  --ui-week-header-font-size: 16px;
+  --ui-week-header-padding: 14px;
+  --ui-day-number-size: 40px;
+  --ui-day-number-font-size: 20px;
+  --ui-holiday-font-size: 12px;
+  --ui-event-font-size: 13.5px;
+  --ui-month-event-font-size: 14.5px;
+  --ui-modal-font-size: 16px;
+}
+
+body.ui-size-10 {
+  --ui-font-size: 17px;
+  --ui-title-size: 23px;
+  --ui-icon-btn-size: 50px;
+  --ui-icon-font-size: 27px;
+  --ui-today-font-size: 17px;
+  --ui-sidebar-font-size: 19px;
+  --ui-view-font-size: 17px;
+  --ui-view-padding: 17px;
+  --ui-week-header-font-size: 17px;
+  --ui-week-header-padding: 15px;
+  --ui-day-number-size: 42px;
+  --ui-day-number-font-size: 21px;
+  --ui-holiday-font-size: 12.5px;
+  --ui-event-font-size: 14px;
+  --ui-month-event-font-size: 15px;
+  --ui-modal-font-size: 17px;
 }
 
 /* スムーズなテーマ切り替えのためのトランジション */
@@ -179,7 +387,7 @@ button:active,
 }
 
 .header-left h1 {
-  font-size: 18px;
+  font-size: var(--ui-title-size);
   font-weight: 500;
 }
 
@@ -221,7 +429,7 @@ button:active,
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 14px;
+  font-size: var(--ui-font-size);
   font-weight: 600;
   text-align: left;
 }
@@ -231,7 +439,7 @@ button:active,
 }
 
 .mobile-action-item .material-icons {
-  font-size: 22px;
+  font-size: var(--ui-icon-font-size);
   color: var(--text);
 }
 
@@ -245,9 +453,9 @@ button {
 }
 
 .icon-btn {
-  width: 40px;
+  width: var(--ui-icon-btn-size);
 
-  height: 40px;
+  height: var(--ui-icon-btn-size);
 
   border-radius: 50%;
 
@@ -258,6 +466,10 @@ button {
   justify-content: center;
 
   align-items: center;
+}
+
+.icon-btn .material-icons {
+  font-size: var(--ui-icon-font-size);
 }
 
 .icon-btn:hover {
@@ -272,6 +484,8 @@ button {
   background: var(--primary-light);
 
   color: var(--primary);
+
+  font-size: var(--ui-today-font-size);
 
   font-weight: bold;
 }
@@ -412,6 +626,7 @@ FAB
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
+  font-size: var(--ui-modal-font-size);
 }
 
 body.dark .modal-content {
@@ -658,6 +873,8 @@ body.dark .field-error-text {
   align-items: center;
 
   gap: 12px;
+
+  font-size: var(--ui-sidebar-font-size);
 
   cursor: pointer;
 }

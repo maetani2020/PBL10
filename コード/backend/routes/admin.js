@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const os = require('os');
-const { query } = require('../db');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const { query, withTransaction } = require('../db');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 const { sendToUsers } = require('../utils/websocket');
 const config = require('../config');
@@ -9,6 +13,58 @@ const { normalizeText, validateTextLength } = require('../utils/validation');
 const { normalizeAdminLogFilters, buildAdminLogWhereClause } = require('../utils/admin-log-filters');
 
 let previousCpuSnapshot = getCpuSnapshot();
+
+const BACKUP_VERSION = 1;
+const BACKUP_FORMAT = 'pbl-calendar-backup-v1';
+const AUTO_BACKUP_DIR = process.env.ADMIN_BACKUP_DIR || path.join(__dirname, '..', 'backups');
+
+const RESTORE_TABLES = {
+    groups: ['id', 'name', 'owner_id', 'created_at'],
+    groupMembers: ['id', 'group_id', 'user_id', 'role', 'created_at'],
+    groupInvitations: ['id', 'group_id', 'invited_user_id', 'invited_by', 'role', 'status', 'created_at', 'responded_at'],
+    calendars: ['id', 'name', 'owner_id', 'group_id', 'created_at'],
+    calendarShares: ['id', 'calendar_id', 'user_id', 'access_level', 'created_at'],
+    events: [
+        'id', 'calendar_id', 'creator_id', 'title', 'location', 'allday', 'start_time', 'end_time',
+        'color', 'memo', 'visibility', 'hp_consumption', 'motivation_consumption', 'recurrence',
+        'created_at', 'event_type', 'reminder_minutes', 'notify_at_start', 'task_deadline_notify',
+        'mail_reminder_enabled', 'mail_to', 'mail_subject', 'mail_remind_at', 'mail_sent',
+        'deleted_at', 'deleted_by'
+    ],
+    tasks: ['id', 'user_id', 'group_id', 'title', 'due_date', 'completed', 'hp_consumption', 'motivation_consumption', 'created_at'],
+    householdAccounts: ['id', 'user_id', 'type', 'amount', 'category', 'game_title', 'date', 'memo', 'created_at'],
+    notifications: ['id', 'user_id', 'title', 'message', 'status', 'notify_at', 'created_at'],
+    notificationHistory: ['id', 'user_id', 'title', 'message', 'sent_at', 'type', 'status'],
+    notificationDeliveries: ['id', 'user_id', 'event_id', 'delivery_key', 'channel', 'title', 'message', 'scheduled_for', 'delivered_at']
+};
+
+const RESTORE_DELETE_ORDER = [
+    'notification_deliveries',
+    'notification_history',
+    'notifications',
+    'household_accounts',
+    'tasks',
+    'events',
+    'calendar_shares',
+    'calendars',
+    'group_invitations',
+    'group_members',
+    'groups'
+];
+
+const SERIAL_TABLES = [
+    'users',
+    'groups',
+    'group_members',
+    'group_invitations',
+    'calendars',
+    'calendar_shares',
+    'tasks',
+    'household_accounts',
+    'notifications',
+    'notification_history',
+    'notification_deliveries'
+];
 
 function bytesToMb(bytes) {
     return Math.round(bytes / (1024 * 1024)) + ' MB';
@@ -51,6 +107,211 @@ function parseLogDetails(details) {
     } catch (err) {
         return { raw: String(details) };
     }
+}
+
+function createHttpError(statusCode, message) {
+    const err = new Error(message);
+    err.statusCode = statusCode;
+    return err;
+}
+
+function getBackupTables(backup) {
+    return backup && typeof backup === 'object' && backup.tables && typeof backup.tables === 'object'
+        ? backup.tables
+        : {};
+}
+
+function getBackupArray(backup, key) {
+    const value = getBackupTables(backup)[key];
+    if (value == null) return [];
+    if (!Array.isArray(value)) {
+        throw createHttpError(400, `バックアップ内の ${key} が配列形式ではありません`);
+    }
+    return value;
+}
+
+function validateBackupForRestore(filename, backup) {
+    if (!filename || typeof filename !== 'string' || !filename.toLowerCase().endsWith('.json')) {
+        throw createHttpError(400, 'アップロードできるバックアップファイルは .json のみです');
+    }
+
+    if (!backup || typeof backup !== 'object') {
+        throw createHttpError(400, 'バックアップJSONの形式が正しくありません');
+    }
+
+    if (backup.backup_version !== BACKUP_VERSION) {
+        throw createHttpError(400, `backup_version が不正です。version ${BACKUP_VERSION} のバックアップを指定してください`);
+    }
+
+    if (!backup.exported_at || Number.isNaN(Date.parse(backup.exported_at))) {
+        throw createHttpError(400, 'exported_at が存在しない、または日時形式が正しくありません');
+    }
+
+    if (backup.format !== BACKUP_FORMAT) {
+        throw createHttpError(400, 'このアプリで作成されたバックアップではありません');
+    }
+
+    const tables = getBackupTables(backup);
+    if (!tables || !Array.isArray(tables.users)) {
+        throw createHttpError(400, 'バックアップ内に users テーブル情報がありません');
+    }
+}
+
+function safeBackupFilename(prefix = 'backup') {
+    return `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+}
+
+async function buildBackupData(adminUser, db = query) {
+    return {
+        backup_version: BACKUP_VERSION,
+        exported_at: new Date().toISOString(),
+        generatedAt: new Date().toISOString(),
+        generatedBy: {
+            id: adminUser.id,
+            email: adminUser.email,
+            displayName: adminUser.display_name
+        },
+        format: BACKUP_FORMAT,
+        note: 'Password hashes, refresh tokens, reset tokens, blacklisted tokens, and push subscription secrets are not included.',
+        tables: {
+            users: await db.all(
+                `SELECT id, email, display_name, max_hp, max_motivation, recovery_rate,
+                        warning_threshold, role, account_status, timeout_until,
+                        restriction_reason, restricted_at, restricted_by,
+                        notification_settings, last_activity_at, created_at
+                 FROM users
+                 ORDER BY id ASC`
+            ),
+            groups: await db.all('SELECT * FROM groups ORDER BY id ASC'),
+            groupMembers: await db.all('SELECT * FROM group_members ORDER BY id ASC'),
+            groupInvitations: await db.all('SELECT * FROM group_invitations ORDER BY id ASC'),
+            calendars: await db.all('SELECT * FROM calendars ORDER BY id ASC'),
+            calendarShares: await db.all('SELECT * FROM calendar_shares ORDER BY id ASC'),
+            events: await db.all('SELECT * FROM events ORDER BY created_at ASC'),
+            tasks: await db.all('SELECT * FROM tasks ORDER BY id ASC'),
+            householdAccounts: await db.all('SELECT * FROM household_accounts ORDER BY id ASC'),
+            notifications: await db.all('SELECT * FROM notifications ORDER BY id ASC'),
+            notificationHistory: await db.all('SELECT * FROM notification_history ORDER BY id ASC'),
+            notificationDeliveries: await db.all('SELECT * FROM notification_deliveries ORDER BY id ASC'),
+            adminLogs: await db.all('SELECT * FROM admin_logs ORDER BY id ASC')
+        }
+    };
+}
+
+function saveAutoBackupFile(backup) {
+    fs.mkdirSync(AUTO_BACKUP_DIR, { recursive: true });
+    const filePath = path.join(AUTO_BACKUP_DIR, safeBackupFilename('before-restore'));
+    fs.writeFileSync(filePath, JSON.stringify(backup, null, 2), 'utf8');
+    return filePath;
+}
+
+async function verifyAdminPassword(userId, password) {
+    if (!password || typeof password !== 'string') {
+        throw createHttpError(400, '復元には管理者パスワードの再入力が必要です');
+    }
+
+    const user = await query.get('SELECT id, password_hash, role FROM users WHERE id = ?', [userId]);
+    if (!user || user.role !== 'admin') {
+        throw createHttpError(403, '管理者ユーザーが確認できません');
+    }
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+        throw createHttpError(400, '管理者パスワードが違います');
+    }
+}
+
+async function insertRows(db, tableName, columns, rows) {
+    for (const row of rows) {
+        if (!row || typeof row !== 'object') continue;
+        const insertColumns = columns.filter(column => Object.prototype.hasOwnProperty.call(row, column));
+        if (!insertColumns.length) continue;
+        const placeholders = insertColumns.map(() => '?').join(', ');
+        const values = insertColumns.map(column => row[column]);
+        await db.run(
+            `INSERT INTO ${tableName} (${insertColumns.join(', ')}) VALUES (${placeholders})`,
+            values
+        );
+    }
+}
+
+async function restoreUsers(db, backupUsers, currentAdminId) {
+    const dummyHash = await bcrypt.hash(`restored-${crypto.randomBytes(32).toString('hex')}`, 10);
+    const userColumns = [
+        'email', 'display_name', 'max_hp', 'max_motivation', 'recovery_rate',
+        'warning_threshold', 'role', 'account_status', 'timeout_until',
+        'restriction_reason', 'restricted_at', 'restricted_by',
+        'notification_settings', 'last_activity_at', 'created_at'
+    ];
+
+    for (const backupUser of backupUsers) {
+        if (!backupUser || !backupUser.id || !backupUser.email || !backupUser.display_name) {
+            throw createHttpError(400, 'バックアップ内のユーザー情報に不足があります');
+        }
+
+        const emailOwner = await db.get('SELECT id FROM users WHERE email = ?', [backupUser.email]);
+        if (emailOwner && Number(emailOwner.id) !== Number(backupUser.id)) {
+            throw createHttpError(400, `メールアドレス ${backupUser.email} が別ユーザーIDで既に使われています`);
+        }
+
+        const existing = await db.get('SELECT id FROM users WHERE id = ?', [backupUser.id]);
+        const nextUser = { ...backupUser };
+        if (Number(nextUser.id) === Number(currentAdminId)) {
+            nextUser.role = 'admin';
+            nextUser.account_status = 'active';
+            nextUser.timeout_until = null;
+            nextUser.restriction_reason = null;
+            nextUser.restricted_at = null;
+            nextUser.restricted_by = null;
+        }
+
+        if (existing) {
+            const setSql = userColumns.map(column => `${column} = ?`).join(', ');
+            await db.run(
+                `UPDATE users SET ${setSql} WHERE id = ?`,
+                [...userColumns.map(column => nextUser[column] ?? null), nextUser.id]
+            );
+        } else {
+            await db.run(
+                `INSERT INTO users (id, password_hash, ${userColumns.join(', ')})
+                 VALUES (?, ?, ${userColumns.map(() => '?').join(', ')})`,
+                [nextUser.id, dummyHash, ...userColumns.map(column => nextUser[column] ?? null)]
+            );
+        }
+    }
+}
+
+async function resetSerialSequences(db) {
+    for (const tableName of SERIAL_TABLES) {
+        await db.run(
+            `SELECT setval(
+                pg_get_serial_sequence('${tableName}', 'id'),
+                COALESCE((SELECT MAX(id) FROM ${tableName}), 1),
+                EXISTS (SELECT 1 FROM ${tableName})
+            )`
+        );
+    }
+}
+
+async function restoreBackupData(db, backup, currentAdminId) {
+    await restoreUsers(db, getBackupArray(backup, 'users'), currentAdminId);
+
+    for (const tableName of RESTORE_DELETE_ORDER) {
+        await db.run(`DELETE FROM ${tableName}`);
+    }
+
+    await insertRows(db, 'groups', RESTORE_TABLES.groups, getBackupArray(backup, 'groups'));
+    await insertRows(db, 'group_members', RESTORE_TABLES.groupMembers, getBackupArray(backup, 'groupMembers'));
+    await insertRows(db, 'group_invitations', RESTORE_TABLES.groupInvitations, getBackupArray(backup, 'groupInvitations'));
+    await insertRows(db, 'calendars', RESTORE_TABLES.calendars, getBackupArray(backup, 'calendars'));
+    await insertRows(db, 'calendar_shares', RESTORE_TABLES.calendarShares, getBackupArray(backup, 'calendarShares'));
+    await insertRows(db, 'events', RESTORE_TABLES.events, getBackupArray(backup, 'events'));
+    await insertRows(db, 'tasks', RESTORE_TABLES.tasks, getBackupArray(backup, 'tasks'));
+    await insertRows(db, 'household_accounts', RESTORE_TABLES.householdAccounts, getBackupArray(backup, 'householdAccounts'));
+    await insertRows(db, 'notifications', RESTORE_TABLES.notifications, getBackupArray(backup, 'notifications'));
+    await insertRows(db, 'notification_history', RESTORE_TABLES.notificationHistory, getBackupArray(backup, 'notificationHistory'));
+    await insertRows(db, 'notification_deliveries', RESTORE_TABLES.notificationDeliveries, getBackupArray(backup, 'notificationDeliveries'));
+    await resetSerialSequences(db);
 }
 
 function getUserRestrictionStatus(user) {
@@ -495,37 +756,7 @@ router.post('/users/:id/unrestrict', async (req, res) => {
 // GET /api/admin/backup - Export safe application data as JSON
 router.get('/backup', async (req, res) => {
     try {
-        const backup = {
-            generatedAt: new Date().toISOString(),
-            generatedBy: {
-                id: req.user.id,
-                email: req.user.email,
-                displayName: req.user.display_name
-            },
-            format: 'pbl-calendar-backup-v1',
-            note: 'Password hashes, refresh tokens, reset tokens, blacklisted tokens, and push subscription secrets are not included.',
-            tables: {
-                users: await query.all(
-                    `SELECT id, email, display_name, max_hp, max_motivation, recovery_rate,
-                            warning_threshold, role, account_status, timeout_until,
-                            restriction_reason, restricted_at, restricted_by,
-                            notification_settings, last_activity_at, created_at
-                     FROM users
-                     ORDER BY id ASC`
-                ),
-                groups: await query.all('SELECT * FROM groups ORDER BY id ASC'),
-                groupMembers: await query.all('SELECT * FROM group_members ORDER BY id ASC'),
-                groupInvitations: await query.all('SELECT * FROM group_invitations ORDER BY id ASC'),
-                calendars: await query.all('SELECT * FROM calendars ORDER BY id ASC'),
-                calendarShares: await query.all('SELECT * FROM calendar_shares ORDER BY id ASC'),
-                events: await query.all('SELECT * FROM events ORDER BY created_at ASC'),
-                tasks: await query.all('SELECT * FROM tasks ORDER BY id ASC'),
-                householdAccounts: await query.all('SELECT * FROM household_accounts ORDER BY id ASC'),
-                notifications: await query.all('SELECT * FROM notifications ORDER BY id ASC'),
-                notificationHistory: await query.all('SELECT * FROM notification_history ORDER BY id ASC'),
-                adminLogs: await query.all('SELECT * FROM admin_logs ORDER BY id ASC')
-            }
-        };
+        const backup = await buildBackupData(req.user);
 
         await logAdminAction(req, 'backup:create', 'system', 'backup', {
             tableCount: Object.keys(backup.tables).length,
@@ -539,6 +770,59 @@ router.get('/backup', async (req, res) => {
     } catch (err) {
         console.error('Admin backup error:', err);
         res.status(500).json({ error: 'バックアップの作成に失敗しました' });
+    }
+});
+
+// POST /api/admin/backup/import - Restore application data from backup JSON
+router.post('/backup/import', async (req, res) => {
+    const { filename, admin_password, backup } = req.body || {};
+
+    try {
+        validateBackupForRestore(filename, backup);
+        await verifyAdminPassword(req.user.id, admin_password);
+
+        const beforeBackup = await buildBackupData(req.user);
+        const autoBackupPath = saveAutoBackupFile(beforeBackup);
+
+        const restoredCounts = {};
+        Object.keys(RESTORE_TABLES).forEach(key => {
+            restoredCounts[key] = getBackupArray(backup, key).length;
+        });
+        restoredCounts.users = getBackupArray(backup, 'users').length;
+
+        await withTransaction(async (tx) => {
+            await restoreBackupData(tx, backup, req.user.id);
+            await tx.run(
+                `INSERT INTO admin_logs (admin_user_id, action, target_type, target_id, details, ip_address)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [
+                    req.user.id,
+                    'backup:restore',
+                    'system',
+                    'backup-import',
+                    JSON.stringify({
+                        filename,
+                        backup_version: backup.backup_version,
+                        exported_at: backup.exported_at,
+                        autoBackupPath,
+                        restoredCounts
+                    }),
+                    getClientIp(req)
+                ]
+            );
+        });
+
+        res.json({
+            message: 'バックアップを復元しました',
+            autoBackupPath,
+            restoredCounts
+        });
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        if (statusCode >= 500) {
+            console.error('Admin backup restore error:', err);
+        }
+        res.status(statusCode).json({ error: err.message || 'バックアップの復元に失敗しました' });
     }
 });
 

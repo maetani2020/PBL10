@@ -799,6 +799,7 @@
           <button class="settings-tab-btn active" data-tab="password">パスワード変更</button>
           <button class="settings-tab-btn" data-tab="profile">ユーザー名変更</button>
           <button class="settings-tab-btn" data-tab="email">メール変更</button>
+          <button class="settings-tab-btn" data-tab="display">表示設定</button>
         </div>
 
         <!-- Tab: パスワード変更 -->
@@ -842,6 +843,20 @@
               <input type="text" id="emailConfirmCode" class="auth-input-field" placeholder="123456" maxlength="6" />
             </div>
             <button id="confirmEmailChangeBtn" class="auth-primary-btn">確認して変更</button>
+          </div>
+        </div>
+
+        <div id="settingsTab_display" class="settings-tab-panel hidden">
+          <div class="settings-field-group">
+            <label class="settings-label" for="settingsUiSize">
+              UIサイズ
+              <span id="settingsUiSizeValue" class="settings-value-badge">5</span>
+            </label>
+            <div class="ui-size-control">
+              <span>小</span>
+              <input type="range" id="settingsUiSize" min="1" max="10" step="1" value="5" />
+              <span>大</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1009,6 +1024,7 @@
 
           <label>通知履歴の保持日数</label>
           <input type="number" id="settingsHistoryRetentionDays" min="1" max="365" />
+
         </div>
 
         <div class="modal-actions" style="margin-top:12px;">
