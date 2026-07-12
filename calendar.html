@@ -1,0 +1,1041 @@
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1a73e8" />
+
+    <title>Shared Calendar</title>
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/calendar-base.css" />
+    <link rel="stylesheet" href="css/calendar-views.css" />
+    <link rel="stylesheet" href="css/calendar-ai.css" />
+    <link rel="stylesheet" href="css/calendar-auth.css" />
+    <link rel="stylesheet" href="css/calendar-hp-motivation.css" />
+    <link rel="stylesheet" href="css/calendar-notification.css" />
+
+    <!-- Material Icons -->
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+
+  <body>
+    <!-- =========================
+     サイドバー
+========================== -->
+
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h2>Shared Calendar</h2>
+      </div>
+
+      <ul>
+        <li class="sidebar-item active" data-nav="calendar">
+          <span class="material-icons"> calendar_month </span>
+          カレンダー
+        </li>
+
+        <li class="sidebar-item" data-nav="group">
+          <span class="material-icons"> groups </span>
+          グループ予定
+        </li>
+
+        <li class="sidebar-item" data-nav="private">
+          <span class="material-icons"> person </span>
+          個人予定
+        </li>
+
+        <li class="sidebar-item" data-nav="stats">
+          <span class="material-icons"> show_chart </span>
+          HP統計
+        </li>
+
+        <li class="sidebar-item" data-nav="settings">
+          <span class="material-icons"> notifications </span>
+          通知設定
+        </li>
+
+        <li class="sidebar-item" data-nav="announcements">
+          <span class="material-icons"> campaign </span>
+          管理者からのお知らせ
+          <span id="sidebarAdminAnnouncementUnreadBadge" class="admin-unread-badge admin-unread-badge-inline hidden">0</span>
+        </li>
+
+        <li class="sidebar-item admin-nav hidden" data-nav="admin">
+          <span class="material-icons"> admin_panel_settings </span>
+          管理者
+        </li>
+      </ul>
+
+      <!-- アカウントパネル -->
+      <div class="account-panel">
+        <div class="account-user-card">
+          <div class="account-avatar" id="accountUserAvatar">U</div>
+          <div class="account-info">
+            <div class="account-name" id="accountUserName">---</div>
+            <div class="account-email" id="accountUserEmail">---</div>
+          </div>
+        </div>
+        <div class="account-panel-actions">
+          <button id="openAccountSettingsBtn" class="account-settings-btn">
+            <span class="material-icons">manage_accounts</span>
+            アカウント設定
+          </button>
+          <button id="sidebarLogoutBtn">
+            <span class="material-icons" style="vertical-align:middle;font-size:16px;margin-right:4px;">logout</span>
+            ログアウト
+          </button>
+        </div>
+      </div>
+    </aside>
+
+
+    <!-- =========================
+     オーバーレイ
+========================== -->
+
+    <div id="sidebarOverlay" class="overlay"></div>
+
+    <!-- =========================
+     ヘッダー
+========================== -->
+
+    <header class="header">
+      <div class="header-left">
+        <button id="menuBtn" class="icon-btn">
+          <span class="material-icons"> menu </span>
+        </button>
+
+        <h1>Shared Calendar</h1>
+      </div>
+
+      <!-- HP・やる気ゲージ -->
+      <div id="headerGauges" class="header-gauges hidden">
+        <div class="gauge-item">
+          <span class="gauge-label">HP</span>
+          <div class="gauge-bar">
+            <div id="headerHpBar" class="gauge-fill hp-green" style="width:100%"></div>
+          </div>
+          <span id="headerHpText" class="gauge-value">100%</span>
+        </div>
+        <div class="gauge-item">
+          <span class="gauge-label">やる気</span>
+          <div class="gauge-bar">
+            <div id="headerMotivationBar" class="gauge-fill motivation-green" style="width:100%"></div>
+          </div>
+          <span id="headerMotivationText" class="gauge-value">100%</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- 今日 -->
+
+        <button id="todayBtn" class="today-btn">今日</button>
+
+        <!-- 予定一覧 -->
+
+        <button id="scheduleListBtn" class="icon-btn" title="予定一覧">
+          <span class="material-icons"> list </span>
+        </button>
+
+        <!-- 下書き読込 -->
+        <button id="draftListBtn" class="icon-btn" title="下書き読込">
+          <span class="material-icons"> edit </span>
+        </button>
+
+        <!-- 下書き削除 -->
+        <button id="clearDraftsToolbarBtn" class="icon-btn" title="下書き削除">
+          <span class="material-icons"> delete_sweep </span>
+        </button>
+
+        <!-- グループ管理 -->
+        <button id="groupManageBtn" class="icon-btn" title="グループ管理">
+          <span class="material-icons"> group_add </span>
+        </button>
+
+        <!-- 通知履歴 -->
+        <button id="notificationHistoryBtn" class="icon-btn" title="通知履歴">
+          <span class="material-icons"> history </span>
+        </button>
+
+        <!-- 管理者からのお知らせ -->
+        <button id="adminAnnouncementsBtn" class="icon-btn" title="管理者からのお知らせ">
+          <span class="material-icons"> campaign </span>
+          <span id="adminAnnouncementUnreadBadge" class="admin-unread-badge hidden">0</span>
+        </button>
+
+        <!-- 通知設定 -->
+        <button id="notificationSettingsBtn" class="icon-btn" title="通知設定">
+          <span class="material-icons"> notifications </span>
+        </button>
+
+        <!-- AIアシスタント -->
+
+        <button id="aiScannerTrigger" class="icon-btn ai-sparkles-btn" title="AIアシスタント">
+          <span class="material-icons">auto_awesome</span>
+        </button>
+
+        <!-- ダークモード -->
+
+        <button id="themeBtn" class="icon-btn" title="ダークモード">
+          <span class="material-icons"> dark_mode </span>
+        </button>
+
+        <!-- ユーザーアバター -->
+        <button id="userAvatarBtn" class="hidden" title="アカウント">U</button>
+
+        <div class="mobile-action-menu">
+          <button
+            id="mobileActionMenuBtn"
+            class="icon-btn mobile-action-menu-btn"
+            type="button"
+            title="操作メニュー"
+            aria-label="操作メニュー"
+            aria-expanded="false"
+          >
+            <span class="material-icons"> more_vert </span>
+          </button>
+
+          <div id="mobileActionMenu" class="mobile-action-dropdown hidden" role="menu">
+            <button type="button" class="mobile-action-item" data-mobile-action="today" role="menuitem">
+              <span class="material-icons"> today </span>
+              <span>今日へ移動</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="list" role="menuitem">
+              <span class="material-icons"> list </span>
+              <span>予定一覧</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="draftList" role="menuitem">
+              <span class="material-icons"> edit </span>
+              <span>下書き読込</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="clearDrafts" role="menuitem">
+              <span class="material-icons"> delete_sweep </span>
+              <span>下書き削除</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="group" role="menuitem">
+              <span class="material-icons"> group_add </span>
+              <span>グループ管理</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="history" role="menuitem">
+              <span class="material-icons"> history </span>
+              <span>通知履歴</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="announcements" role="menuitem">
+              <span class="material-icons"> campaign </span>
+              <span>管理者からのお知らせ</span>
+              <span id="mobileAdminAnnouncementUnreadBadge" class="admin-unread-badge admin-unread-badge-inline hidden">0</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="notificationSettings" role="menuitem">
+              <span class="material-icons"> notifications </span>
+              <span>通知設定</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="ai" role="menuitem">
+              <span class="material-icons"> auto_awesome </span>
+              <span>AIアシスタント</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="theme" role="menuitem">
+              <span class="material-icons"> dark_mode </span>
+              <span>ダークモード</span>
+            </button>
+            <button type="button" class="mobile-action-item" data-mobile-action="account" role="menuitem">
+              <span class="material-icons"> account_circle </span>
+              <span>アカウント</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- =========================
+     ナビゲーション
+========================== -->
+
+    <section class="calendar-nav">
+      <button id="prevBtn" class="nav-btn">
+        <span class="material-icons"> chevron_left </span>
+      </button>
+
+      <h2 id="currentTitle">2026年6月</h2>
+
+      <button id="nextBtn" class="nav-btn">
+        <span class="material-icons"> chevron_right </span>
+      </button>
+    </section>
+
+    <!-- =========================
+     表示切替
+========================== -->
+
+    <section class="view-switch">
+      <button id="monthViewBtn" class="view-btn active">月</button>
+
+      <button id="weekViewBtn" class="view-btn">週</button>
+
+      <button id="dayViewBtn" class="view-btn">日</button>
+    </section>
+
+    <!-- 表示オプション -->
+    <section class="display-options">
+      <label class="display-option checkbox">
+        <input type="checkbox" id="showHpMotivation" />
+        HP・やる気を表示
+      </label>
+    </section>
+
+    <!-- フィルターバナー -->
+    <div id="filterBanner" class="filter-banner hidden"></div>
+
+    <!-- =========================
+     曜日
+========================== -->
+
+    <section id="weekHeader" class="week-header">
+      <div class="sun">日</div>
+      <div>月</div>
+      <div>火</div>
+      <div>水</div>
+      <div>木</div>
+      <div>金</div>
+      <div class="sat">土</div>
+    </section>
+
+    <!-- =========================
+     AIによる一日アドバイス
+========================== -->
+
+    <div id="aiSummaryContainer" class="ai-summary-container hidden">
+      <div class="ai-summary-header">
+        <span class="ai-summary-title">
+          <span class="material-icons">auto_awesome</span> AIによる一日アドバイス
+        </span>
+        <button id="closeAiSummary" class="ai-summary-close-btn">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div id="aiSummaryText" class="ai-summary-text">
+        計画作成中...
+      </div>
+    </div>
+
+    <!-- =========================
+     月表示
+========================== -->
+
+    <main id="monthView" class="month-view">
+      <!-- JS生成 -->
+    </main>
+
+    <!-- =========================
+     週表示
+========================== -->
+
+    <main id="weekView" class="week-view hidden">
+      <!-- JS生成 -->
+    </main>
+
+    <!-- =========================
+     日表示
+========================== -->
+
+    <main id="dayView" class="day-view hidden">
+      <!-- JS生成 -->
+    </main>
+
+    <!-- =========================
+     統計パネル
+========================== -->
+    <section id="statsPanel" class="stats-panel hidden">
+      <h3>HP・やる気 週間推移</h3>
+      <div id="statsChart" class="stats-chart"></div>
+      <h3>消費履歴（選択日）</h3>
+      <div id="historyPanel" class="history-panel"></div>
+    </section>
+
+    <section id="adminPanel" class="admin-panel hidden">
+      <div class="admin-header">
+        <h3>管理者画面</h3>
+        <button id="refreshAdminBtn" type="button" class="secondary-btn">
+          <span class="material-icons">refresh</span>
+          更新
+        </button>
+      </div>
+
+      <div id="adminStatsCards" class="admin-stats-grid"></div>
+
+      <div class="admin-card">
+        <h4>ユーザー管理</h4>
+        <div class="admin-table-wrap">
+          <table class="admin-user-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>表示名</th>
+                <th>メール</th>
+                <th>権限</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <h4>お知らせ送信</h4>
+        <input type="text" id="adminAnnouncementTitle" placeholder="タイトル" />
+        <textarea id="adminAnnouncementMessage" rows="3" placeholder="本文"></textarea>
+        <button id="sendAnnouncementBtn" type="button" class="primary-btn">送信</button>
+      </div>
+    </section>
+
+    <!-- =========================
+     追加ボタン
+========================== -->
+
+    <button id="addEventBtn" class="fab">
+      <span class="material-icons"> add </span>
+    </button>
+
+    <!-- =========================
+     予定登録モーダル
+========================== -->
+
+    <div id="eventModal" class="modal">
+      <div class="modal-content event-modal">
+        <h2>予定登録</h2>
+
+        <div class="modal-body">
+          <div id="preSaveWarning" class="alert-box hidden"></div>
+          <div id="restSuggestions" class="rest-suggestions hidden"></div>
+
+          <div class="event-step-nav" aria-label="予定登録ステップ">
+            <button id="eventStepBasicTab" type="button" class="event-step-pill active">基本設定</button>
+            <button id="eventStepDetailsTab" type="button" class="event-step-pill">詳細設定</button>
+          </div>
+
+          <div id="eventStepBasic" class="event-step-panel">
+          <input
+            type="text"
+            id="eventTitle"
+            maxlength="100"
+            placeholder="タイトル"
+          />
+
+          <label>開始日時</label>
+          <input type="datetime-local" id="eventStart" />
+
+          <label>終了日時</label>
+          <input type="datetime-local" id="eventEnd" />
+
+          <label class="checkbox">
+            <input type="checkbox" id="allDay" />
+            終日予定
+          </label>
+
+          <label>予定の種類</label>
+          <select id="eventType">
+            <option value="event">通常予定</option>
+            <option value="task">タスク</option>
+            <option value="mail">メール送信リマインド</option>
+          </select>
+          </div>
+
+          <div id="eventStepDetails" class="event-step-panel hidden">
+          <!-- 予定のオプション：通知タイミング -->
+          <div class="event-extra-options">
+            <label>通知タイミング</label>
+            <div class="inline-checks">
+              <label class="checkbox compact-checkbox">
+                <input type="checkbox" id="remind30" />
+                30分前
+              </label>
+              <label class="checkbox compact-checkbox">
+                <input type="checkbox" id="remind5" />
+                5分前
+              </label>
+              <label class="checkbox compact-checkbox">
+                <input type="checkbox" id="remindStart" />
+                開始/期限時刻
+              </label>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <input
+                type="number"
+                id="customReminderMinutes"
+                min="1"
+                max="10080"
+                placeholder="カスタム通知（分前）"
+                style="margin-bottom:0;"
+              />
+              <button id="addCustomReminderBtn" class="small-btn" style="flex:0 0 60px;">追加</button>
+            </div>
+            <div id="eventReminderList" class="reminder-chip-list"></div>
+          </div>
+
+          <!-- タスクオプション -->
+          <div id="taskOptions" class="event-extra-options hidden">
+            <label class="checkbox">
+              <input type="checkbox" id="taskDeadlineNotify" />
+              タスク期限通知を行う
+            </label>
+          </div>
+
+          <!-- メールオプション -->
+          <div id="mailOptions" class="event-extra-options hidden">
+            <label class="checkbox">
+              <input type="checkbox" id="mailReminderEnabled" />
+              メール送信リマインドを行う
+            </label>
+            <input type="text" id="mailTo" maxlength="100" placeholder="宛先メモ" />
+            <input type="text" id="mailSubject" maxlength="100" placeholder="件名" />
+            <label>通知日時</label>
+            <input type="datetime-local" id="mailRemindAt" />
+            <label class="checkbox">
+              <input type="checkbox" id="mailSent" />
+              送信済み
+            </label>
+          </div>
+
+          <!-- 公開範囲 -->
+          <label>公開範囲</label>
+          <select id="eventVisibility">
+            <option value="public">全体公開</option>
+            <option value="group">グループ公開</option>
+            <option value="private">自分のみ</option>
+          </select>
+
+          <!-- グループ選択 -->
+          <div id="groupSelectWrap" class="hidden">
+            <label>グループ</label>
+            <select id="eventGroupId"></select>
+          </div>
+
+          <!-- HP消費率・やる気消費率 -->
+          <div class="hp-motivation-inputs">
+            <div style="flex: 1;">
+              <label>HP消費率 (%)</label>
+              <input type="number" id="hpCost" min="0" max="100" value="0" />
+            </div>
+            <div style="flex: 1;">
+              <label>やる気消費率 (%)</label>
+              <input type="number" id="motivationCost" min="0" max="100" value="0" />
+            </div>
+          </div>
+
+          <textarea id="eventMemo" rows="3" placeholder="メモ"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="saveDraftEventBtn" type="button" class="secondary-btn">下書き保存</button>
+          <button id="saveEventBtn">保存</button>
+          <button id="deleteEventBtn">削除</button>
+          <button id="closeModalBtn">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="draftListModal" class="modal">
+      <div class="modal-content draft-list-modal">
+        <h2 id="draftListTitle">下書き一覧</h2>
+        <div class="modal-body">
+          <div id="draftListContainer" class="draft-list-container"></div>
+        </div>
+        <div class="modal-actions" style="margin-top: 10px;">
+          <button id="clearAllDraftsBtn" class="danger-btn" style="flex:1;">すべて削除</button>
+          <button id="closeDraftListBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================
+     予定一覧モーダル
+========================== -->
+
+    <div id="listModal" class="modal">
+      <div class="modal-content list-modal">
+        <h2>予定一覧</h2>
+
+        <div class="list-mode">
+          <button data-filter="day">日</button>
+
+          <button data-filter="week">週</button>
+
+          <button data-filter="month">月</button>
+        </div>
+
+        <div id="scheduleList">
+          <!-- JS生成 -->
+        </div>
+
+        <button id="closeListBtn">閉じる</button>
+      </div>
+    </div>
+
+    <!-- =========================
+     ローディング
+========================== -->
+
+    <div id="loading" class="loading hidden">読み込み中...</div>
+
+    <!-- ========================================== -->
+    <!-- AI ASSISTANT SHEET & BACKDROPS -->
+    <!-- ========================================== -->
+    <div id="scannerBackdrop" class="scanner-backdrop hidden"></div>
+
+    <div id="scannerSheet" class="scanner-sheet sheet-hidden">
+        <!-- Drag Handle Indicator -->
+        <div class="scanner-drag-handle">
+            <div class="drag-handle-bar"></div>
+        </div>
+
+        <!-- Sheet Header -->
+        <div class="scanner-header">
+            <button id="closeScannerBtn" class="scanner-close-btn">閉じる</button>
+            <span class="scanner-title">
+                <i data-lucide="sparkles" class="sparkles-icon"></i> 予定追加太郎
+            </span>
+            <button id="clearChatBtn" class="scanner-clear-btn">クリア</button>
+        </div>
+
+        <!-- Chat Logs Area -->
+        <div id="aiChatHistory" class="ai-chat-history">
+            <!-- Welcome Bot Message -->
+            <div class="chat-bubble-wrapper bot">
+                <div class="bot-avatar">
+                    <i data-lucide="sparkles"></i>
+                </div>
+                <div class="chat-bubble">
+                    <p class="bot-name">予定追加太郎</p>
+                    <div class="bubble-content">
+                        こんにちは！スケジュールアシスタントの「予定追加太郎」です。<br><br>
+                        写真や文章からスケジュールを<strong>「追加」</strong>するだけでなく、登録済みの予定を<strong>「確認（検索）」</strong>したり、不要な予定を<strong>「削除」</strong>したりすることもできるようになりました。<br><br>
+                        <span class="example-box">
+                            💡 例えばこう言ってみてね：<br>
+                            ・「来週の予定を教えて」<br>
+                            ・「明日のミーティングの予定を削除して」<br>
+                            ・「25日の予定はある？」
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Chat Bubbles -->
+            <div id="chatMessagesContainer" class="chat-messages-container"></div>
+        </div>
+
+        <!-- Input Area Container -->
+        <div class="chat-input-area">
+            <!-- Attachment Files Carousel -->
+            <div id="attachmentCarousel" class="attachment-carousel hidden"></div>
+
+            <!-- Chat Main Row -->
+            <div class="chat-input-row">
+                <!-- Plus Button -->
+                <button id="aiPlusBtn" class="chat-plus-btn">
+                    <span class="material-icons">add</span>
+                </button>
+
+                <!-- Text Input -->
+                <textarea id="aiChatInput" rows="1" placeholder="予定の詳細、確認、削除などを入力"></textarea>
+
+                <!-- Send Button -->
+                <button id="aiSendBtn" class="chat-send-btn" disabled>
+                    <span class="material-icons">arrow_upward</span>
+                </button>
+            </div>
+
+            <!-- Context Hint -->
+            <p class="chat-context-hint">
+                予定追加太郎（Gemini 2.5 Flash）はカレンダーとの高度な連携に対応しています
+            </p>
+        </div>
+
+        <!-- Add Attachments Action Sheet Dialog -->
+        <div id="actionSheetBackdrop" class="action-sheet-backdrop hidden"></div>
+        <div id="actionSheet" class="action-sheet sheet-hidden">
+            <!-- Actions list -->
+            <div class="action-sheet-buttons">
+                <div class="action-sheet-label" id="cameraTriggerBtn" style="cursor: pointer;">
+                    <span class="material-icons">photo_camera</span> カメラで撮影する
+                </div>
+
+                <label class="action-sheet-label" for="galleryInput">
+                    <span class="material-icons">image</span> 写真ライブラリから選択
+                </label>
+                <input type="file" id="galleryInput" accept="image/*" class="sr-only">
+            </div>
+
+            <!-- Cancel Button -->
+            <button id="actionCancelBtn" class="action-sheet-cancel-btn">
+                キャンセル
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Camera Modal -->
+    <div id="cameraModal" class="modal" style="z-index: 3100; display: none;">
+      <div class="modal-content" style="max-width: 500px; display: flex; flex-direction: column; gap: 12px; position: relative; background: var(--surface); color: var(--text);">
+        <h2 style="font-size: 18px; font-weight: bold; text-align: center; color: var(--text);">カメラ撮影</h2>
+        <!-- Video Stream Container -->
+        <div id="cameraVideoContainer" style="position: relative; width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+          <video id="cameraVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+        </div>
+        <!-- Shutter & Controls -->
+        <div class="modal-actions" style="display: flex; gap: 12px; margin-top: 8px;">
+          <button id="shutterBtn" style="flex: 2; padding: 12px; border-radius: 8px; background: #af52de; color: white; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span class="material-icons">photo_camera</span> 撮影する
+          </button>
+          <button id="closeCameraModalBtn" style="flex: 1; padding: 12px; border-radius: 8px; background: var(--border); color: var(--text); font-weight: bold; cursor: pointer;">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert / Toast Modal -->
+    <div id="toastBox" class="toast-box hidden">
+        メッセージ
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Auth Overlay (Login / Register Screen)    -->
+    <!-- ========================================== -->
+    <div id="authOverlay" class="auth-fade-in">
+      <div class="auth-card">
+        <!-- Logo -->
+        <div class="auth-logo-wrap">
+          <div class="auth-logo-icon">
+            <span class="material-icons">calendar_month</span>
+          </div>
+          <div class="auth-logo-title">Shared Calendar</div>
+          <div class="auth-logo-sub">グループ共有 ＆ AIスケジュール</div>
+        </div>
+
+        <!-- Inputs -->
+        <div class="auth-inputs">
+          <div id="authDisplayNameContainer" class="hidden">
+            <input type="text" id="authDisplayName" class="auth-input-field" maxlength="10" placeholder="ユーザー名（10文字以内）" autocomplete="nickname" />
+          </div>
+          <input type="email" id="authEmail" class="auth-input-field" placeholder="メールアドレス（oic-ok.ac.jp）" autocomplete="email" />
+          <input type="password" id="authPassword" class="auth-input-field" maxlength="100" placeholder="パスワード（英字＋数字8文字以上・100文字以内）" autocomplete="current-password" />
+        </div>
+
+        <!-- Primary Button -->
+        <button id="authPrimaryBtn" class="auth-primary-btn">サインイン</button>
+
+        <!-- Footer Links -->
+        <div class="auth-footer-links">
+          <button id="forgotPasswordLink" class="auth-link-btn">パスワードを忘れた方</button>
+          <button id="authToggleMode" class="auth-toggle-link">新規アカウントを作成する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Password Reset Modal                       -->
+    <!-- ========================================== -->
+    <div id="passwordResetModal" class="auth-sub-modal hidden">
+      <div class="auth-sub-card">
+        <h3 class="auth-sub-title">
+          <span class="material-icons">lock_reset</span>
+          パスワードリセット
+        </h3>
+        <p class="auth-sub-desc">登録済みのメールアドレスを入力してください。<br>パスワード再設定用のリンクをメールで送信します。</p>
+        <input type="email" id="resetEmail" class="auth-input-field" placeholder="メールアドレス" />
+        <div class="auth-sub-actions">
+          <button id="cancelResetBtn" class="auth-sub-cancel-btn">キャンセル</button>
+          <button id="sendResetEmailBtn" class="auth-primary-btn" style="flex:1;">送信</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- New Password Modal                         -->
+    <!-- ========================================== -->
+    <div id="newPasswordModal" class="auth-sub-modal hidden">
+      <div class="auth-sub-card">
+        <h3 class="auth-sub-title">
+          <span class="material-icons">password</span>
+          新しいパスワード
+        </h3>
+        <p class="auth-sub-desc">新しいパスワードを入力してください。英字と数字を含む8文字以上で設定できます。</p>
+        <input type="password" id="newResetPassword" class="auth-input-field" maxlength="100" placeholder="新しいパスワード" autocomplete="new-password" />
+        <input type="password" id="confirmResetPassword" class="auth-input-field" maxlength="100" placeholder="新しいパスワード（確認）" autocomplete="new-password" />
+        <div class="auth-sub-actions">
+          <button id="cancelNewPasswordBtn" class="auth-sub-cancel-btn">キャンセル</button>
+          <button id="submitNewPasswordBtn" class="auth-primary-btn" style="flex:1;">変更</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Account Settings Modal                     -->
+    <!-- ========================================== -->
+    <div id="accountSettingsModal" class="auth-sub-modal hidden">
+      <div class="auth-sub-card settings-card">
+        <div class="settings-header">
+          <h3 class="auth-sub-title" style="margin:0;">
+            <span class="material-icons">manage_accounts</span>
+            アカウント設定
+          </h3>
+          <button id="closeAccountSettingsBtn" class="settings-close-btn">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="settings-tabs">
+          <button class="settings-tab-btn active" data-tab="password">パスワード変更</button>
+          <button class="settings-tab-btn" data-tab="profile">ユーザー名変更</button>
+          <button class="settings-tab-btn" data-tab="email">メール変更</button>
+          <button class="settings-tab-btn" data-tab="display">表示設定</button>
+        </div>
+
+        <!-- Tab: パスワード変更 -->
+        <div id="settingsTab_password" class="settings-tab-panel">
+          <div class="settings-field-group">
+            <label class="settings-label">現在のパスワード</label>
+            <input type="password" id="currentPassword" class="auth-input-field" placeholder="現在のパスワード" />
+          </div>
+          <div class="settings-field-group">
+            <label class="settings-label">新しいパスワード</label>
+            <input type="password" id="newPassword" class="auth-input-field" placeholder="英字＋数字8文字以上" />
+          </div>
+          <div class="settings-field-group">
+            <label class="settings-label">新しいパスワード（確認）</label>
+            <input type="password" id="confirmPassword" class="auth-input-field" placeholder="もう一度入力" />
+          </div>
+          <button id="changePasswordBtn" class="auth-primary-btn">パスワードを変更</button>
+        </div>
+
+        <!-- Tab: メールアドレス変更 -->
+        <div id="settingsTab_profile" class="settings-tab-panel hidden">
+          <div class="settings-field-group">
+            <label class="settings-label">ユーザー名（10文字以内）</label>
+            <input type="text" id="newDisplayName" class="auth-input-field" maxlength="10" placeholder="新しいユーザー名" autocomplete="nickname" />
+          </div>
+          <button id="changeDisplayNameBtn" class="auth-primary-btn">ユーザー名を変更</button>
+        </div>
+
+        <div id="settingsTab_email" class="settings-tab-panel hidden">
+          <div class="settings-field-group">
+            <label class="settings-label">新しいメールアドレス</label>
+            <input type="email" id="newEmail" class="auth-input-field" placeholder="新しいメールアドレス" />
+          </div>
+          <button id="requestEmailChangeBtn" class="auth-primary-btn">確認コードを送信</button>
+
+          <!-- 確認コード入力（送信後に表示） -->
+          <div id="emailConfirmSection" class="hidden" style="margin-top:16px;">
+            <div class="settings-field-group">
+              <label class="settings-label">確認コード（6桁）</label>
+              <p style="font-size:11px;color:#9aa0a6;margin-bottom:6px;">サーバーのコンソールログに表示されたコードを入力</p>
+              <input type="text" id="emailConfirmCode" class="auth-input-field" placeholder="123456" maxlength="6" />
+            </div>
+            <button id="confirmEmailChangeBtn" class="auth-primary-btn">確認して変更</button>
+          </div>
+        </div>
+
+        <div id="settingsTab_display" class="settings-tab-panel hidden">
+          <div class="settings-field-group">
+            <label class="settings-label" for="settingsUiSize">
+              UIサイズ
+              <span id="settingsUiSizeValue" class="settings-value-badge">5</span>
+            </label>
+            <div class="ui-size-control">
+              <span>小</span>
+              <input type="range" id="settingsUiSize" min="1" max="10" step="1" value="5" />
+              <span>大</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- グループ管理モーダル                        -->
+    <!-- ========================================== -->
+    <div id="yearJumpModal" class="modal">
+      <div class="modal-content year-jump-modal">
+        <h2>年月へ移動</h2>
+        <div class="year-jump-grid">
+          <div class="settings-field-group">
+            <label class="settings-label">年</label>
+            <input type="number" id="jumpYearInput" min="1970" max="2100" step="1" />
+          </div>
+          <div class="settings-field-group">
+            <label class="settings-label">月</label>
+            <select id="jumpMonthSelect">
+              <option value="1">1月</option>
+              <option value="2">2月</option>
+              <option value="3">3月</option>
+              <option value="4">4月</option>
+              <option value="5">5月</option>
+              <option value="6">6月</option>
+              <option value="7">7月</option>
+              <option value="8">8月</option>
+              <option value="9">9月</option>
+              <option value="10">10月</option>
+              <option value="11">11月</option>
+              <option value="12">12月</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top:12px;">
+          <button id="applyYearJumpBtn" class="primary-btn">移動</button>
+          <button id="closeYearJumpBtn" class="modal-footer-btn">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="groupModal" class="modal">
+      <div class="modal-content group-modal">
+        <h2>グループ管理</h2>
+
+        <div class="modal-body">
+          <div class="group-section" style="margin-bottom: 16px;">
+            <h3>グループ作成</h3>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="newGroupName" placeholder="グループ名" style="margin-bottom:0;" />
+              <button id="createGroupBtn" class="primary-btn" style="flex:0 0 80px;">作成</button>
+            </div>
+          </div>
+
+          <div class="group-section" style="margin-bottom: 16px;">
+            <h3>所属グループ</h3>
+            <div id="groupList" class="group-list-container"></div>
+          </div>
+
+          <div id="groupDetail" class="group-section hidden">
+            <h3 id="groupDetailTitle">グループ詳細</h3>
+            <div id="memberList" class="member-list-container"></div>
+            <div class="group-actions" style="margin-top:10px; display:flex; gap:8px; margin-bottom:8px;">
+              <input type="email" id="inviteUserId" placeholder="招待するメールアドレス" style="margin-bottom:0;" />
+              <button id="inviteMemberBtn" class="primary-btn" style="flex:0 0 80px;">招待</button>
+            </div>
+            <div class="group-actions" style="display:flex; gap:8px;">
+              <button id="dissolveGroupBtn" class="danger-btn" style="flex:1;">グループ解散</button>
+              <button id="leaveGroupBtn" class="danger-btn" style="flex:1;">グループ脱退</button>
+            </div>
+          </div>
+        </div>
+
+        <button id="closeGroupBtn" class="modal-footer-btn" style="width:100%; margin-top:12px;">閉じる</button>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 通知履歴モーダル                           -->
+    <!-- ========================================== -->
+    <div id="notificationHistoryModal" class="modal">
+      <div class="modal-content list-modal">
+        <h2>通知履歴</h2>
+
+        <div class="modal-body">
+          <div id="notificationHistoryList" class="history-list-container"></div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 10px;">
+          <button id="clearNotificationHistoryBtn" class="danger-btn" style="flex:1;">履歴を全削除</button>
+          <button id="closeNotificationHistoryBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 管理者からのお知らせモーダル                 -->
+    <!-- ========================================== -->
+    <div id="adminAnnouncementsModal" class="modal">
+      <div class="modal-content list-modal admin-mailbox-modal">
+        <h2>メールボックス</h2>
+        <p class="admin-mailbox-subtitle">管理者からのお知らせ</p>
+
+        <div class="modal-body">
+          <div id="adminAnnouncementsList" class="admin-announcement-list"></div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 10px;">
+          <button id="reloadAdminAnnouncementsBtn" class="primary-btn" style="flex:1;">再読み込み</button>
+          <button id="closeAdminAnnouncementsBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 通知設定モーダル                           -->
+    <!-- ========================================== -->
+    <div id="notificationSettingsModal" class="modal">
+      <div class="modal-content list-modal wide-modal">
+        <h2>通知設定</h2>
+
+        <div class="modal-body">
+          <label class="checkbox">
+            <input type="checkbox" id="settingsNotificationEnabled" />
+            通知を有効にする
+          </label>
+
+          <label class="checkbox">
+            <input type="checkbox" id="settingsTaskDeadlineEnabled" />
+            タスク期限通知を有効にする
+          </label>
+
+          <label class="checkbox">
+            <input type="checkbox" id="settingsMailReminderEnabled" />
+            メール送信リマインドを有効にする
+          </label>
+
+          <label>既定の通知タイミング</label>
+          <div class="inline-checks settings-checks">
+            <label class="checkbox compact-checkbox">
+              <input type="checkbox" id="settingsRemind30" />
+              30分前
+            </label>
+            <label class="checkbox compact-checkbox">
+              <input type="checkbox" id="settingsRemind5" />
+              5分前
+            </label>
+            <label class="checkbox compact-checkbox">
+              <input type="checkbox" id="settingsRemindStart" />
+              開始/期限時刻
+            </label>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <input
+              type="number"
+              id="settingsCustomReminderMinutes"
+              min="1"
+              max="10080"
+              placeholder="既定のカスタム通知（分前）"
+              style="margin-bottom:0;"
+            />
+            <button id="addSettingsCustomReminderBtn" class="small-btn" style="flex:0 0 60px;">追加</button>
+          </div>
+          <div id="settingsReminderList" class="reminder-chip-list"></div>
+
+          <label>通知履歴の保持日数</label>
+          <input type="number" id="settingsHistoryRetentionDays" min="1" max="365" />
+
+        </div>
+
+        <div class="modal-actions" style="margin-top:12px;">
+          <button id="saveNotificationSettingsBtn" class="primary-btn" style="flex:1;">保存</button>
+          <button id="closeNotificationSettingsBtn" class="modal-footer-btn" style="flex:1; margin:0;">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script type="module" src="js/calendar-main.js"></script>
+  </body>
+</html>
+

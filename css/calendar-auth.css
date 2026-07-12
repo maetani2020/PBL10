@@ -1,0 +1,600 @@
+/* =====================================
+  calendar-auth.css
+  認証オーバーレイ & アカウント UI
+===================================== */
+
+/* ============================
+  Auth Overlay (全画面ログイン)
+============================ */
+
+#authOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  background: var(--bg);
+  transition: opacity 0.35s ease;
+}
+
+#authOverlay.auth-fade-in {
+  opacity: 1;
+}
+
+#authOverlay.auth-fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 32px 28px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Logo / Header */
+.auth-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-logo-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  box-shadow: 0 4px 16px rgba(26, 115, 232, 0.4);
+}
+
+.auth-logo-icon .material-icons {
+  font-size: 36px;
+}
+
+.auth-logo-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.auth-logo-sub {
+  font-size: 12px;
+  color: #9aa0a6;
+  text-align: center;
+}
+
+/* Inputs */
+.auth-inputs {
+  background: var(--bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-input-field {
+  padding: 12px 14px;
+  font-size: 14px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  width: 100%;
+  outline: none;
+  transition: background 0.15s;
+}
+
+.auth-input-field:last-child {
+  border-bottom: none;
+}
+
+.auth-input-field::placeholder {
+  color: #9aa0a6;
+}
+
+.auth-input-field:focus {
+  background: var(--primary-light);
+}
+
+/* Primary Button */
+.auth-primary-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  box-shadow: 0 3px 10px rgba(26, 115, 232, 0.3);
+}
+
+.auth-primary-btn:hover {
+  opacity: 0.9;
+}
+
+.auth-primary-btn:active {
+  transform: scale(0.98);
+}
+
+.auth-primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Toggle Link */
+.auth-toggle-link {
+  text-align: center;
+  font-size: 13px;
+  color: var(--primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  text-decoration: underline;
+  transition: opacity 0.15s;
+}
+
+.auth-toggle-link:hover {
+  opacity: 0.7;
+}
+
+/* ============================
+  User Avatar Button (header)
+============================ */
+
+#userAvatarBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 2px 6px rgba(26, 115, 232, 0.35);
+}
+
+#userAvatarBtn:hover {
+  opacity: 0.85;
+  transform: scale(1.08);
+}
+
+/* ============================
+  Account Panel (sidebar内)
+============================ */
+
+.account-panel {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+.account-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+
+.account-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.account-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.account-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-email {
+  font-size: 11px;
+  color: #9aa0a6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#sidebarLogoutBtn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fce8e6;
+  color: #ea4335;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#sidebarLogoutBtn:hover {
+  background: #f9cbc8;
+}
+
+body.dark #sidebarLogoutBtn {
+  background: rgba(234, 67, 53, 0.15);
+  color: #ff6b60;
+}
+
+body.dark #sidebarLogoutBtn:hover {
+  background: rgba(234, 67, 53, 0.25);
+}
+
+/* ============================
+  Auth Footer Links
+============================ */
+.auth-footer-links {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.auth-link-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  padding: 4px;
+  text-decoration: underline;
+  transition: opacity 0.15s;
+}
+
+.auth-link-btn:hover {
+  opacity: 0.7;
+}
+
+/* ============================
+  Sub Modal (Password Reset / Account Settings)
+============================ */
+.auth-sub-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(5px);
+  transition: opacity 0.3s ease;
+}
+
+.auth-sub-modal.hidden {
+  display: none !important;
+}
+
+.auth-sub-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 28px 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: modalPopUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPopUp {
+  from {
+    transform: scale(0.92) translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.auth-sub-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-sub-title .material-icons {
+  font-size: 24px;
+  color: var(--primary);
+}
+
+.auth-sub-desc {
+  font-size: 13px;
+  color: #5f6368;
+  line-height: 1.5;
+}
+
+body.dark .auth-sub-desc {
+  color: #9aa0a6;
+}
+
+.auth-sub-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.auth-sub-cancel-btn {
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.auth-sub-cancel-btn:hover {
+  background: var(--primary-light);
+}
+
+/* ============================
+  Account Settings Modal & Tabs
+============================ */
+.settings-card {
+  max-width: 440px;
+  gap: 20px;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.settings-close-btn:hover {
+  background: var(--border);
+}
+
+.settings-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  gap: 4px;
+  padding-bottom: 2px;
+}
+
+.settings-tab-btn {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: #5f6368;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+body.dark .settings-tab-btn {
+  color: #9aa0a6;
+}
+
+.settings-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.settings-tab-btn:hover:not(.active) {
+  color: var(--text);
+}
+
+.settings-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-tab-panel.hidden {
+  display: none !important;
+}
+
+.settings-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5f6368;
+  padding-left: 2px;
+}
+
+body.dark .settings-label {
+  color: #9aa0a6;
+}
+
+.settings-value-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ui-size-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.ui-size-control span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ui-size-control input[type="range"] {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--primary);
+}
+
+/* Account Panel Actions */
+.account-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.account-settings-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.account-settings-btn:hover {
+  background: var(--primary-light);
+}
+
+.account-settings-btn .material-icons {
+  font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  #authOverlay {
+    padding: 16px;
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+
+  .auth-card {
+    margin-top: 24px;
+    padding: 24px 18px;
+    border-radius: 16px;
+    gap: 16px;
+  }
+
+  .auth-logo-icon {
+    width: 56px;
+    height: 56px;
+  }
+
+  .auth-logo-title {
+    font-size: 20px;
+  }
+
+  .auth-sub-modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .auth-sub-card {
+    width: 100%;
+    max-width: none;
+    max-height: 92dvh;
+    overflow-y: auto;
+    border-radius: 18px 18px 0 0;
+    padding: 20px;
+  }
+
+  .settings-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-tab-btn {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+}
