@@ -11,6 +11,7 @@ const { sendToUsers } = require('../utils/websocket');
 const config = require('../config');
 const { normalizeText, validateTextLength } = require('../utils/validation');
 const { normalizeAdminLogFilters, buildAdminLogWhereClause } = require('../utils/admin-log-filters');
+const { getClientIp } = require('../utils/client-ip');
 
 let previousCpuSnapshot = getCpuSnapshot();
 
@@ -96,11 +97,6 @@ function getCpuUsagePercent() {
 
     if (totalDiff <= 0) return 0;
     return (1 - idleDiff / totalDiff) * 100;
-}
-
-function getClientIp(req) {
-    const clientIp = req.ip || req.connection.remoteAddress || '';
-    return clientIp.startsWith('::ffff:') ? clientIp.substring(7) : clientIp;
 }
 
 function parseLogDetails(details) {
@@ -422,12 +418,9 @@ function verifyIpWhitelist(req, res, next) {
         return next(); // Whitelist not configured, skip
     }
 
-    const clientIp = req.ip || req.connection.remoteAddress;
+    const clientIp = getClientIp(req);
 
-    // Normalize IPv6 mapped IPv4 addresses (e.g., ::ffff:127.0.0.1)
-    const normalizedIp = clientIp.startsWith('::ffff:') ? clientIp.substring(7) : clientIp;
-
-    if (!whitelist.includes(normalizedIp) && !whitelist.includes(clientIp)) {
+    if (!whitelist.includes(clientIp)) {
         console.warn(`Blocked admin request from unauthorized IP: ${clientIp}`);
         return res.status(403).json({ error: '許可されていないIPアドレスからのアクセスです' });
     }

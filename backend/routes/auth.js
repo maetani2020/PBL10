@@ -7,6 +7,7 @@ const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
 const config = require('../config');
 const { sendMail } = require('../utils/mailer');
+const { getClientIp } = require('../utils/client-ip');
 const {
     normalizeEmail,
     validateEmail,
@@ -19,11 +20,6 @@ const {
 // Temporary memory store for email verification codes
 const emailChangeVerifications = new Map();
 const loginAttempts = new Map();
-
-function getClientIp(req) {
-    const clientIp = req.ip || req.connection.remoteAddress || '';
-    return clientIp.startsWith('::ffff:') ? clientIp.substring(7) : clientIp;
-}
 
 function getLoginAttemptKey(req, email) {
     return `${getClientIp(req)}:${normalizeEmail(email)}`;

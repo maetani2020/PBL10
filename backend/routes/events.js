@@ -3,6 +3,7 @@ const router = express.Router();
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
 const { sendToUsers } = require('../utils/websocket');
+const { getClientIp } = require('../utils/client-ip');
 const {
     normalizeEmail,
     validateEmail,
@@ -210,11 +211,6 @@ async function checkCapacityWarning(userId, dateStr, additionalHp = 0, additiona
         };
     }
     return null;
-}
-
-function getClientIp(req) {
-    const clientIp = req.ip || req.connection.remoteAddress || '';
-    return clientIp.startsWith('::ffff:') ? clientIp.substring(7) : clientIp;
 }
 
 async function logEventAction(req, action, targetId, details = {}) {

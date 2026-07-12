@@ -72,6 +72,30 @@ function formatDateTime(value) {
   return String(value).replace('T', ' ').slice(0, 16);
 }
 
+function formatUtcDateTimeInJapan(value) {
+  if (!value) return '-';
+  const raw = String(value).trim();
+  const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const date = new Date(hasTimeZone ? normalized : `${normalized}Z`);
+  if (Number.isNaN(date.getTime())) return formatDateTime(value);
+
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} JST`;
+}
+
 function adminActionLabel(action) {
   const labels = {
     'backup:create': 'バックアップ作成',
@@ -594,7 +618,7 @@ function renderAdminLogs() {
       <div class="row-head">
         <div>
           <div class="row-title">${escapeHtml(adminActionLabel(log.action))} <span class="row-meta">#${escapeHtml(log.id)}</span></div>
-          <div class="row-meta">${escapeHtml(formatDateTime(log.created_at))} / ${escapeHtml(log.admin_name || log.admin_email || 'Unknown admin')}</div>
+          <div class="row-meta">${escapeHtml(formatUtcDateTimeInJapan(log.created_at))} / ${escapeHtml(log.admin_name || log.admin_email || 'Unknown admin')}</div>
           <div class="chips">
             <span class="chip">${escapeHtml(log.target_type || 'system')}</span>
             <span class="chip">対象 ${escapeHtml(log.target_id || '-')}</span>
