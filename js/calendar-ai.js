@@ -29,6 +29,14 @@ import {
 import { refreshCalendar, switchView } from './calendar-views.js';
 import { showHpMotivationRecalculation } from './calendar-hp-motivation.js';
 
+function formatAiResponseHtml(text, { allowBold = false } = {}) {
+  let safeText = escapeHTML(String(text ?? ''));
+  if (allowBold) {
+    safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  }
+  return safeText.replace(/\n/g, '<br>');
+}
+
 export const scannerSheet = document.getElementById("scannerSheet");
 export const scannerBackdrop = document.getElementById("scannerBackdrop");
 export const actionSheet = document.getElementById("actionSheet");
@@ -655,7 +663,7 @@ ${eventDetailsText}
 
     if (!text) throw new Error("応答がありません");
 
-    aiSummaryText.innerHTML = text.replace(/\n/g, '<br>');
+    aiSummaryText.innerHTML = formatAiResponseHtml(text);
   } catch (err) {
     console.error("AI Daily Planner error: ", err);
     aiSummaryText.innerText = "アドバイスの生成に失敗しました。時間をおいてもう一度お試しください。";
@@ -1024,11 +1032,7 @@ window.getAIAdvice = async function(eventId, buttonElement) {
 
     if (!text) throw new Error("応答がありません");
 
-    const formattedText = text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\n/g, '<br>');
-
-    displayDiv.innerHTML = formattedText;
+    displayDiv.innerHTML = formatAiResponseHtml(text, { allowBold: true });
   } catch (err) {
     console.error("AI Advice error: ", err);
     displayDiv.innerHTML = `<span style="color:var(--sunday);">アドバイスが読み込めませんでした。もう一度お試しください。</span>`;

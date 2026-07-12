@@ -376,6 +376,10 @@ router.post('/login', async (req, res) => {
 
 // POST /api/auth/google - Mock Google OAuth Login
 router.post('/google-login', async (req, res) => {
+    return res.status(410).json({
+        error: 'Google login is disabled. Use email and password login.'
+    });
+
     const { email, display_name } = req.body;
     const normalizedEmail = normalizeEmail(email);
     const normalizedDisplayName = normalizeText(display_name);
