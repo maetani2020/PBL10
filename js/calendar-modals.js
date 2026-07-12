@@ -197,6 +197,9 @@ export function resetForm() {
 
   setSelectedEventId(null);
   window.editingEventId = null;
+  eventModal?.classList.add("is-create");
+  eventModal?.classList.remove("is-edit");
+  document.getElementById("deleteEventBtn")?.classList.add("hidden");
   
   document.getElementById("eventTitle").value = "";
   document.getElementById("eventMemo").value = "";
@@ -282,6 +285,9 @@ export function openEditEvent(event) {
   notifyDraftDetached();
   setSelectedEventId(event.id);
   window.editingEventId = event.id;
+  eventModal?.classList.remove("is-create");
+  eventModal?.classList.add("is-edit");
+  document.getElementById("deleteEventBtn")?.classList.remove("hidden");
   
   document.getElementById("eventTitle").value = event.title;
   document.getElementById("eventMemo").value = event.memo || "";

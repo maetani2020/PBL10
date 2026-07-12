@@ -355,6 +355,14 @@ body.dark #saveEventBtn:hover {
   gap: 10px;
 }
 
+#eventModal.is-create .modal-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#eventModal.is-create #deleteEventBtn {
+  display: none;
+}
+
 #eventModal .modal-actions button {
   min-width: 0;
   width: 100%;
@@ -1082,6 +1090,10 @@ body.dark .admin-ad-ticker-inner {
   #eventModal .modal-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #eventModal.is-create .modal-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   #eventModal .modal-actions button {
