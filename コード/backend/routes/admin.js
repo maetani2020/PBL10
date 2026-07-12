@@ -34,6 +34,7 @@ const RESTORE_TABLES = {
     tasks: ['id', 'user_id', 'group_id', 'title', 'due_date', 'completed', 'hp_consumption', 'motivation_consumption', 'created_at'],
     householdAccounts: ['id', 'user_id', 'type', 'amount', 'category', 'game_title', 'date', 'memo', 'created_at'],
     notifications: ['id', 'user_id', 'title', 'message', 'status', 'notify_at', 'created_at'],
+    adminAds: ['id', 'text', 'url', 'image_url', 'created_by', 'expires_at', 'created_at'],
     notificationHistory: ['id', 'user_id', 'title', 'message', 'sent_at', 'type', 'status'],
     notificationDeliveries: ['id', 'user_id', 'event_id', 'delivery_key', 'channel', 'title', 'message', 'scheduled_for', 'delivered_at']
 };
@@ -41,6 +42,7 @@ const RESTORE_TABLES = {
 const RESTORE_DELETE_ORDER = [
     'notification_deliveries',
     'notification_history',
+    'admin_ads',
     'notifications',
     'household_accounts',
     'tasks',
@@ -62,6 +64,7 @@ const SERIAL_TABLES = [
     'tasks',
     'household_accounts',
     'notifications',
+    'admin_ads',
     'notification_history',
     'notification_deliveries'
 ];
@@ -191,6 +194,7 @@ async function buildBackupData(adminUser, db = query) {
             tasks: await db.all('SELECT * FROM tasks ORDER BY id ASC'),
             householdAccounts: await db.all('SELECT * FROM household_accounts ORDER BY id ASC'),
             notifications: await db.all('SELECT * FROM notifications ORDER BY id ASC'),
+            adminAds: await db.all('SELECT * FROM admin_ads ORDER BY id ASC'),
             notificationHistory: await db.all('SELECT * FROM notification_history ORDER BY id ASC'),
             notificationDeliveries: await db.all('SELECT * FROM notification_deliveries ORDER BY id ASC'),
             adminLogs: await db.all('SELECT * FROM admin_logs ORDER BY id ASC')
@@ -308,6 +312,7 @@ async function restoreBackupData(db, backup, currentAdminId) {
     await insertRows(db, 'events', RESTORE_TABLES.events, getBackupArray(backup, 'events'));
     await insertRows(db, 'tasks', RESTORE_TABLES.tasks, getBackupArray(backup, 'tasks'));
     await insertRows(db, 'household_accounts', RESTORE_TABLES.householdAccounts, getBackupArray(backup, 'householdAccounts'));
+    await insertRows(db, 'admin_ads', RESTORE_TABLES.adminAds, getBackupArray(backup, 'adminAds'));
     await insertRows(db, 'notifications', RESTORE_TABLES.notifications, getBackupArray(backup, 'notifications'));
     await insertRows(db, 'notification_history', RESTORE_TABLES.notificationHistory, getBackupArray(backup, 'notificationHistory'));
     await insertRows(db, 'notification_deliveries', RESTORE_TABLES.notificationDeliveries, getBackupArray(backup, 'notificationDeliveries'));
@@ -362,6 +367,52 @@ async function getCalendarAccessors(calendarId) {
     }
 
     return Array.from(userIds);
+}
+
+function normalizeOptionalHttpUrl(value, label) {
+    const normalized = normalizeText(value);
+    if (!normalized) return '';
+    if (!validateTextLength(normalized, 500)) {
+        throw createHttpError(400, `${label}は500文字以内で入力してください`);
+    }
+    try {
+        const parsed = new URL(normalized);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+            throw new Error('invalid protocol');
+        }
+        return parsed.href;
+    } catch {
+        throw createHttpError(400, `${label}は http:// または https:// のURLを入力してください`);
+    }
+}
+
+function normalizeOptionalImageData(value) {
+    const normalized = normalizeText(value);
+    if (!normalized) return '';
+    if (normalized.length > 1400000) {
+        throw createHttpError(400, '画像ファイルは1MB以内にしてください');
+    }
+    if (!/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(normalized)) {
+        throw createHttpError(400, '画像ファイルの形式が正しくありません');
+    }
+    return normalized;
+}
+
+function normalizeAdPayload(body = {}) {
+    const text = normalizeText(body.text);
+    if (text && !validateTextLength(text, 200)) {
+        throw createHttpError(400, '広告テキストは200文字以内で入力してください');
+    }
+
+    const url = normalizeOptionalHttpUrl(body.url, '広告URL');
+    const imageData = normalizeOptionalImageData(body.image_data || body.imageData);
+    const imageUrl = imageData || normalizeOptionalHttpUrl(body.image_url || body.imageUrl, '画像URL');
+
+    if (!text && !url && !imageUrl) {
+        throw createHttpError(400, '広告テキスト、URL、画像のいずれかを入力してください');
+    }
+
+    return { text, url, imageUrl };
 }
 
 // IP Whitelist middleware (Optional, recommended)
@@ -533,6 +584,47 @@ router.post('/announcements', async (req, res) => {
     }
 });
 
+// POST /api/admin/ads - Broadcast a playful ad ticker to calendar clients
+router.post('/ads', async (req, res) => {
+    try {
+        const { text, url, imageUrl } = normalizeAdPayload(req.body || {});
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+
+        const result = await query.run(
+            `INSERT INTO admin_ads (text, url, image_url, created_by, expires_at)
+             VALUES (?, ?, ?, ?, ?)`,
+            [text || null, url || null, imageUrl || null, req.user.id, expiresAt]
+        );
+
+        const adId = result.lastID;
+        const users = await query.all('SELECT id FROM users');
+        sendToUsers(users.map(user => user.id), {
+            type: 'admin_ad',
+            adId,
+            text,
+            url,
+            imageUrl,
+            expiresAt
+        });
+
+        await logAdminAction(req, 'ad:send', 'ad', adId, {
+            hasText: !!text,
+            hasUrl: !!url,
+            hasImage: !!imageUrl,
+            expiresAt
+        });
+
+        res.json({
+            message: '広告をカレンダーへ配信しました',
+            ad: { id: adId, text, url, image_url: imageUrl, expires_at: expiresAt }
+        });
+    } catch (err) {
+        console.error('Admin send ad error:', err);
+        res.status(err.statusCode || 500).json({ error: err.message || '広告配信に失敗しました' });
+    }
+});
+
 // GET /api/admin/system-stats - Monitor system resources & database statistics
 router.get('/system-stats', async (req, res) => {
     try {
@@ -561,6 +653,7 @@ router.get('/system-stats', async (req, res) => {
         const taskCount = await query.get('SELECT COUNT(*) as count FROM tasks');
         const notificationCount = await query.get('SELECT COUNT(*) as count FROM notification_history');
         const adminLogCount = await query.get('SELECT COUNT(*) as count FROM admin_logs');
+        const adminAdCount = await query.get('SELECT COUNT(*) as count FROM admin_ads');
 
         // 2. Fetch System/Runtime Info
         const memoryUsage = process.memoryUsage();
@@ -608,6 +701,7 @@ router.get('/system-stats', async (req, res) => {
                 pendingInvitations: pendingInvitationCount.count,
                 tasks: taskCount.count,
                 notificationHistory: notificationCount.count,
+                adminAds: adminAdCount.count,
                 adminLogs: adminLogCount.count
             }
         };

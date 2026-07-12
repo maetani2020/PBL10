@@ -128,6 +128,24 @@
             <textarea id="adminAnnouncementMessage" rows="5" maxlength="1000" placeholder="お知らせ本文"></textarea>
             <button id="sendAnnouncementBtn" class="primary-wide"><span class="material-icons">send</span>送信</button>
           </div>
+
+          <div class="admin-ad-form">
+            <div class="ad-form-heading">
+              <h3>広告配信</h3>
+              <p>カレンダー画面に流れる広告を配信します。URL・文字・画像は複数選択できます。</p>
+            </div>
+            <div class="ad-type-row">
+              <label><input id="adminAdUseText" type="checkbox" checked /> 文字</label>
+              <label><input id="adminAdUseUrl" type="checkbox" checked /> URL</label>
+              <label><input id="adminAdUseImage" type="checkbox" /> 画像</label>
+            </div>
+            <textarea id="adminAdText" rows="3" maxlength="200" placeholder="広告テキスト"></textarea>
+            <input id="adminAdUrl" type="url" maxlength="500" placeholder="https://example.com" />
+            <input id="adminAdImageUrl" type="url" maxlength="500" placeholder="画像URL（https://...）" />
+            <input id="adminAdImageFile" type="file" accept="image/*" />
+            <p class="ad-image-help">画像はURL入力、または1MBまでの画像ファイルを選択できます。</p>
+            <button id="sendAdBtn" class="primary-wide ad-send-btn"><span class="material-icons">ads_click</span>広告を流す</button>
+          </div>
         </section>
 
         <section id="maintenancePanel" class="panel hidden">
@@ -168,6 +186,7 @@
               <option value="group">グループ操作</option>
               <option value="event">イベント操作</option>
               <option value="announcement">お知らせ</option>
+              <option value="ad">広告</option>
               <option value="backup">バックアップ</option>
               <option value="login">ログイン</option>
               <option value="settings">設定・履歴</option>
@@ -179,6 +198,7 @@
               <option value="group_member">グループメンバー</option>
               <option value="event">イベント</option>
               <option value="announcement">お知らせ</option>
+              <option value="ad">広告</option>
               <option value="system">システム</option>
             </select>
             <input id="adminLogDateFilter" class="search-input" type="date" />

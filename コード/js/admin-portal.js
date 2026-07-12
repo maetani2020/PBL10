@@ -79,6 +79,7 @@ function adminActionLabel(action) {
     'user:role:update': 'ユーザー権限変更',
     'user:delete': 'ユーザー削除',
     'announcement:send': 'お知らせ送信',
+    'ad:send': '広告配信',
     'group_member:role:update': 'グループ権限変更',
     'group_member:remove': 'グループメンバー削除',
     'group:delete': 'グループ削除',
@@ -279,6 +280,7 @@ async function loadStats() {
     ['招待待ち', stats.database?.pendingInvitations ?? 0],
     ['タスク', stats.database?.tasks ?? 0],
     ['通知履歴', stats.database?.notificationHistory ?? 0],
+    ['広告', stats.database?.adminAds ?? 0],
     ['操作ログ', stats.database?.adminLogs ?? 0],
     ['稼働時間', stats.process?.uptime ?? '-'],
     ['Nodeメモリ', stats.process?.memory?.heapUsed ?? '-']
@@ -628,6 +630,80 @@ async function sendAnnouncement() {
   await Promise.all([loadStats(), loadAdminLogs()]);
 }
 
+function syncAdInputAvailability() {
+  const pairs = [
+    ['adminAdUseText', 'adminAdText'],
+    ['adminAdUseUrl', 'adminAdUrl'],
+    ['adminAdUseImage', 'adminAdImageUrl'],
+    ['adminAdUseImage', 'adminAdImageFile']
+  ];
+
+  pairs.forEach(([checkId, fieldId]) => {
+    const checkbox = document.getElementById(checkId);
+    const field = document.getElementById(fieldId);
+    if (!checkbox || !field) return;
+    field.disabled = !checkbox.checked;
+  });
+}
+
+function readAdImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve('');
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('画像ファイルを選択してください'));
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      reject(new Error('画像ファイルは1MB以内にしてください'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('画像ファイルの読み込みに失敗しました'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sendAdminAd() {
+  const useText = document.getElementById('adminAdUseText')?.checked;
+  const useUrl = document.getElementById('adminAdUseUrl')?.checked;
+  const useImage = document.getElementById('adminAdUseImage')?.checked;
+  const textEl = document.getElementById('adminAdText');
+  const urlEl = document.getElementById('adminAdUrl');
+  const imageEl = document.getElementById('adminAdImageUrl');
+  const imageFileEl = document.getElementById('adminAdImageFile');
+  const imageData = useImage ? await readAdImageFile(imageFileEl?.files?.[0]) : '';
+
+  const payload = {
+    text: useText ? textEl.value.trim() : '',
+    url: useUrl ? urlEl.value.trim() : '',
+    image_url: useImage ? imageEl.value.trim() : '',
+    image_data: imageData
+  };
+
+  if (!payload.text && !payload.url && !payload.image_url && !payload.image_data) {
+    showToast('広告に使う文字、URL、画像のどれかを入力してください');
+    return;
+  }
+
+  if (!confirm('カレンダー画面に広告を流しますか？')) return;
+
+  const data = await api('/api/admin/ads', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+  textEl.value = '';
+  urlEl.value = '';
+  imageEl.value = '';
+  if (imageFileEl) imageFileEl.value = '';
+  showToast(data.message || '広告を配信しました');
+  await Promise.all([loadStats(), loadAdminLogs()]);
+}
+
 async function handleClick(event) {
   const target = event.target.closest('button');
   if (!target) return;
@@ -781,6 +857,11 @@ document.getElementById('eventVisibilityFilter').addEventListener('change', rend
 document.getElementById('eventTypeFilter').addEventListener('change', renderEvents);
 document.getElementById('eventStatusFilter').addEventListener('change', renderEvents);
 document.getElementById('sendAnnouncementBtn').addEventListener('click', () => sendAnnouncement().catch(err => showToast(err.message)));
+document.getElementById('sendAdBtn')?.addEventListener('click', () => sendAdminAd().catch(err => showToast(err.message)));
+['adminAdUseText', 'adminAdUseUrl', 'adminAdUseImage'].forEach(id => {
+  document.getElementById(id)?.addEventListener('change', syncAdInputAvailability);
+});
+syncAdInputAvailability();
 document.getElementById('createBackupBtn').addEventListener('click', () => createBackup().catch(err => showToast(err.message)));
 document.getElementById('restoreBackupBtn')?.addEventListener('click', () => restoreBackup().catch(err => showToast(err.message)));
 document.getElementById('refreshLogsBtn').addEventListener('click', () => loadAdminLogs().catch(err => showToast(err.message)));

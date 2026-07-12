@@ -3,6 +3,7 @@ const ACTION_GROUP_PREFIXES = {
   group: ['group:', 'group_member:'],
   event: ['event:'],
   announcement: ['announcement:'],
+  ad: ['ad:'],
   backup: ['backup:'],
   login: ['admin:login:'],
   settings: ['user_settings:', 'notification_history:']
@@ -14,6 +15,7 @@ const TARGET_TYPES = new Set([
   'group_member',
   'event',
   'announcement',
+  'ad',
   'system'
 ]);
 

@@ -383,7 +383,21 @@ async function initDb() {
             )
         `);
 
-        // 16. Create Admin Logs Table
+        // 16. Create Admin Ads Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS admin_ads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT,
+                url TEXT,
+                image_url TEXT,
+                created_by INTEGER,
+                expires_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        // 17. Create Admin Logs Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS admin_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -398,7 +412,7 @@ async function initDb() {
             )
         `);
 
-        // 17. Create JWT Blacklist Table (for logout token invalidation)
+        // 18. Create JWT Blacklist Table (for logout token invalidation)
         await createTable(`
             CREATE TABLE IF NOT EXISTS blacklisted_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -9,12 +9,17 @@ let lastCheckTime = new Date();
 let serviceWorkerRegistrationPromise = null;
 let pushSubscriptionPromise = null;
 let adminAnnouncementTimer = null;
+let adminAdTimer = null;
+let adminAdCloseTimer = null;
+let activeAdminAdId = null;
 let adminAnnouncementInitialCheckDone = false;
 let latestAdminAnnouncementLogs = [];
 const NOTIFIED_KEY = "shared_calendar_notified_flags";
 const LOCAL_SETTINGS_KEY = "shared_calendar_notification_settings_local";
 const ADMIN_ANNOUNCEMENT_LAST_KEY = "shared_calendar_last_admin_announcement";
+const ADMIN_AD_DISMISSED_KEY = "shared_calendar_dismissed_admin_ads";
 const ADMIN_ANNOUNCEMENT_CHECK_MS = 30000;
+const ADMIN_AD_CHECK_MS = 5000;
 
 // Default settings if not in LocalStorage
 const DEFAULT_LOCAL_SETTINGS = {
@@ -679,6 +684,156 @@ export function openAdminAnnouncementsModal() {
 export function closeAdminAnnouncementsModal() {
   const modal = document.getElementById("adminAnnouncementsModal");
   if (modal) modal.style.display = "none";
+}
+
+function getDismissedAdminAds() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ADMIN_AD_DISMISSED_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberDismissedAdminAd(id) {
+  const list = getDismissedAdminAds().filter(value => value !== String(id));
+  list.unshift(String(id));
+  localStorage.setItem(ADMIN_AD_DISMISSED_KEY, JSON.stringify(list.slice(0, 50)));
+}
+
+function safeHttpUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw, window.location.href);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function safeImageSrc(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(raw)) return raw;
+  return safeHttpUrl(raw);
+}
+
+function ensureAdminAdTicker() {
+  let ticker = document.getElementById("adminAdTicker");
+  if (ticker) return ticker;
+
+  ticker = document.createElement("div");
+  ticker.id = "adminAdTicker";
+  ticker.className = "admin-ad-ticker hidden";
+  ticker.innerHTML = `
+    <div class="admin-ad-ticker-inner">
+      <div class="admin-ad-track" id="adminAdTrack"></div>
+      <button id="adminAdCloseBtn" class="admin-ad-close" type="button" aria-label="広告を閉じる">×</button>
+    </div>
+  `;
+  document.body.appendChild(ticker);
+  const closeBtn = ticker.querySelector("#adminAdCloseBtn");
+  const closeAd = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (activeAdminAdId != null) rememberDismissedAdminAd(activeAdminAdId);
+    hideAdminAdTicker();
+  };
+  closeBtn?.addEventListener("pointerdown", closeAd);
+  closeBtn?.addEventListener("click", closeAd);
+  return ticker;
+}
+
+function hideAdminAdTicker() {
+  const ticker = document.getElementById("adminAdTicker");
+  if (ticker) ticker.classList.add("hidden");
+  activeAdminAdId = null;
+  clearTimeout(adminAdCloseTimer);
+}
+
+function showAdminAdTicker(ad) {
+  if (!ad?.id) return;
+  const dismissed = getDismissedAdminAds();
+  if (dismissed.includes(String(ad.id))) return;
+
+  const ticker = ensureAdminAdTicker();
+  const track = ticker.querySelector("#adminAdTrack");
+  const closeBtn = ticker.querySelector("#adminAdCloseBtn");
+  if (!track || !closeBtn) return;
+
+  activeAdminAdId = ad.id;
+  ticker.dataset.adId = String(ad.id);
+  track.innerHTML = "";
+
+  const badge = document.createElement("span");
+  badge.className = "admin-ad-badge";
+  badge.textContent = "広告";
+  track.appendChild(badge);
+
+  const imageUrl = safeImageSrc(ad.image_url);
+  if (imageUrl) {
+    const image = document.createElement("img");
+    image.className = "admin-ad-image";
+    image.src = imageUrl;
+    image.alt = "広告画像";
+    track.appendChild(image);
+  }
+
+  if (ad.text) {
+    const text = document.createElement("span");
+    text.className = "admin-ad-text";
+    text.textContent = ad.text;
+    track.appendChild(text);
+  }
+
+  const adUrl = safeHttpUrl(ad.url);
+  if (adUrl) {
+    const link = document.createElement("a");
+    link.className = "admin-ad-link";
+    link.href = adUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = adUrl;
+    track.appendChild(link);
+  }
+
+  closeBtn.classList.remove("visible");
+  ticker.classList.remove("hidden");
+  clearTimeout(adminAdCloseTimer);
+  adminAdCloseTimer = setTimeout(() => {
+    closeBtn.classList.add("visible");
+  }, 10000);
+}
+
+export async function syncAdminAd({ silent = true } = {}) {
+  const response = await apiRequest("/api/notifications/active-ad");
+  const ad = response?.ad;
+  if (!ad) {
+    hideAdminAdTicker();
+    return null;
+  }
+
+  if (getDismissedAdminAds().includes(String(ad.id))) return null;
+  const ticker = document.getElementById("adminAdTicker");
+  const alreadyVisible = ticker && !ticker.classList.contains("hidden") && ticker.dataset.adId === String(ad.id);
+  if (!alreadyVisible) {
+    showAdminAdTicker(ad);
+    if (!silent) showToast("広告が配信されました");
+  }
+  return ad;
+}
+
+export function startAdminAdWatcher() {
+  if (adminAdTimer) clearInterval(adminAdTimer);
+  syncAdminAd({ silent: true }).catch(err => {
+    console.warn("Initial admin ad sync failed:", err);
+  });
+  adminAdTimer = setInterval(() => {
+    syncAdminAd({ silent: false }).catch(err => {
+      console.warn("Admin ad sync failed:", err);
+    });
+  }, ADMIN_AD_CHECK_MS);
 }
 
 export function startAdminAnnouncementWatcher() {

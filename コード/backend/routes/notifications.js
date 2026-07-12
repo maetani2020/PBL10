@@ -112,6 +112,25 @@ router.patch('/history/:id/read', authenticateToken, async (req, res) => {
     }
 });
 
+// GET /api/notifications/active-ad - Latest active admin ad ticker
+router.get('/active-ad', authenticateToken, async (req, res) => {
+    try {
+        const now = new Date().toISOString();
+        const ad = await query.get(
+            `SELECT id, text, url, image_url, expires_at, created_at
+             FROM admin_ads
+             WHERE expires_at IS NULL OR expires_at > ?
+             ORDER BY id DESC
+             LIMIT 1`,
+            [now]
+        );
+        res.json({ ad: ad || null });
+    } catch (err) {
+        console.error('Get active admin ad error:', err);
+        res.status(500).json({ error: '広告の取得に失敗しました' });
+    }
+});
+
 // GET /api/notifications/settings - Get user's notification toggles
 router.get('/settings', authenticateToken, async (req, res) => {
     try {

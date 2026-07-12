@@ -103,6 +103,7 @@ import {
   renderSettingsReminderList,
   startNotificationWatcher,
   startAdminAnnouncementWatcher,
+  startAdminAdWatcher,
   syncNotificationSettings
 } from './calendar-notification.js';
 
@@ -866,6 +867,7 @@ async function init() {
     updateAdminNavVisibility();
     startNotificationWatcher();
     startAdminAnnouncementWatcher();
+    startAdminAdWatcher();
   }
 
   switchView("month");
@@ -1207,6 +1209,8 @@ document.addEventListener("DOMContentLoaded", () => {
     await syncNotificationSettings();
     updateAdminNavVisibility();
     startNotificationWatcher();
+    startAdminAnnouncementWatcher();
+    startAdminAdWatcher();
   });
 
   document.addEventListener("auth:user-updated", () => {

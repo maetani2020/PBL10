@@ -475,6 +475,58 @@ select:disabled {
   max-width: 720px;
 }
 
+.admin-ad-form {
+  display: grid;
+  gap: 10px;
+  max-width: 720px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.ad-form-heading h3 {
+  margin: 0 0 4px;
+}
+
+.ad-form-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ad-type-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ad-type-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 700;
+}
+
+.admin-ad-form input:disabled,
+.admin-ad-form textarea:disabled {
+  opacity: 0.45;
+  background: #f1f5f9;
+}
+
+.ad-image-help {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ad-send-btn {
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+}
+
 .maintenance-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
