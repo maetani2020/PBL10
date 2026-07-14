@@ -71,6 +71,10 @@ export function getCurrentFilterVisibility() {
   return "public";
 }
 
+export function isReadOnlyCalendarMode() {
+  return currentFilter === "all";
+}
+
 function isGroupEvent(event) {
   return event.visibility === "group" || !!event.group_id;
 }

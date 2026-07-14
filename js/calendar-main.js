@@ -17,6 +17,7 @@ import {
   clearFormError,
   getAllEvents,
   getCurrentFilterVisibility,
+  isReadOnlyCalendarMode,
   saveEvents,
   normalizeEvent
 } from './calendar-state.js';
@@ -305,7 +306,15 @@ function applyEventDraftData(draft) {
   updatePreSavePreview();
 }
 
+function showReadOnlyCalendarWriteToast() {
+  showToast("カレンダー画面は閲覧専用です。予定の追加・編集は「個人予定」または「グループ予定」から行ってください。");
+}
+
 function saveEventDraft() {
+  if (isReadOnlyCalendarMode()) {
+    showReadOnlyCalendarWriteToast();
+    return;
+  }
   const draftData = {
     ...collectEventDraftData(),
     savedAt: new Date().toISOString()
@@ -359,6 +368,10 @@ function closeDraftListModal() {
 }
 
 function loadEventDraft(draftId) {
+  if (isReadOnlyCalendarMode()) {
+    showReadOnlyCalendarWriteToast();
+    return;
+  }
   const drafts = readDraftsFromStorage();
   if (drafts.length === 0) {
     showToast("保存されている下書きはありません");
@@ -493,6 +506,10 @@ function updateLocalEventCache(savedEvent) {
 }
 
 async function saveEvent() {
+  if (isReadOnlyCalendarMode()) {
+    showReadOnlyCalendarWriteToast();
+    return;
+  }
   clearFieldErrors(eventModal);
   clearFormError("preSaveWarning");
 
@@ -658,6 +675,10 @@ async function saveEvent() {
 }
 
 async function deleteEvent() {
+  if (isReadOnlyCalendarMode()) {
+    showReadOnlyCalendarWriteToast();
+    return;
+  }
   if (!selectedEventId) return;
 
   const result = confirm("予定を削除しますか？削除後は管理者画面から復元できます。");
@@ -836,15 +857,18 @@ function switchPanel(panel) {
   import('./calendar-state.js').then(state => {
     if (panel === "calendar") {
       state.setCurrentFilter("all");
+      document.getElementById("addEventBtn")?.classList.add("hidden");
       if (filterBanner) filterBanner.classList.add("hidden");
     } else if (panel === "group") {
       state.setCurrentFilter("group");
+      document.getElementById("addEventBtn")?.classList.remove("hidden");
       if (filterBanner) {
         filterBanner.textContent = "グループ予定を表示中";
         filterBanner.classList.remove("hidden");
       }
     } else if (panel === "private") {
       state.setCurrentFilter("private");
+      document.getElementById("addEventBtn")?.classList.remove("hidden");
       if (filterBanner) {
         filterBanner.textContent = "個人予定を表示中";
         filterBanner.classList.remove("hidden");

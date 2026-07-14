@@ -6,7 +6,9 @@ import {
   formatDate,
   clearFieldErrors,
   clearFormError,
-  getCurrentFilterVisibility
+  getCurrentFilterVisibility,
+  isReadOnlyCalendarMode,
+  showToast
 } from './calendar-state.js';
 import { getLocalSettings } from './calendar-notification.js';
 
@@ -15,6 +17,32 @@ export const listModal = document.getElementById("listModal");
 
 function notifyDraftDetached() {
   document.dispatchEvent(new CustomEvent("event-form:draft-detached"));
+}
+
+const CALENDAR_READ_ONLY_MESSAGE = "カレンダー画面は閲覧専用です。予定の追加・編集は「個人予定」または「グループ予定」から行ってください。";
+
+function showCalendarReadOnlyToast() {
+  showToast(CALENDAR_READ_ONLY_MESSAGE);
+}
+
+function setEventFormReadOnly(readOnly) {
+  eventModal?.classList.toggle("is-read-only", readOnly);
+  eventModal?.querySelectorAll("input, textarea, select").forEach(el => {
+    el.disabled = readOnly;
+  });
+  eventModal?.querySelectorAll(".reminder-chip button, #addCustomReminderBtn").forEach(el => {
+    el.disabled = readOnly;
+  });
+
+  document.getElementById("saveEventBtn")?.classList.toggle("hidden", readOnly);
+  document.getElementById("saveDraftEventBtn")?.classList.toggle("hidden", readOnly);
+  if (readOnly) {
+    document.getElementById("deleteEventBtn")?.classList.add("hidden");
+  }
+}
+
+function restoreEventFormEditability() {
+  setEventFormReadOnly(false);
 }
 
 export function setEventModalStep(step = "basic") {
@@ -193,6 +221,7 @@ function applyCurrentCalendarModeToEventForm() {
 
 export function resetForm() {
   notifyDraftDetached();
+  restoreEventFormEditability();
   const settings = getLocalSettings();
 
   setSelectedEventId(null);
@@ -235,6 +264,11 @@ export function resetForm() {
 }
 
 export function openCreateEvent(dateStr) {
+  if (isReadOnlyCalendarMode()) {
+    showCalendarReadOnlyToast();
+    return;
+  }
+
   resetForm();
   document.getElementById("eventStart").value = dateStr + "T09:00";
   document.getElementById("eventEnd").value = dateStr + "T10:00";
@@ -253,6 +287,11 @@ export function openCreateEvent(dateStr) {
 }
 
 export function openCreateEventWithTime(dateStr, hour) {
+  if (isReadOnlyCalendarMode()) {
+    showCalendarReadOnlyToast();
+    return;
+  }
+
   resetForm();
 
   const startHourStr = String(hour).padStart(2, "0") + ":00";
@@ -283,11 +322,13 @@ export function openCreateEventWithTime(dateStr, hour) {
 
 export function openEditEvent(event) {
   notifyDraftDetached();
+  restoreEventFormEditability();
+  const readOnly = isReadOnlyCalendarMode();
   setSelectedEventId(event.id);
   window.editingEventId = event.id;
   eventModal?.classList.remove("is-create");
   eventModal?.classList.add("is-edit");
-  document.getElementById("deleteEventBtn")?.classList.remove("hidden");
+  document.getElementById("deleteEventBtn")?.classList.toggle("hidden", readOnly);
   
   document.getElementById("eventTitle").value = event.title;
   document.getElementById("eventMemo").value = event.memo || "";
@@ -344,5 +385,7 @@ export function openEditEvent(event) {
   });
 
   updateEventOptionVisibility();
+  setEventFormReadOnly(readOnly);
+  if (readOnly) showCalendarReadOnlyToast();
   openModal();
 }

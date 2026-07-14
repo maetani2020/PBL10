@@ -10,6 +10,7 @@ import {
   getAllEvents,
   getEvents, 
   getCurrentFilterVisibility,
+  isReadOnlyCalendarMode,
   saveEvents, 
   formatDate, 
   escapeHTML, 
@@ -498,7 +499,15 @@ export function handleAIResponseAction(botBubbleId, aiResponse, sourcePromptText
     <p>${aiMessage}</p>
   `;
 
-  if (action === 'ADD_EVENTS' && responseEvents.length > 0) {
+  if (action === 'ADD_EVENTS' && responseEvents.length > 0 && isReadOnlyCalendarMode()) {
+    interactiveHTML += `
+      <div class="ai-proposal-section">
+        <p class="ai-proposal-header add">カレンダー画面は閲覧専用です</p>
+        <p>予定を追加する場合は、左メニューで「個人予定」または「グループ予定」に切り替えてからもう一度実行してください。</p>
+      </div>
+    `;
+
+  } else if (action === 'ADD_EVENTS' && responseEvents.length > 0) {
     interactiveHTML += `<div class="ai-proposal-section">`;
     interactiveHTML += `<p class="ai-proposal-header add">✨ 提案予定 (${responseEvents.length}件)</p>`;
 
@@ -910,6 +919,10 @@ function saveAiEventToCache(savedEvent) {
 }
 
 window.registerProposalEvent = async function(encodedEvent, uniquePropId) {
+  if (isReadOnlyCalendarMode()) {
+    showToast("カレンダー画面は閲覧専用です。予定の追加は「個人予定」または「グループ予定」から行ってください。");
+    return;
+  }
   const btn = document.getElementById(`${uniquePropId}-btn`);
   const card = document.getElementById(`${uniquePropId}-card`);
 
@@ -963,6 +976,10 @@ window.registerProposalEvent = async function(encodedEvent, uniquePropId) {
 };
 
 window.deleteLocalEventFromProposal = function(eventId, uniquePropId) {
+  if (isReadOnlyCalendarMode()) {
+    showToast("カレンダー画面は閲覧専用です。予定の削除は「個人予定」または「グループ予定」から行ってください。");
+    return;
+  }
   let events = getEvents();
   events = events.filter(e => e.id != eventId);
   saveEvents(events);
