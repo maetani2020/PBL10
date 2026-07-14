@@ -869,19 +869,22 @@ function switchPanel(panel) {
     if (panel === "calendar") {
       state.setCurrentFilter("all");
       document.getElementById("addEventBtn")?.classList.add("hidden");
-      if (filterBanner) filterBanner.classList.add("hidden");
+      if (filterBanner) {
+        filterBanner.textContent = "カレンダー（全予定）";
+        filterBanner.classList.remove("hidden");
+      }
     } else if (panel === "group") {
       state.setCurrentFilter("group");
       document.getElementById("addEventBtn")?.classList.remove("hidden");
       if (filterBanner) {
-        filterBanner.textContent = "グループ予定を表示中";
+        filterBanner.textContent = "グループ予定";
         filterBanner.classList.remove("hidden");
       }
     } else if (panel === "private") {
       state.setCurrentFilter("private");
       document.getElementById("addEventBtn")?.classList.remove("hidden");
       if (filterBanner) {
-        filterBanner.textContent = "個人予定を表示中";
+        filterBanner.textContent = "個人予定";
         filterBanner.classList.remove("hidden");
       }
     }
@@ -907,6 +910,12 @@ function renderStatsPanel(range) {
 // ----------------------------------------------------
 async function init() {
   restoreTheme();
+
+  const filterBanner = document.getElementById("filterBanner");
+  if (filterBanner) {
+    filterBanner.textContent = "カレンダー（全予定）";
+    filterBanner.classList.remove("hidden");
+  }
 
   if (isLoggedIn()) {
     await syncEvents();

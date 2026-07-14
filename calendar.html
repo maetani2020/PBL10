@@ -260,16 +260,25 @@
      ナビゲーション
 ========================== -->
 
-    <section class="calendar-nav">
-      <button id="prevBtn" class="nav-btn">
-        <span class="material-icons"> chevron_left </span>
-      </button>
+    <section class="calendar-nav compact-calendar-nav">
+      <div id="filterBanner" class="filter-banner nav-filter-badge hidden"></div>
 
-      <h2 id="currentTitle">2026年6月</h2>
+      <div class="calendar-nav-center">
+        <button id="prevBtn" class="nav-btn" aria-label="前へ">
+          <span class="material-icons"> chevron_left </span>
+        </button>
 
-      <button id="nextBtn" class="nav-btn">
-        <span class="material-icons"> chevron_right </span>
-      </button>
+        <h2 id="currentTitle">2026年6月</h2>
+
+        <button id="nextBtn" class="nav-btn" aria-label="次へ">
+          <span class="material-icons"> chevron_right </span>
+        </button>
+      </div>
+
+      <label class="display-option checkbox calendar-nav-hp-toggle">
+        <input type="checkbox" id="showHpMotivation" />
+        HP・やる気を表示
+      </label>
     </section>
 
     <!-- =========================
@@ -283,17 +292,6 @@
 
       <button id="dayViewBtn" class="view-btn">日</button>
     </section>
-
-    <!-- 表示オプション -->
-    <section class="display-options">
-      <label class="display-option checkbox">
-        <input type="checkbox" id="showHpMotivation" />
-        HP・やる気を表示
-      </label>
-    </section>
-
-    <!-- フィルターバナー -->
-    <div id="filterBanner" class="filter-banner hidden"></div>
 
     <!-- =========================
      曜日

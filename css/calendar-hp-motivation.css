@@ -436,3 +436,130 @@ body.dark .rest-suggestion-title,
 body.dark .rest-item .material-icons {
   color: #6ee7b7;
 }
+
+
+/* Compact calendar navigation layout */
+.compact-calendar-nav {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto minmax(180px, 1fr);
+  align-items: center;
+  justify-content: stretch;
+  gap: 14px;
+  min-height: 58px;
+  height: auto;
+  padding: 8px 18px;
+}
+
+.calendar-nav-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.compact-calendar-nav .nav-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid rgba(26, 115, 232, 0.22);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: none;
+}
+
+.compact-calendar-nav .nav-filter-badge.hidden {
+  display: none;
+}
+
+.calendar-nav-hp-toggle {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  max-width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.calendar-nav-hp-toggle input {
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+body.dark .calendar-nav-hp-toggle {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 900px) {
+  .compact-calendar-nav {
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .compact-calendar-nav .nav-filter-badge,
+  .calendar-nav-hp-toggle {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+
+  .calendar-nav-center {
+    gap: 10px;
+  }
+
+  #currentTitle {
+    min-width: 130px;
+    font-size: 18px;
+  }
+
+  .compact-calendar-nav .nav-btn {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 640px) {
+  .compact-calendar-nav {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .calendar-nav-center {
+    order: 1;
+  }
+
+  .compact-calendar-nav .nav-filter-badge {
+    order: 2;
+    justify-self: center;
+  }
+
+  .calendar-nav-hp-toggle {
+    order: 3;
+    justify-self: center;
+  }
+}
