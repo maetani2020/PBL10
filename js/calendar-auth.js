@@ -11,6 +11,66 @@ export let authToken = localStorage.getItem('ios_calendar_token') || '';
 export let refreshTokenStr = localStorage.getItem('ios_calendar_refresh_token') || '';
 export let currentUser = JSON.parse(localStorage.getItem('ios_calendar_user')) || null;
 
+let authSocket = null;
+let authSocketReconnectTimer = null;
+
+function getAuthSocketUrl() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}`;
+}
+
+function closeAuthSocket() {
+  if (authSocketReconnectTimer) {
+    clearTimeout(authSocketReconnectTimer);
+    authSocketReconnectTimer = null;
+  }
+
+  if (authSocket) {
+    authSocket.onclose = null;
+    authSocket.close();
+    authSocket = null;
+  }
+}
+
+function scheduleAuthSocketReconnect() {
+  if (!authToken || authSocketReconnectTimer) return;
+  authSocketReconnectTimer = setTimeout(() => {
+    authSocketReconnectTimer = null;
+    connectAuthSocket();
+  }, 5000);
+}
+
+export function connectAuthSocket() {
+  if (!authToken || typeof WebSocket === 'undefined') return;
+  closeAuthSocket();
+
+  try {
+    authSocket = new WebSocket(getAuthSocketUrl());
+    authSocket.addEventListener('open', () => {
+      authSocket?.send(JSON.stringify({ type: 'auth', token: authToken }));
+    });
+    authSocket.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'account_restricted') {
+          forceLogout(data.message || 'このアカウントは管理者により制限されました。');
+        }
+      } catch (err) {
+        console.warn('WebSocket message parse failed:', err);
+      }
+    });
+    authSocket.addEventListener('close', scheduleAuthSocketReconnect);
+  } catch (err) {
+    console.warn('WebSocket connection failed:', err);
+    scheduleAuthSocketReconnect();
+  }
+}
+
+function isAccountRestrictionMessage(message) {
+  const text = String(message || '');
+  return text.includes('BAN') || text.includes('タイムアウト') || text.includes('このアカウント');
+}
+
 function notifyAuthUserUpdated(user) {
   if (typeof document === 'undefined') return;
   document.dispatchEvent(new CustomEvent('auth:user-updated', { detail: { user } }));
@@ -20,8 +80,10 @@ export function setAuthToken(token) {
   authToken = token;
   if (token) {
     localStorage.setItem('ios_calendar_token', token);
+    connectAuthSocket();
   } else {
     localStorage.removeItem('ios_calendar_token');
+    closeAuthSocket();
   }
 }
 
@@ -86,8 +148,15 @@ export async function apiRequest(endpoint, options = {}, _retry = false) {
     }
 
     if (res.status === 403) {
+      const errorMessage = data.error || 'この操作を行う権限がありません。';
+      if (isAccountRestrictionMessage(errorMessage)) {
+        await forceLogout(errorMessage);
+        const err = new Error(errorMessage);
+        err.skipToast = true;
+        throw err;
+      }
       await refreshCurrentUser({ silent: true });
-      throw new Error(data.error || 'この操作を行う権限がありません。');
+      throw new Error(errorMessage);
     }
 
     if (!res.ok) {
@@ -98,7 +167,7 @@ export async function apiRequest(endpoint, options = {}, _retry = false) {
     const message = err.name === 'TypeError'
       ? 'サーバーに接続できません。通信状況を確認してください。'
       : err.message;
-    showToast(message);
+    if (!err.skipToast) showToast(message);
     throw err;
   }
 }
@@ -144,6 +213,14 @@ async function tryRefreshToken() {
 // -------------------------------------------------------
 // Logout (with server-side token blacklisting)
 // -------------------------------------------------------
+export async function forceLogout(message = '') {
+  setAuthToken('');
+  setRefreshToken('');
+  setCurrentUser(null);
+  showAuthOverlay();
+  if (message) showToast(message);
+}
+
 export async function logout() {
   try {
     // サーバー側でJWTをブラックリスト登録
@@ -736,7 +813,12 @@ export function initAccountPanel() {
 // -------------------------------------------------------
 export async function checkAuth() {
   if (isLoggedIn()) {
-    await refreshCurrentUser({ silent: true });
+    const user = await refreshCurrentUser({ silent: true });
+    if (!user) {
+      await forceLogout();
+      return false;
+    }
+    connectAuthSocket();
     hideAuthOverlay();
     updateUserDisplay();
     return true;

@@ -328,6 +328,13 @@ async function clearUserSessions(userId) {
     await query.run('DELETE FROM refresh_tokens WHERE user_id = ?', [userId]);
 }
 
+function notifyAccountRestricted(userId, payload) {
+    sendToUsers([Number(userId)], {
+        type: 'account_restricted',
+        ...payload
+    });
+}
+
 async function logAdminAction(req, action, targetType = null, targetId = null, details = {}) {
     try {
         await query.run(
@@ -736,6 +743,11 @@ router.post('/users/:id/ban', async (req, res) => {
             [reason, req.user.id, userId]
         );
         await clearUserSessions(userId);
+        notifyAccountRestricted(userId, {
+            status: 'banned',
+            reason,
+            message: `このアカウントはBANされています。理由: ${reason}`
+        });
 
         await logAdminAction(req, 'user:ban', 'user', userId, {
             email: user.email,
@@ -787,6 +799,12 @@ router.post('/users/:id/timeout', async (req, res) => {
             [timeoutUntil, reason, req.user.id, userId]
         );
         await clearUserSessions(userId);
+        notifyAccountRestricted(userId, {
+            status: 'timeout',
+            reason,
+            timeoutUntil,
+            message: `このアカウントは ${new Date(timeoutUntil).toLocaleString('ja-JP')} までタイムアウト中です。理由: ${reason}`
+        });
 
         await logAdminAction(req, 'user:timeout', 'user', userId, {
             email: user.email,
