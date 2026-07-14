@@ -86,7 +86,7 @@ export function getEvents() {
   } else if (currentFilter === "private") {
     return eventsCache.filter(isPrivateEvent);
   }
-  return eventsCache.filter(e => !isGroupEvent(e) && !isPrivateEvent(e));
+  return eventsCache;
 }
 
 export function getAllEvents() {
