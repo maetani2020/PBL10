@@ -42,7 +42,9 @@ import {
   resetForm,
   openCreateEvent,
   collectEventReminderMinutes,
+  addEventCustomReminderFromInput,
   renderEventReminderList,
+  setEventReminderControls,
   updateEventOptionVisibility,
   updateAllDayDateTimeVisibility,
   setEventModalStep
@@ -101,6 +103,7 @@ import {
   openNotificationSettingsModal,
   closeNotificationSettingsModal,
   saveNotificationSettingsFromForm,
+  addSettingsCustomReminderFromInput,
   renderSettingsReminderList,
   startNotificationWatcher,
   startAdminAnnouncementWatcher,
@@ -196,6 +199,7 @@ function collectEventDraftData() {
     remind30: getChecked("remind30", true),
     remind5: getChecked("remind5", true),
     remindStart: getChecked("remindStart", true),
+    reminderMinutes: collectEventReminderMinutes(),
     customReminderMinutes: document.getElementById("customReminderMinutes")?.value || "",
     taskDeadlineNotify: getChecked("taskDeadlineNotify", true),
     mailReminderEnabled: getChecked("mailReminderEnabled"),
@@ -287,10 +291,17 @@ function applyEventDraftData(draft) {
   setValue("eventMemo", draft.memo);
   setValue("eventVisibility", draft.visibility || "public");
   setValue("eventGroupId", draft.groupId);
-  setChecked("remind30", draft.remind30 ?? true);
-  setChecked("remind5", draft.remind5 ?? true);
-  setChecked("remindStart", draft.remindStart ?? true);
-  setValue("customReminderMinutes", draft.customReminderMinutes);
+  const draftReminderMinutes = Array.isArray(draft.reminderMinutes)
+    ? draft.reminderMinutes
+    : [
+        ...(draft.remind30 ?? true ? [30] : []),
+        ...(draft.remind5 ?? true ? [5] : []),
+        ...(() => {
+          const minute = Number(draft.customReminderMinutes);
+          return Number.isFinite(minute) && minute > 0 ? [Math.floor(minute)] : [];
+        })()
+      ];
+  setEventReminderControls(draftReminderMinutes, draft.remindStart ?? true);
   setChecked("taskDeadlineNotify", draft.taskDeadlineNotify ?? true);
   setChecked("mailReminderEnabled", draft.mailReminderEnabled);
   setValue("mailTo", draft.mailTo);
@@ -1190,11 +1201,27 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("groupSelectWrap").classList.toggle("hidden", !isGroup);
   });
 
+  document.getElementById("addSettingsCustomReminderBtn")?.addEventListener("click", addSettingsCustomReminderFromInput);
+  document.getElementById("settingsCustomReminderMinutes")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addSettingsCustomReminderFromInput();
+    }
+  });
+
   // Notification Settings Form Events
   ["settingsRemind30", "settingsRemind5", "settingsRemindStart", "settingsCustomReminderMinutes"].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener(id.includes("Custom") ? "input" : "change", renderSettingsReminderList);
+    }
+  });
+
+  document.getElementById("addCustomReminderBtn")?.addEventListener("click", addEventCustomReminderFromInput);
+  document.getElementById("customReminderMinutes")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addEventCustomReminderFromInput();
     }
   });
 

@@ -116,15 +116,76 @@ export function updateAllDayDateTimeVisibility({ normalize = false } = {}) {
   });
 }
 
+function normalizeReminderMinute(value) {
+  const minute = Number(value);
+  if (!Number.isFinite(minute) || minute < 1 || minute > 10080) return null;
+  return Math.floor(minute);
+}
+
+function uniqueReminderMinutes(minutes) {
+  const seen = new Set();
+  return minutes
+    .map(normalizeReminderMinute)
+    .filter(minute => minute !== null)
+    .filter(minute => {
+      if (seen.has(minute)) return false;
+      seen.add(minute);
+      return true;
+    });
+}
+
+function getEventCustomReminderInput() {
+  return document.getElementById("customReminderMinutes");
+}
+
+function getEventCustomReminderMinutes() {
+  const input = getEventCustomReminderInput();
+  if (!input) return [];
+  try {
+    const parsed = JSON.parse(input.dataset.customReminderMinutes || "[]");
+    return uniqueReminderMinutes(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return [];
+  }
+}
+
+function setEventCustomReminderMinutes(minutes) {
+  const input = getEventCustomReminderInput();
+  if (!input) return;
+  input.dataset.customReminderMinutes = JSON.stringify(uniqueReminderMinutes(minutes));
+}
+
+export function addEventCustomReminderFromInput() {
+  const input = getEventCustomReminderInput();
+  const minute = normalizeReminderMinute(input?.value);
+  if (minute === null) {
+    showToast("カスタム通知は1から10080分の範囲で入力してください");
+    return;
+  }
+
+  if (minute === 30) {
+    document.getElementById("remind30").checked = true;
+  } else if (minute === 5) {
+    document.getElementById("remind5").checked = true;
+  } else {
+    setEventCustomReminderMinutes([...getEventCustomReminderMinutes(), minute]);
+  }
+
+  input.value = "";
+  renderEventReminderList();
+}
+
 export function collectEventReminderMinutes() {
   const minutes = [];
   if (document.getElementById("remind30")?.checked) minutes.push(30);
   if (document.getElementById("remind5")?.checked) minutes.push(5);
 
-  const custom = Number(document.getElementById("customReminderMinutes")?.value);
-  if (Number.isFinite(custom) && custom > 0) minutes.push(Math.floor(custom));
+  minutes.push(...getEventCustomReminderMinutes());
 
-  return minutes;
+  const custom = normalizeReminderMinute(getEventCustomReminderInput()?.value);
+  if (custom !== null) minutes.push(custom);
+
+  return uniqueReminderMinutes(minutes);
 }
 
 function addReminderChip(list, label, onDelete) {
@@ -176,7 +237,11 @@ export function renderEventReminderList() {
     addReminderChip(list, label, () => {
       if (m === 30) document.getElementById("remind30").checked = false;
       else if (m === 5) document.getElementById("remind5").checked = false;
-      else document.getElementById("customReminderMinutes").value = "";
+      else {
+        setEventCustomReminderMinutes(getEventCustomReminderMinutes().filter(minute => minute !== m));
+        const input = getEventCustomReminderInput();
+        if (Number(input?.value) === m) input.value = "";
+      }
       renderEventReminderList();
     });
   });
@@ -199,9 +264,10 @@ export function setEventReminderControls(minutes, atStart) {
   document.getElementById("remind5").checked = norm.includes(5);
   document.getElementById("remindStart").checked = !!atStart;
 
-  const custom = norm.find(m => m !== 30 && m !== 5);
-  document.getElementById("customReminderMinutes").value = custom || "";
+  setEventCustomReminderMinutes(norm.filter(m => m !== 30 && m !== 5));
+  document.getElementById("customReminderMinutes").value = "";
   renderEventReminderList();
+
 }
 
 function applyCurrentCalendarModeToEventForm() {

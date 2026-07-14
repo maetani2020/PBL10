@@ -28,6 +28,28 @@ const DEFAULT_LOCAL_SETTINGS = {
   historyRetentionDays: 30
 };
 
+function normalizeReminderMinute(value) {
+  const minute = Number(value);
+  if (!Number.isFinite(minute) || minute < 1 || minute > 10080) return null;
+  return Math.floor(minute);
+}
+
+function uniqueReminderMinutes(minutes) {
+  const seen = new Set();
+  return minutes
+    .map(normalizeReminderMinute)
+    .filter(minute => minute !== null)
+    .filter(minute => {
+      if (seen.has(minute)) return false;
+      seen.add(minute);
+      return true;
+    });
+}
+
+function getCustomSettingsReminderMinutes() {
+  return uniqueReminderMinutes((getLocalSettings().eventBeforeMinutes || []).filter(minute => minute !== 30 && minute !== 5));
+}
+
 // Global notification toggles synced from backend
 let backendSettings = {
   events: true,
@@ -166,9 +188,8 @@ function updateSettingsUI() {
   if (remind5) remind5.checked = local.eventBeforeMinutes.includes(5);
   if (remindStart) remindStart.checked = !!local.eventAtStart;
 
-  const custom = local.eventBeforeMinutes.find(m => m !== 30 && m !== 5);
   const customInput = document.getElementById("settingsCustomReminderMinutes");
-  if (customInput) customInput.value = custom || "";
+  if (customInput) customInput.value = "";
 
   const retention = document.getElementById("settingsHistoryRetentionDays");
   if (retention) retention.value = local.historyRetentionDays || 30;
@@ -195,8 +216,8 @@ export async function saveNotificationSettingsFromForm() {
   const tasks = document.getElementById("settingsTaskDeadlineEnabled")?.checked ?? true;
   const email = document.getElementById("settingsMailReminderEnabled")?.checked ?? true;
   const customRaw = document.getElementById("settingsCustomReminderMinutes")?.value;
-  const customValue = Number(customRaw);
-  if (customRaw && (!Number.isFinite(customValue) || customValue < 1 || customValue > 10080)) {
+  const customValue = normalizeReminderMinute(customRaw);
+  if (customRaw && customValue === null) {
     return showFieldError("settingsCustomReminderMinutes", "カスタム通知は1から10080分の範囲で入力してください");
   }
 
@@ -221,15 +242,14 @@ export async function saveNotificationSettingsFromForm() {
     const eventBeforeMinutes = [];
     if (document.getElementById("settingsRemind30")?.checked) eventBeforeMinutes.push(30);
     if (document.getElementById("settingsRemind5")?.checked) eventBeforeMinutes.push(5);
-    
-    const custom = parseInt(document.getElementById("settingsCustomReminderMinutes")?.value);
-    if (!isNaN(custom) && custom > 0) eventBeforeMinutes.push(custom);
+    eventBeforeMinutes.push(...getCustomSettingsReminderMinutes());
+    if (customValue !== null) eventBeforeMinutes.push(customValue);
 
     const eventAtStart = document.getElementById("settingsRemindStart")?.checked ?? true;
     const historyRetentionDays = parseInt(document.getElementById("settingsHistoryRetentionDays")?.value) || 30;
 
     saveLocalSettings({
-      eventBeforeMinutes,
+      eventBeforeMinutes: uniqueReminderMinutes(eventBeforeMinutes),
       eventAtStart,
       historyRetentionDays
     });
@@ -921,6 +941,28 @@ function removeSettingsStartReminder() {
   updateSettingsUI();
 }
 
+export function addSettingsCustomReminderFromInput() {
+  clearFieldErrors(document.getElementById("notificationSettingsModal"));
+  const input = document.getElementById("settingsCustomReminderMinutes");
+  const minute = normalizeReminderMinute(input?.value);
+  if (minute === null) {
+    return showFieldError("settingsCustomReminderMinutes", "カスタム通知は1から10080分の範囲で入力してください");
+  }
+
+  if (minute === 30) {
+    document.getElementById("settingsRemind30").checked = true;
+  } else if (minute === 5) {
+    document.getElementById("settingsRemind5").checked = true;
+  } else {
+    const local = getLocalSettings();
+    local.eventBeforeMinutes = uniqueReminderMinutes([...(local.eventBeforeMinutes || []), minute]);
+    saveLocalSettings(local);
+  }
+
+  input.value = "";
+  renderSettingsReminderList();
+}
+
 export function renderSettingsReminderList() {
   const local = getLocalSettings();
   const enabledRemind30 = document.getElementById("settingsRemind30")?.checked;
@@ -930,9 +972,10 @@ export function renderSettingsReminderList() {
   const list = [];
   if (enabledRemind30) list.push(30);
   if (enabledRemind5) list.push(5);
+  list.push(...getCustomSettingsReminderMinutes());
   
-  const custom = parseInt(document.getElementById("settingsCustomReminderMinutes")?.value);
-  if (!isNaN(custom) && custom > 0) list.push(custom);
+  const custom = normalizeReminderMinute(document.getElementById("settingsCustomReminderMinutes")?.value);
+  if (custom !== null) list.push(custom);
 
   renderReminderList(
     "settingsReminderList",
@@ -941,7 +984,10 @@ export function renderSettingsReminderList() {
     (minute) => {
       if (minute === 30) document.getElementById("settingsRemind30").checked = false;
       else if (minute === 5) document.getElementById("settingsRemind5").checked = false;
-      else document.getElementById("settingsCustomReminderMinutes").value = "";
+      else {
+        removeSettingsReminder(minute);
+        return;
+      }
       renderSettingsReminderList();
     },
     () => {
