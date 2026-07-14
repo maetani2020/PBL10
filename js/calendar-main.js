@@ -394,6 +394,18 @@ function deleteEventDraft(draftId) {
   showToast("下書きを削除しました");
 }
 
+function removeActiveDraftAfterEventSave() {
+  if (!activeDraftId) return;
+
+  const drafts = readDraftsFromStorage();
+  const nextDrafts = drafts.filter(draft => draft.id !== activeDraftId);
+  if (nextDrafts.length !== drafts.length) {
+    writeDraftsToStorage(nextDrafts);
+    renderDraftList();
+  }
+  activeDraftId = null;
+}
+
 function clearEventDraft() {
   const drafts = readDraftsFromStorage();
   if (drafts.length === 0) {
@@ -635,6 +647,7 @@ async function saveEvent() {
     }
 
     updateLocalEventCache(savedEvent);
+    removeActiveDraftAfterEventSave();
     closeModal();
     await syncEvents();
     await showHpMotivationRecalculation(savedEvent.start?.substring(0, 10) || start.substring(0, 10), isEditing ? "予定更新" : "予定追加");
