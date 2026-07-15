@@ -1111,6 +1111,16 @@ document.addEventListener("DOMContentLoaded", () => {
       aiChatInputEl.style.height = aiChatInputEl.scrollHeight + "px";
       validateSendButton();
     });
+
+    aiChatInputEl.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+
+      const sendButton = document.getElementById("aiSendBtn");
+      if (!sendButton?.disabled) {
+        sendChatToGemini();
+      }
+    });
   }
 
   const aiPlusBtn = document.getElementById("aiPlusBtn");
