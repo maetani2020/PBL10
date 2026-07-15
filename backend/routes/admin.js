@@ -171,13 +171,13 @@ async function buildBackupData(adminUser, db = query) {
             displayName: adminUser.display_name
         },
         format: BACKUP_FORMAT,
-        note: 'Password hashes, refresh tokens, reset tokens, blacklisted tokens, and push subscription secrets are not included.',
+        note: 'Password hashes, refresh tokens, reset tokens, blacklisted tokens, push subscription secrets, and last activity timestamps are not included.',
         tables: {
             users: await db.all(
                 `SELECT id, email, display_name, max_hp, max_motivation, recovery_rate,
                         warning_threshold, role, account_status, timeout_until,
                         restriction_reason, restricted_at, restricted_by,
-                        notification_settings, last_activity_at, created_at
+                        notification_settings, created_at
                  FROM users
                  ORDER BY id ASC`
             ),
@@ -241,7 +241,7 @@ async function restoreUsers(db, backupUsers, currentAdminId) {
         'email', 'display_name', 'max_hp', 'max_motivation', 'recovery_rate',
         'warning_threshold', 'role', 'account_status', 'timeout_until',
         'restriction_reason', 'restricted_at', 'restricted_by',
-        'notification_settings', 'last_activity_at', 'created_at'
+        'notification_settings', 'created_at'
     ];
 
     for (const backupUser of backupUsers) {
@@ -268,13 +268,13 @@ async function restoreUsers(db, backupUsers, currentAdminId) {
         if (existing) {
             const setSql = userColumns.map(column => `${column} = ?`).join(', ');
             await db.run(
-                `UPDATE users SET ${setSql} WHERE id = ?`,
+                `UPDATE users SET ${setSql}, last_activity_at = CURRENT_TIMESTAMP WHERE id = ?`,
                 [...userColumns.map(column => nextUser[column] ?? null), nextUser.id]
             );
         } else {
             await db.run(
-                `INSERT INTO users (id, password_hash, ${userColumns.join(', ')})
-                 VALUES (?, ?, ${userColumns.map(() => '?').join(', ')})`,
+                `INSERT INTO users (id, password_hash, ${userColumns.join(', ')}, last_activity_at)
+                 VALUES (?, ?, ${userColumns.map(() => '?').join(', ')}, CURRENT_TIMESTAMP)`,
                 [nextUser.id, dummyHash, ...userColumns.map(column => nextUser[column] ?? null)]
             );
         }
