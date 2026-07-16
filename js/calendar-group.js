@@ -72,6 +72,9 @@ export async function syncGroups() {
     activeGroupInvitations = invitations;
     populateGroupDropdowns();
     renderGroupList();
+    if (selectedGroupId && activeGroups.some(g => Number(g.id) === Number(selectedGroupId))) {
+      await selectGroupForDetail(selectedGroupId);
+    }
   } catch (err) {
     console.error('Failed to sync groups:', err);
   }
@@ -219,7 +222,8 @@ export async function selectGroupForDetail(groupId) {
     });
 
     if (canInviteMembers) {
-      const invitations = await apiRequest(`/api/groups/${groupId}/invitations`).catch(() => []);
+      const invitations = (await apiRequest(`/api/groups/${groupId}/invitations`).catch(() => []))
+        .filter(inv => inv.status === "pending");
       const invitationStatus = document.createElement("div");
       invitationStatus.className = "group-invitation-section compact";
       invitationStatus.innerHTML = `
