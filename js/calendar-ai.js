@@ -7,14 +7,16 @@ import {
   setCurrentDate, 
   currentAttachments, 
   setCurrentAttachments, 
-  apiKey, 
+  getAllEvents,
   getEvents, 
+  getCurrentFilterVisibility,
   saveEvents, 
   formatDate, 
-  createId, 
   escapeHTML, 
   showToast 
 } from './calendar-state.js';
+
+import { apiRequest } from './calendar-auth.js';
 
 import { 
   openCreateEvent, 
@@ -25,6 +27,7 @@ import {
 
 // Circular imports are resolved correctly in ES modules
 import { refreshCalendar, switchView } from './calendar-views.js';
+import { showHpMotivationRecalculation } from './calendar-hp-motivation.js';
 
 export const scannerSheet = document.getElementById("scannerSheet");
 export const scannerBackdrop = document.getElementById("scannerBackdrop");
@@ -37,6 +40,8 @@ export const chatMessagesContainer = document.getElementById("chatMessagesContai
 export const aiChatHistory = document.getElementById("aiChatHistory");
 export const aiSummaryContainer = document.getElementById("aiSummaryContainer");
 export const aiSummaryText = document.getElementById("aiSummaryText");
+
+const pendingProposalEvents = new Map();
 
 // ----------------------------------------------------
 // UI Sheet Controls
@@ -87,6 +92,33 @@ export async function fetchWithRetry(url, options, retries = 5, backoff = 1000) 
     }
     throw error;
   }
+}
+
+async function requestGemini(payload, options = {}) {
+  let lastError;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await apiRequest('/api/ai/gemini', {
+        method: 'POST',
+        body: JSON.stringify({
+          payload,
+          model: options.model
+        })
+      });
+    } catch (err) {
+      lastError = err;
+      const message = String(err?.message || "");
+      if (/BAN/i.test(message)) {
+        break;
+      }
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 // ----------------------------------------------------
@@ -211,7 +243,18 @@ export async function sendChatToGemini() {
     start: e.start,
     end: e.end,
     allday: !!e.allDay,
-    memo: e.memo || ""
+    memo: e.memo || "",
+    visibility: e.visibility || "public",
+    eventType: e.eventType || "event",
+    hp_consumption: Number(e.hp_consumption || 0),
+    motivation_consumption: Number(e.motivation_consumption || 0),
+    reminderMinutes: Array.isArray(e.reminderMinutes) ? e.reminderMinutes : [],
+    notifyAtStart: e.notifyAtStart !== false,
+    taskDeadlineNotify: e.taskDeadlineNotify !== false,
+    mailReminderEnabled: !!e.mailReminderEnabled,
+    mailTo: e.mailTo || "",
+    mailSubject: e.mailSubject || "",
+    mailRemindAt: e.mailRemindAt || ""
   }));
 
   let promptText = `
@@ -256,6 +299,36 @@ ${JSON.stringify(serializedCurrentEvents, null, 2)}
   ※ DELETE_EVENTS または LIST_EVENTS の場合、対象となる「既存の予定データ」の "id" の配列を正確に設定してください（複数ある場合は複数指定）。カレンダーの予定データとマッチさせるために必要です。
 `;
 
+  promptText += `
+
+[Additional rules for event details]
+When action is ADD_EVENTS, include detailed event settings when the user mentions them.
+Use these exact JSON keys inside each event object:
+- start and end must be zero-padded local datetime strings: "YYYY-MM-DDTHH:mm". Example: "2026-07-12T13:00"
+- visibility: "public", "group", or "private"
+- eventType: "event", "task", or "mail"
+- hp_consumption: integer 0-100
+- motivation_consumption: integer 0-100
+- reminderMinutes: array of integers, minutes before start. Examples: [30], [5], [30,5]
+- notifyAtStart: boolean. true means notify at the start/end time.
+- taskDeadlineNotify: boolean. true means task deadline notification is enabled.
+- mailReminderEnabled: boolean
+- mailTo: email string, optional
+- mailSubject: string, optional
+- mailRemindAt: "YYYY-MM-DDTHH:mm", optional. If the user asks for an email reminder but does not give a specific mail reminder time, set this to 30 minutes before the event start.
+
+Default values when the user does not specify details:
+- visibility: use the current calendar mode. public for main calendar, group for group calendar, private for personal calendar.
+- eventType: "event"
+- hp_consumption: 0
+- motivation_consumption: 0
+- reminderMinutes: []
+- notifyAtStart: true
+- taskDeadlineNotify: true
+- mailReminderEnabled: false
+- mailTo, mailSubject, mailRemindAt: empty string
+`;
+
   if (userPromptText) {
     promptText += `\n\n【ユーザーからのメッセージ】\n${userPromptText}`;
   }
@@ -298,7 +371,22 @@ ${JSON.stringify(serializedCurrentEvents, null, 2)}
                 allday: { type: "BOOLEAN" },
                 location: { type: "STRING" },
                 memo: { type: "STRING" },
-                color: { type: "STRING" }
+                color: { type: "STRING" },
+                visibility: { type: "STRING" },
+                eventType: { type: "STRING" },
+                hp_consumption: { type: "INTEGER" },
+                motivation_consumption: { type: "INTEGER" },
+                reminderMinutes: {
+                  type: "ARRAY",
+                  items: { type: "INTEGER" }
+                },
+                notifyAtStart: { type: "BOOLEAN" },
+                taskDeadlineNotify: { type: "BOOLEAN" },
+                mailReminderEnabled: { type: "BOOLEAN" },
+                mailTo: { type: "STRING" },
+                mailSubject: { type: "STRING" },
+                mailRemindAt: { type: "STRING" },
+                mailSent: { type: "BOOLEAN" }
               },
               required: ["title", "start", "end", "allday"]
             }
@@ -314,19 +402,13 @@ ${JSON.stringify(serializedCurrentEvents, null, 2)}
   };
 
   try {
-    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
+    const data = await requestGemini(payload);
     const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!textResult) throw new Error("応答データが異常です。");
 
     const resultJson = JSON.parse(textResult);
-    handleAIResponseAction(botBubbleId, resultJson);
+    handleAIResponseAction(botBubbleId, resultJson, userPromptText);
 
   } catch (err) {
     console.error("Gemini API Error: ", err);
@@ -396,7 +478,7 @@ export function renderBotError(id) {
   `;
 }
 
-export function handleAIResponseAction(botBubbleId, aiResponse) {
+export function handleAIResponseAction(botBubbleId, aiResponse, sourcePromptText = "") {
   const botMsg = document.getElementById(botBubbleId);
   if (!botMsg) return;
 
@@ -411,8 +493,16 @@ export function handleAIResponseAction(botBubbleId, aiResponse) {
   `;
 
   if (action === 'ADD_EVENTS' && responseEvents.length > 0) {
-    interactiveHTML += `<div class="ai-proposal-section">`;
+    const sectionId = `add_section_${botBubbleId}`;
+    const proposalEvents = responseEvents.map((p) => ({
+      ...p,
+      __sourcePromptText: sourcePromptText
+    }));
+    pendingProposalEvents.set(sectionId, proposalEvents);
+
+    interactiveHTML += `<div class="ai-proposal-section" id="${sectionId}">`;
     interactiveHTML += `<p class="ai-proposal-header add">✨ 提案予定 (${responseEvents.length}件)</p>`;
+    interactiveHTML += `<ul class="ai-proposal-list">`;
 
     responseEvents.forEach((p, idx) => {
       const uniquePropId = `add_${botBubbleId}_${idx}`;
@@ -421,7 +511,7 @@ export function handleAIResponseAction(botBubbleId, aiResponse) {
       const displayTime = isNaN(startObj.getTime()) ? '' : (p.allday ? '終日' : `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`);
 
       interactiveHTML += `
-        <div class="ai-proposal-card" id="${uniquePropId}-card">
+        <li class="ai-proposal-card ai-proposal-list-item" id="${uniquePropId}-card">
           <div class="ai-proposal-card-info">
             <div class="ai-proposal-color-bar" style="background-color: ${p.color || '#af52de'}"></div>
             <div class="ai-proposal-card-details">
@@ -429,14 +519,30 @@ export function handleAIResponseAction(botBubbleId, aiResponse) {
               <span class="ai-proposal-time">${displayDate} ${displayTime}</span>
             </div>
           </div>
-          <button onclick="registerProposalEvent('${encodeURIComponent(JSON.stringify(p))}', '${uniquePropId}')" 
-                  id="${uniquePropId}-btn"
-                  class="ai-proposal-btn add">
-            カレンダーに追加
-          </button>
-        </div>
+        </li>
       `;
     });
+
+    interactiveHTML += `</ul>`;
+    interactiveHTML += `
+      <div class="ai-proposal-confirm" id="${sectionId}-confirm">
+        <p class="ai-proposal-confirm-text">これでよろしいですか</p>
+        <div class="ai-proposal-confirm-actions">
+          <button type="button"
+                  class="ai-proposal-round-btn yes"
+                  id="${sectionId}-yes"
+                  onclick="confirmAllProposalEvents('${sectionId}')">
+            はい
+          </button>
+          <button type="button"
+                  class="ai-proposal-round-btn no"
+                  id="${sectionId}-no"
+                  onclick="rejectAllProposalEvents('${sectionId}')">
+            いいえ
+          </button>
+        </div>
+      </div>
+    `;
     interactiveHTML += `</div>`;
 
   } else if (action === 'DELETE_EVENTS' && targetIds.length > 0) {
@@ -564,15 +670,9 @@ ${eventDetailsText}
 - スマホ画面にフィットするよう、簡潔さを極めてください。`;
 
   try {
-    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
+    const data = await requestGemini({
+      contents: [{ parts: [{ text: prompt }] }]
     });
-
-    const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!text) throw new Error("応答がありません");
@@ -587,27 +687,268 @@ ${eventDetailsText}
 // ----------------------------------------------------
 // Global Window Functions for AI Inline Event Handlers
 // ----------------------------------------------------
-window.registerProposalEvent = function(encodedEvent, uniquePropId) {
+function clampInteger(value, fallback, min, max) {
+  const parsed = Number.parseInt(value, 10);
+  const number = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function normalizeAiReminderMinutes(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(item => Number.parseInt(item, 10))
+    .filter(item => Number.isInteger(item) && item >= 1 && item <= 10080)
+    .filter((item, index, array) => array.indexOf(item) === index)
+    .slice(0, 10);
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatAiLocalDateTime(year, month, day, hour, minute) {
+  return `${year}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}`;
+}
+
+function normalizeAiLocalDateTime(value, fallbackDate, fallbackTime) {
+  const raw = String(value || "").trim();
+  const fallback = `${fallbackDate}T${fallbackTime}`;
+  if (!raw) return fallback;
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return raw;
+
+  const normalized = raw
+    .replace(/[\u5e74\u6708]/g, "-")
+    .replace(/\u65e5/g, " ")
+    .replace(/\u6642/g, ":")
+    .replace(/\u5206/g, "")
+    .replace(/\//g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/(\d{1,2}):$/g, "$1:00")
+    .trim();
+
+  let match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (match) {
+    return formatAiLocalDateTime(
+      match[1],
+      match[2],
+      match[3],
+      match[4] || fallbackTime.substring(0, 2),
+      match[5] || fallbackTime.substring(3, 5)
+    );
+  }
+
+  match = normalized.match(/^(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (match) {
+    return formatAiLocalDateTime(
+      fallbackDate.substring(0, 4),
+      match[1],
+      match[2],
+      match[3] || fallbackTime.substring(0, 2),
+      match[4] || fallbackTime.substring(3, 5)
+    );
+  }
+
+  match = normalized.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (match) {
+    return `${fallbackDate}T${pad2(match[1])}:${pad2(match[2])}`;
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return formatAiLocalDateTime(
+      parsed.getFullYear(),
+      parsed.getMonth() + 1,
+      parsed.getDate(),
+      parsed.getHours(),
+      parsed.getMinutes()
+    );
+  }
+
+  return fallback;
+}
+
+function shiftLocalDateTime(value, minutes) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setMinutes(date.getMinutes() + minutes);
+  const pad = (num) => String(num).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function normalizeAiVisibility(value) {
+  const currentVisibility = getCurrentFilterVisibility();
+  const visibility = String(value || currentVisibility || "public").toLowerCase();
+  if (["public", "group", "private"].includes(visibility)) return visibility;
+  return currentVisibility || "public";
+}
+
+function normalizeAiEventType(value) {
+  const eventType = String(value || "event").toLowerCase();
+  if (["event", "task", "mail"].includes(eventType)) return eventType;
+  return "event";
+}
+
+async function resolveAiCalendarId(visibility) {
+  if (visibility !== "group") return undefined;
+
+  const selectedGroupId = document.getElementById("eventGroupId")?.value || "";
+  const calendars = await apiRequest('/api/calendars');
+  const groupCalendars = calendars.filter(calendar => calendar.group_id);
+  const matchedCalendar = selectedGroupId
+    ? groupCalendars.find(calendar => String(calendar.group_id) === String(selectedGroupId))
+    : groupCalendars[0];
+
+  if (!matchedCalendar) {
+    throw new Error("Group calendar is not available");
+  }
+  return matchedCalendar.id;
+}
+
+function extractAiDetailsFromPrompt(promptText) {
+  const text = String(promptText || "");
+  const details = {};
+
+  const hpMatch = text.match(/HP\s*(?:\u6d88\u8cbb(?:\u7387)?)?\s*[:：]?\s*(\d{1,3})/i);
+  if (hpMatch) {
+    details.hp_consumption = clampInteger(hpMatch[1], 0, 0, 100);
+  }
+
+  const motivationMatch = text.match(/(?:\u3084\u308b\u6c17|\u30e2\u30c1\u30d9(?:\u30fc\u30b7\u30e7\u30f3)?|motivation)\s*(?:\u6d88\u8cbb(?:\u7387)?)?\s*[:：]?\s*(\d{1,3})/i);
+  if (motivationMatch) {
+    details.motivation_consumption = clampInteger(motivationMatch[1], 0, 0, 100);
+  }
+
+  const reminderMinutes = [];
+  const minuteRegex = /(\d{1,4})\s*\u5206\u524d/g;
+  let minuteMatch;
+  while ((minuteMatch = minuteRegex.exec(text)) !== null) {
+    const minute = Number.parseInt(minuteMatch[1], 10);
+    if (Number.isInteger(minute) && minute >= 1 && minute <= 10080 && !reminderMinutes.includes(minute)) {
+      reminderMinutes.push(minute);
+    }
+  }
+  if (reminderMinutes.length > 0) {
+    details.reminderMinutes = reminderMinutes.slice(0, 10);
+  }
+
+  const hasMail = /(?:\u30e1\u30fc\u30eb|mail|email)/i.test(text);
+  const hasReminder = /(?:\u30ea\u30de\u30a4\u30f3\u30c9|\u901a\u77e5|\u9001\u4fe1)/i.test(text);
+  if (hasMail && hasReminder) {
+    details.mailReminderEnabled = true;
+  }
+
+  if (/(?:\u958b\u59cb|\u671f\u9650)/.test(text)) {
+    details.notifyAtStart = true;
+    details.taskDeadlineNotify = true;
+  }
+
+  if (/\u30bf\u30b9\u30af|\u8ab2\u984c|\u671f\u9650/.test(text)) {
+    details.eventType = "task";
+  } else if (hasMail && /\u9001\u4fe1/.test(text)) {
+    details.eventType = "mail";
+  }
+
+  if (/\u500b\u4eba/.test(text)) {
+    details.visibility = "private";
+  } else if (/\u30b0\u30eb\u30fc\u30d7/.test(text)) {
+    details.visibility = "group";
+  }
+
+  return details;
+}
+
+async function buildAiEventPayload(eventData) {
+  const promptDetails = extractAiDetailsFromPrompt(eventData.__sourcePromptText);
+  const mergedEventData = {
+    ...eventData,
+    ...Object.fromEntries(Object.entries(promptDetails).filter(([, value]) => value !== undefined && value !== null))
+  };
+  const today = formatDate(new Date());
+  const allDay = !!(mergedEventData.allday ?? mergedEventData.allDay);
+  let start = normalizeAiLocalDateTime(mergedEventData.start, today, allDay ? "00:00" : "09:00");
+  let end = normalizeAiLocalDateTime(mergedEventData.end, start.substring(0, 10), allDay ? "23:59" : "10:00");
+
+  if (allDay) {
+    start = `${start.substring(0, 10)}T00:00`;
+    end = `${end.substring(0, 10)}T23:59`;
+  }
+
+  if (start > end) {
+    end = shiftLocalDateTime(start, allDay ? 1439 : 60);
+  }
+
+  const visibility = normalizeAiVisibility(mergedEventData.visibility);
+  const eventType = normalizeAiEventType(mergedEventData.eventType || mergedEventData.type);
+  const reminderMinutes = normalizeAiReminderMinutes(mergedEventData.reminderMinutes);
+  const mailReminderEnabled = !!mergedEventData.mailReminderEnabled;
+  const mailOffset = reminderMinutes.length > 0 ? reminderMinutes[0] : 30;
+  const mailRemindAt = mailReminderEnabled
+    ? (mergedEventData.mailRemindAt
+      ? normalizeAiLocalDateTime(mergedEventData.mailRemindAt, start.substring(0, 10), start.substring(11, 16))
+      : shiftLocalDateTime(start, -mailOffset))
+    : "";
+
+  return {
+    calendar_id: await resolveAiCalendarId(visibility),
+    title: String(mergedEventData.title || "Untitled event").trim().slice(0, 100),
+    location: String(mergedEventData.location || "").trim().slice(0, 100),
+    allday: allDay,
+    start,
+    end,
+    color: /^#[0-9A-Fa-f]{6}$/.test(String(mergedEventData.color || "")) ? mergedEventData.color : "#007AFF",
+    memo: String(mergedEventData.memo || "").trim().slice(0, 1000),
+    visibility,
+    hp_consumption: clampInteger(mergedEventData.hp_consumption, 0, 0, 100),
+    motivation_consumption: clampInteger(mergedEventData.motivation_consumption, 0, 0, 100),
+    eventType,
+    reminderMinutes,
+    notifyAtStart: mergedEventData.notifyAtStart !== false,
+    taskDeadlineNotify: mergedEventData.taskDeadlineNotify !== false,
+    mailReminderEnabled,
+    mailTo: String(mergedEventData.mailTo || "").trim(),
+    mailSubject: String(mergedEventData.mailSubject || "").trim().slice(0, 120),
+    mailRemindAt,
+    mailSent: !!mergedEventData.mailSent
+  };
+}
+
+function saveAiEventToCache(savedEvent) {
+  const allEvents = getAllEvents();
+  const normalizedEvent = {
+    ...savedEvent,
+    allDay: !!(savedEvent.allDay ?? savedEvent.allday),
+    date: (savedEvent.start || "").substring(0, 10)
+  };
+  saveEvents([...allEvents, normalizedEvent]);
+}
+
+window.registerProposalEvent = async function(encodedEvent, uniquePropId) {
+  const btn = document.getElementById(`${uniquePropId}-btn`);
+  const card = document.getElementById(`${uniquePropId}-card`);
+
   try {
     const eventData = JSON.parse(decodeURIComponent(encodedEvent));
-    const events = getEvents();
+    const payload = await buildAiEventPayload(eventData);
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = "追加中...";
+    }
+
+    const data = await apiRequest('/api/events', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
 
     const newEvent = {
-      id: createId(),
-      title: eventData.title,
-      start: eventData.start,
-      end: eventData.end,
-      date: eventData.start.substring(0, 10),
-      memo: eventData.memo || "",
-      visibility: "public",
-      allDay: !!eventData.allday
+      ...payload,
+      ...(data.event || {}),
+      allDay: payload.allday,
+      date: payload.start.substring(0, 10)
     };
 
-    events.push(newEvent);
-    saveEvents(events);
-
-    const btn = document.getElementById(`${uniquePropId}-btn`);
-    const card = document.getElementById(`${uniquePropId}-card`);
+    saveAiEventToCache(newEvent);
 
     if (btn) {
       btn.disabled = true;
@@ -627,11 +968,108 @@ window.registerProposalEvent = function(encodedEvent, uniquePropId) {
       setCurrentDate(startObj);
     }
     refreshCalendar();
+    await showHpMotivationRecalculation(newEvent.start?.substring(0, 10), "AI予定追加");
 
   } catch (err) {
     console.error("Failed to add proposal event", err);
     showToast("追加に失敗しました ❌");
   }
+};
+
+window.confirmAllProposalEvents = async function(sectionId) {
+  const yesBtn = document.getElementById(`${sectionId}-yes`);
+  const noBtn = document.getElementById(`${sectionId}-no`);
+  const confirmEl = document.getElementById(`${sectionId}-confirm`);
+  const botBubbleId = sectionId.replace(/^add_section_/, '');
+  const proposalEvents = pendingProposalEvents.get(sectionId) || [];
+
+  try {
+    if (!Array.isArray(proposalEvents) || proposalEvents.length === 0) {
+      showToast("登録する予定がありません ❌");
+      return;
+    }
+
+    if (yesBtn) {
+      yesBtn.disabled = true;
+      yesBtn.textContent = "...";
+    }
+    if (noBtn) noBtn.disabled = true;
+
+    let successCount = 0;
+    let lastEvent = null;
+
+    for (let i = 0; i < proposalEvents.length; i++) {
+      const eventData = proposalEvents[i];
+      const payload = await buildAiEventPayload(eventData);
+      const data = await apiRequest('/api/events', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      const newEvent = {
+        ...payload,
+        ...(data.event || {}),
+        allDay: payload.allday,
+        date: payload.start.substring(0, 10)
+      };
+
+      saveAiEventToCache(newEvent);
+      successCount += 1;
+      lastEvent = newEvent;
+
+      const cardEl = document.getElementById(`add_${botBubbleId}_${i}-card`);
+      if (cardEl) {
+        cardEl.style.borderColor = "#34a853";
+        cardEl.style.background = "rgba(52, 168, 83, 0.05)";
+      }
+    }
+
+    pendingProposalEvents.delete(sectionId);
+
+    if (confirmEl) {
+      confirmEl.innerHTML = `<p class="ai-proposal-confirm-result success">${successCount}件を登録しました</p>`;
+    }
+
+    showToast(`${successCount}件の予定を追加しました ✨`);
+
+    if (lastEvent?.start) {
+      const startObj = new Date(lastEvent.start);
+      if (!isNaN(startObj.getTime())) {
+        setCurrentDate(startObj);
+      }
+      refreshCalendar();
+      await showHpMotivationRecalculation(lastEvent.start.substring(0, 10), "AI予定追加");
+    } else {
+      refreshCalendar();
+    }
+  } catch (err) {
+    console.error("Failed to add proposal events", err);
+    showToast("追加に失敗しました ❌");
+    if (yesBtn) {
+      yesBtn.disabled = false;
+      yesBtn.textContent = "はい";
+    }
+    if (noBtn) noBtn.disabled = false;
+  }
+};
+
+window.rejectAllProposalEvents = function(sectionId) {
+  const confirmEl = document.getElementById(`${sectionId}-confirm`);
+  const section = document.getElementById(sectionId);
+
+  pendingProposalEvents.delete(sectionId);
+
+  if (confirmEl) {
+    confirmEl.innerHTML = `<p class="ai-proposal-confirm-result cancel">登録をキャンセルしました</p>`;
+  }
+
+  if (section) {
+    section.querySelectorAll('.ai-proposal-list-item').forEach((card) => {
+      card.style.opacity = "0.5";
+    });
+  }
+
+  showToast("登録をキャンセルしました");
 };
 
 window.deleteLocalEventFromProposal = function(eventId, uniquePropId) {
@@ -697,15 +1135,9 @@ window.getAIAdvice = async function(eventId, buttonElement) {
 - 全体で150文字以内の非常に短いテキストにしてください。`;
 
   try {
-    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
+    const data = await requestGemini({
+      contents: [{ parts: [{ text: prompt }] }]
     });
-
-    const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!text) throw new Error("応答がありません");

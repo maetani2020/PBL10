@@ -1,0 +1,1128 @@
+/* ========================================================
+   calendar-notification.css
+   Notification settings and history styling (Premium iOS Glassmorphism)
+   ======================================================== */
+
+.inline-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.compact-checkbox {
+  font-size: 13px !important;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 100px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.25s cubic-bezier(0.1, 0.8, 0.3, 1);
+  gap: 0;
+  margin-bottom: 0 !important;
+}
+
+.compact-checkbox input[type="checkbox"] {
+  display: none;
+}
+
+.compact-checkbox:has(input[type="checkbox"]:checked) {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+}
+
+.compact-checkbox:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.compact-checkbox:has(input[type="checkbox"]:checked):hover {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  opacity: 0.9;
+}
+
+.reminder-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+  min-height: 28px;
+}
+
+.reminder-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--primary-light, rgba(0, 122, 255, 0.1));
+  color: var(--primary, #007aff);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 100px;
+  transition: all 0.2s cubic-bezier(0.1, 0.8, 0.3, 1);
+  border: 1px solid rgba(0, 122, 255, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.05);
+}
+
+.reminder-chip button {
+  background: transparent;
+  border: none;
+  color: var(--primary, #007aff);
+  margin-left: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.reminder-chip button:hover {
+  opacity: 1;
+}
+
+/* History logs */
+.history-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.history-list-container::-webkit-scrollbar {
+  width: 5px;
+}
+
+.history-list-container::-webkit-scrollbar-thumb {
+  background: var(--border, #e5e5ea);
+  border-radius: 10px;
+}
+
+/* Group & List Modal Enhancements */
+.group-modal, .list-modal {
+  max-width: 480px !important;
+}
+
+.group-list-container, .member-list-container {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  margin-bottom: 12px;
+}
+
+.group-list-item, .member-list-item {
+  transition: background-color 0.15s ease;
+}
+
+.group-list-item:hover {
+  background-color: var(--primary-light, rgba(0, 122, 255, 0.05)) !important;
+}
+
+.group-list-item:active {
+  background-color: var(--border, #e5e5ea) !important;
+}
+
+.event-extra-options {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+
+.event-extra-options label {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* ====================================================
+   Modern Slate Tech Dark Mode Custom Overrides
+   ==================================================== */
+body.dark {
+  color-scheme: dark;
+}
+
+/* Base text color corrections */
+body.dark .account-name,
+body.dark .account-email,
+body.dark .auth-title,
+body.dark .auth-subtitle,
+body.dark .settings-label,
+body.dark .settings-tab-btn,
+body.dark .sidebar-user,
+body.dark label,
+body.dark h1,
+body.dark h2,
+body.dark h3,
+body.dark h4,
+body.dark p,
+body.dark span {
+  color: var(--text);
+}
+
+/* Force dark backgrounds on form controls to Slate 950 for contrast */
+body.dark input,
+body.dark select,
+body.dark textarea,
+body.dark .auth-inputs,
+body.dark .auth-input-field,
+body.dark .attachment-desc-input,
+body.dark .chat-input-row,
+body.dark #aiChatInput {
+  background-color: #090d16 !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+
+body.dark input::placeholder,
+body.dark textarea::placeholder,
+body.dark .auth-input-field::placeholder,
+body.dark #aiChatInput::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Modal and sidebar specific overrides */
+body.dark .modal-content,
+body.dark .auth-card,
+body.dark .scanner-sheet,
+body.dark .chat-input-area {
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+/* Dropdown option background styling in dark mode */
+body.dark select option {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+/* Light background cells check */
+body.dark .other-month {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  color: var(--text-muted) !important;
+}
+
+/* Modern FAB dark styling */
+body.dark .fab {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3) !important;
+}
+
+body.dark .fab .material-icons,
+body.dark .fab span {
+  color: #ffffff !important;
+}
+
+body.dark .fab:hover {
+  background: #5558e6 !important;
+}
+
+/* Active buttons and tabs */
+body.dark .today-btn,
+body.dark .primary-btn,
+body.dark .auth-primary-btn,
+body.dark #saveEventBtn,
+body.dark #saveNotificationSettingsBtn,
+body.dark #saveMotivationSettingsBtn {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border-color: var(--primary) !important;
+}
+
+body.dark .today-btn:hover,
+body.dark .primary-btn:hover,
+body.dark .auth-primary-btn:hover,
+body.dark #saveEventBtn:hover {
+  background: #5558e6 !important;
+}
+
+
+
+/* Admin panel and draft controls */
+.admin-panel {
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.admin-panel.hidden {
+  display: none !important;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-header h3,
+.admin-card h4 {
+  margin: 0;
+}
+
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.admin-stat-card,
+.admin-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 12px;
+}
+
+.admin-stat-card span {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.admin-stat-card strong {
+  font-size: 22px;
+}
+
+.admin-card {
+  margin-bottom: 16px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.admin-user-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+
+.admin-user-table th,
+.admin-user-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-user-table select,
+.member-role-select {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  padding: 4px 8px;
+}
+
+.admin-card input,
+.admin-card textarea {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.admin-card button {
+  margin-top: 8px;
+}
+
+#eventModal .modal-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#eventModal .modal-actions button {
+  min-width: 0;
+  width: 100%;
+}
+
+.event-step-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.event-step-pill {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--text-muted, rgba(60, 60, 67, 0.72));
+  background: var(--surface);
+  cursor: pointer;
+  width: 100%;
+}
+
+.event-step-pill.active {
+  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.event-step-panel {
+  min-height: 0;
+}
+
+#eventModal[data-step="basic"] #preSaveWarning {
+  display: none !important;
+}
+
+.draft-list-modal {
+  max-width: 520px;
+}
+
+.draft-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draft-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--bg);
+}
+
+.draft-item-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.draft-item-meta {
+  color: var(--text-muted, rgba(60, 60, 67, 0.72));
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.draft-empty {
+  text-align: center;
+  color: var(--text-muted, rgba(60, 60, 67, 0.72));
+  padding: 18px 8px;
+  margin: 0;
+}
+
+.draft-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.draft-item-actions button {
+  flex: 1;
+}
+
+body.dark .draft-item {
+  background: var(--surface);
+}
+
+body.dark .event-step-pill:not(.active),
+body.dark .draft-item-meta,
+body.dark .draft-empty {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.member-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.member-profile {
+  min-width: 0;
+}
+
+.member-profile strong,
+.member-profile small {
+  display: block;
+}
+
+.member-profile small {
+  opacity: 0.65;
+  overflow-wrap: anywhere;
+}
+
+.member-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.member-role-label {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.member-remove-btn,
+.admin-delete-user {
+  min-height: 32px;
+  padding: 4px 10px;
+}
+
+.group-invitation-section {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.group-invitation-section.compact {
+  margin-top: 12px;
+}
+
+.group-invitation-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.invitation-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.invitation-status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.invitation-status-chip.pending {
+  background: rgba(255, 149, 0, 0.12);
+  color: #b45f00;
+}
+
+.invitation-status-chip.accepted {
+  background: rgba(52, 199, 89, 0.14);
+  color: #1f7a35;
+}
+
+.invitation-status-chip.declined {
+  background: rgba(255, 59, 48, 0.12);
+  color: #b42318;
+}
+
+.group-invitation-empty {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+body.dark .group-invitation-section {
+  background: var(--surface);
+}
+
+body.dark .invitation-status-chip.pending {
+  color: #ffd18a;
+}
+
+body.dark .invitation-status-chip.accepted {
+  color: #9be7b0;
+}
+
+body.dark .invitation-status-chip.declined {
+  color: #ffaaa3;
+}
+
+body.dark .admin-panel,
+body.dark .admin-stat-card,
+body.dark .admin-card,
+body.dark .admin-user-table,
+body.dark .admin-user-table th,
+body.dark .admin-user-table td {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+body.dark .admin-user-table select,
+body.dark .member-role-select,
+body.dark .admin-card input,
+body.dark .admin-card textarea {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+
+/* Light mode role select visibility fix */
+.member-role-select,
+.member-role-select option,
+.admin-user-table select,
+.admin-user-table select option {
+  background: #ffffff !important;
+  color: #202124 !important;
+  border-color: var(--border) !important;
+}
+
+body.dark .member-role-select option,
+body.dark .admin-user-table select option {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+.icon-btn {
+  position: relative;
+}
+
+.sidebar-item,
+.mobile-action-item {
+  position: relative;
+}
+
+.admin-unread-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ff3b30;
+  color: #ffffff;
+  border: 2px solid var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(255, 59, 48, 0.28);
+}
+
+.admin-unread-badge-inline {
+  position: static;
+  margin-left: auto;
+  border-color: transparent;
+}
+
+.admin-unread-badge.hidden {
+  display: none !important;
+}
+
+.admin-announcement-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-mailbox-modal {
+  width: min(92vw, 780px) !important;
+  max-width: 780px !important;
+}
+
+.admin-mailbox-modal .modal-body {
+  overflow: hidden;
+  padding-right: 0;
+}
+
+.admin-mailbox-subtitle {
+  margin: -4px 0 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-mailbox {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 360px;
+  max-height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.admin-mailbox-list {
+  overflow-y: auto;
+  max-height: 60vh;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.admin-mailbox-item {
+  width: 100%;
+  min-height: 82px;
+  padding: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-mailbox-item:hover,
+.admin-mailbox-item.active {
+  background: var(--hover);
+}
+
+.admin-mailbox-item.unread {
+  box-shadow: inset 4px 0 0 #ff3b30;
+}
+
+.admin-mailbox-item.unread .admin-mailbox-item-head strong {
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.admin-mailbox-item.unread .admin-mailbox-preview {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.admin-mailbox-item-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 6px;
+}
+
+.admin-mailbox-item-head strong {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-mailbox-item-head time {
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.admin-mailbox-preview {
+  display: -webkit-box;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.admin-mailbox-detail {
+  min-width: 0;
+  padding: 18px;
+  overflow-y: auto;
+  max-height: 60vh;
+  background: var(--surface);
+}
+
+.admin-mailbox-from {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+
+.admin-mailbox-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #ffffff !important;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  overflow: hidden;
+}
+
+.admin-mailbox-from strong,
+.admin-mailbox-from span {
+  display: block;
+}
+
+.admin-mailbox-from > div {
+  min-width: 0;
+}
+
+.admin-mailbox-from span,
+.admin-mailbox-from time {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.admin-mailbox-from time {
+  white-space: nowrap;
+}
+
+.admin-mailbox-detail h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.admin-mailbox-message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.admin-announcement-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.admin-announcement-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.admin-announcement-card h3 {
+  margin: 0;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.admin-announcement-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-announcement-message {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.admin-announcement-time {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.admin-announcement-empty {
+  margin: 0;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.admin-announcement-empty.error {
+  color: var(--ios-red);
+}
+
+body.dark .admin-announcement-card {
+  background: #000000;
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+body.dark .admin-mailbox,
+body.dark .admin-mailbox-detail {
+  background: #000000;
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+body.dark .admin-mailbox-list {
+  background: #000000;
+  border-color: #ffffff;
+}
+
+body.dark .admin-mailbox-item {
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+body.dark .admin-mailbox-item:hover,
+body.dark .admin-mailbox-item.active {
+  background: #1f1f1f;
+}
+
+body.dark .admin-mailbox-subtitle,
+body.dark .admin-mailbox-item-head time,
+body.dark .admin-mailbox-preview,
+body.dark .admin-mailbox-from span,
+body.dark .admin-mailbox-from time {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+body.dark .admin-announcement-time,
+body.dark .admin-announcement-empty {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.admin-ad-ticker {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 76px;
+  z-index: 4200;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.admin-ad-ticker.hidden {
+  display: none;
+}
+
+.admin-ad-ticker-inner {
+  position: relative;
+  min-height: 54px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.96), rgba(37, 99, 235, 0.96));
+  color: #fff;
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.24);
+}
+
+.admin-ad-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-width: max-content;
+  padding: 10px 76px 10px 16px;
+  font-weight: 800;
+  white-space: nowrap;
+  animation: admin-ad-marquee 18s linear infinite;
+  pointer-events: none;
+}
+
+.admin-ad-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.admin-ad-image {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.admin-ad-link {
+  position: relative;
+  z-index: 2;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  pointer-events: auto;
+}
+
+.admin-ad-close {
+  position: absolute;
+  z-index: 8;
+  right: 10px;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.96);
+  color: #111827;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease;
+}
+
+.admin-ad-close.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.admin-ad-close:hover,
+.admin-ad-close:focus-visible {
+  background: #fff;
+}
+
+.admin-ad-close:active {
+  transform: translateY(-50%) scale(0.94);
+}
+
+body.dark .admin-ad-ticker-inner {
+  background: linear-gradient(135deg, rgba(91, 33, 182, 0.98), rgba(29, 78, 216, 0.98));
+}
+
+@keyframes admin-ad-marquee {
+  from {
+    transform: translateX(100vw);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-mailbox-modal {
+    width: 92vw !important;
+    max-width: 520px !important;
+  }
+
+  .admin-mailbox {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .admin-mailbox-list {
+    max-height: 220px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .admin-mailbox-detail {
+    max-height: 42vh;
+    padding: 14px;
+  }
+
+  .admin-mailbox-from {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .admin-mailbox-from time {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 768px) {
+  #eventModal .modal-content {
+    max-height: 94dvh;
+  }
+
+  #eventModal .modal-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #eventModal .modal-actions button {
+    min-width: 0;
+    width: 100%;
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+
+  .event-step-nav {
+    gap: 6px;
+  }
+
+  .event-step-pill {
+    padding: 7px 6px;
+    font-size: 12px;
+  }
+
+  .inline-checks,
+  .settings-checks,
+  .hp-motivation-inputs,
+  .group-actions,
+  .member-list-item,
+  .invitation-list-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .compact-checkbox,
+  .group-actions button,
+  .member-controls,
+  .member-controls select,
+  .member-controls button {
+    width: 100%;
+  }
+
+  .draft-item-actions {
+    flex-direction: column;
+  }
+
+  .admin-table-wrap {
+    overflow-x: auto;
+  }
+}

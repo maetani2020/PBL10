@@ -5,7 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "set-admin": "node scripts/set-admin-user.js",
+    "test": "node --test tests/unit/validation.test.js tests/integration/admin-log-filter.test.js",
+    "test:unit": "node --test tests/unit/validation.test.js",
+    "test:integration": "node --test tests/integration/admin-log-filter.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.22.0",
@@ -14,7 +18,9 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^9.0.3",
     "pg": "^8.21.0",
+    "web-push": "^3.6.7",
     "ws": "^8.21.0"
   },
   "devDependencies": {

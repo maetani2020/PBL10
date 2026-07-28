@@ -3,6 +3,7 @@ const router = express.Router();
 const { query } = require('../db');
 const authenticateToken = require('../middleware/auth');
 const { sendToUsers } = require('../utils/websocket');
+const { normalizeText, validateTextLength, parseIntegerInRange, isLocalDate } = require('../utils/validation');
 
 // Helper to check user membership in a group
 async function checkGroupMembership(groupId, userId) {
@@ -57,13 +58,23 @@ router.get('/', authenticateToken, async (req, res) => {
 // POST /api/tasks - Create a new task
 router.post('/', authenticateToken, async (req, res) => {
     const { title, due_date, hp_consumption, motivation_consumption, group_id } = req.body;
+    const finalTitle = normalizeText(title);
 
-    if (!title || !title.trim()) {
-        return res.status(400).json({ error: 'タスクのタイトルを入力してください' });
+    if (!validateTextLength(finalTitle, 100)) {
+        return res.status(400).json({ error: 'タスク名は1文字以上100文字以内で入力してください' });
+    }
+
+    if (due_date && !isLocalDate(due_date)) {
+        return res.status(400).json({ error: '期限日は YYYY-MM-DD 形式で指定してください' });
     }
 
     try {
         const userId = req.user.id;
+        const hpVal = parseIntegerInRange(hp_consumption, 0, 0, 100);
+        const motVal = parseIntegerInRange(motivation_consumption, 0, 0, 100);
+        if (hpVal === null || motVal === null) {
+            return res.status(400).json({ error: 'HP消費率とやる気消費率は0から100の範囲で指定してください' });
+        }
 
         // If it's a group task, verify group membership
         if (group_id) {
@@ -73,13 +84,10 @@ router.post('/', authenticateToken, async (req, res) => {
             }
         }
 
-        const hpVal = parseInt(hp_consumption || 0);
-        const motVal = parseInt(motivation_consumption || 0);
-
         const result = await query.run(
             `INSERT INTO tasks (user_id, group_id, title, due_date, completed, hp_consumption, motivation_consumption)
              VALUES (?, ?, ?, ?, 0, ?, ?)`,
-            [userId, group_id || null, title.trim(), due_date || null, hpVal, motVal]
+            [userId, group_id || null, finalTitle, due_date || null, hpVal, motVal]
         );
 
         const newTaskId = result.lastID;
@@ -97,7 +105,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
         res.status(201).json({
             message: 'タスクを登録しました',
-            task: { id: newTaskId, user_id: userId, group_id, title, due_date, completed: false, hp_consumption: hpVal, motivation_consumption: motVal }
+            task: { id: newTaskId, user_id: userId, group_id, title: finalTitle, due_date, completed: false, hp_consumption: hpVal, motivation_consumption: motVal }
         });
     } catch (err) {
         console.error('Create task error:', err);
@@ -129,10 +137,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
         }
 
         const compVal = completed !== undefined ? (completed ? 1 : 0) : task.completed;
-        const hpVal = hp_consumption !== undefined ? parseInt(hp_consumption) : task.hp_consumption;
-        const motVal = motivation_consumption !== undefined ? parseInt(motivation_consumption) : task.motivation_consumption;
-        const finalTitle = title !== undefined ? title.trim() : task.title;
+        const hpVal = parseIntegerInRange(hp_consumption, task.hp_consumption, 0, 100);
+        const motVal = parseIntegerInRange(motivation_consumption, task.motivation_consumption, 0, 100);
+        if (hpVal === null || motVal === null) {
+            return res.status(400).json({ error: 'HP消費率とやる気消費率は0から100の範囲で指定してください' });
+        }
+
+        const finalTitle = title !== undefined ? normalizeText(title) : task.title;
+        if (!validateTextLength(finalTitle, 100)) {
+            return res.status(400).json({ error: 'タスク名は1文字以上100文字以内で入力してください' });
+        }
+
         const finalDueDate = due_date !== undefined ? due_date : task.due_date;
+        if (finalDueDate && !isLocalDate(finalDueDate)) {
+            return res.status(400).json({ error: '期限日は YYYY-MM-DD 形式で指定してください' });
+        }
 
         await query.run(
             `UPDATE tasks 
@@ -216,7 +235,7 @@ router.post('/recommend', authenticateToken, async (req, res) => {
         // Retrieve existing events for the day to check availability
         const events = await query.all(
             `SELECT start_time, end_time FROM events 
-             WHERE creator_id = ? AND start_time LIKE ?`,
+             WHERE creator_id = ? AND start_time LIKE ? AND deleted_at IS NULL`,
             [userId, `${formattedDate}%`]
         );
 

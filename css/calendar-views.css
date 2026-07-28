@@ -9,6 +9,7 @@ calendar-views.css
 
 .view-switch {
   display: flex;
+  flex: 0 0 auto;
 
   background: var(--surface);
 
@@ -18,11 +19,13 @@ calendar-views.css
 .view-btn {
   flex: 1;
 
-  padding: 12px;
+  padding: var(--ui-view-padding);
 
   background: transparent;
 
   color: var(--text);
+
+  font-size: var(--ui-view-font-size);
 
   font-weight: 600;
 }
@@ -39,6 +42,7 @@ calendar-views.css
 
 .week-header {
   display: grid;
+  flex: 0 0 auto;
 
   grid-template-columns: repeat(7, 1fr);
 
@@ -50,7 +54,9 @@ calendar-views.css
 .week-header div {
   text-align: center;
 
-  padding: 10px;
+  padding: var(--ui-week-header-padding);
+
+  font-size: var(--ui-week-header-font-size);
 
   font-weight: bold;
 }
@@ -72,9 +78,12 @@ calendar-views.css
 
   grid-template-columns: repeat(7, 1fr);
 
-  grid-auto-rows: 1fr;
+  grid-auto-rows: minmax(0, 1fr);
 
-  height: calc(100vh - 64px - 60px - 45px - 45px);
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  padding-bottom: 6px;
 
   overflow: hidden;
 }
@@ -85,22 +94,19 @@ calendar-views.css
   padding: 4px;
 
   position: relative;
+  min-height: 0;
 
   overflow: hidden;
 }
 
 .day-cell:hover {
-  background: #f8f9fa;
-}
-
-body.dark .day-cell:hover {
-  background: #3c4043;
+  background: var(--hover);
 }
 
 .day-number {
-  width: 28px;
+  width: var(--ui-day-number-size);
 
-  height: 28px;
+  height: var(--ui-day-number-size);
 
   display: flex;
 
@@ -110,15 +116,48 @@ body.dark .day-cell:hover {
 
   border-radius: 50%;
 
-  font-size: 14px;
+  font-size: var(--ui-day-number-font-size);
+
+  font-weight: 600;
 }
 
 .sunday {
   color: var(--sunday);
 }
 
+.holiday {
+  color: var(--sunday);
+}
+
 .saturday {
   color: var(--saturday);
+}
+
+.holiday-name,
+.week-holiday-name,
+.day-holiday-name {
+  color: var(--sunday);
+  font-size: var(--ui-holiday-font-size);
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holiday-name {
+  margin: 1px 0 2px;
+}
+
+.week-holiday-name {
+  display: block;
+  margin-top: 2px;
+}
+
+.day-holiday-name {
+  display: inline-block;
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 /* ==========================
@@ -162,7 +201,7 @@ body.dark .day-cell:hover {
 
   color: white;
 
-  font-size: 11px;
+  font-size: var(--ui-event-font-size);
 
   overflow: hidden;
 
@@ -171,6 +210,35 @@ body.dark .day-cell:hover {
   text-overflow: ellipsis;
 
   cursor: pointer;
+
+  transition: transform 0.2s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.2s ease;
+}
+
+.event:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.month-cell-events {
+  position: relative;
+  z-index: 2;
+}
+
+.month-event-span {
+  position: relative;
+  z-index: 5;
+  align-self: start;
+  min-height: 19px;
+  line-height: 19px;
+  margin: calc(40px + (var(--month-event-lane, 0) * 22px)) 4px 0;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: var(--ui-month-event-font-size);
+  font-weight: 700;
+}
+
+.month-event-span:hover {
+  transform: translateY(-1px);
 }
 
 .public {
@@ -199,7 +267,9 @@ body.dark .day-cell:hover {
 ========================== */
 
 .week-view {
-  height: calc(100vh - 214px);
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
 
   overflow-y: auto;
 }
@@ -216,7 +286,8 @@ body.dark .day-cell:hover {
 
 .week-view .week-header div {
   text-align: center;
-  padding: 10px;
+  padding: var(--ui-week-header-padding);
+  font-size: var(--ui-week-header-font-size);
   font-weight: bold;
   border-right: 1px solid var(--border);
 }
@@ -280,7 +351,9 @@ body.dark .week-day-column:hover {
 ========================== */
 
 .day-view {
-  height: calc(100vh - 214px);
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
 
   overflow-y: auto;
 }
@@ -292,6 +365,12 @@ body.dark .week-day-column:hover {
   padding: 15px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.2s ease;
+}
+
+.event-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
 }
 
 .event-card h4 {
@@ -337,11 +416,130 @@ body.dark .week-day-column:hover {
 ========================== */
 
 @media (max-width: 768px) {
-  .day-number {
+  .view-switch {
+    min-height: 40px;
+  }
+
+  .view-btn {
+    padding: 9px 6px;
+    font-size: 13px;
+  }
+
+  .display-options {
+    padding: 6px 10px;
+  }
+
+  .week-header div {
+    padding: 7px 2px;
     font-size: 12px;
+  }
+
+  .month-view {
+    height: auto;
+    min-height: 0;
+    padding-bottom: 6px;
+  }
+
+  .day-cell {
+    padding: 3px;
+    min-width: 0;
+  }
+
+  .day-number {
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
   }
 
   .event {
     font-size: 10px;
+    line-height: 1.25;
+    padding: 2px 4px;
+    margin-top: 3px;
+    max-width: 100%;
   }
+
+  .month-event-span {
+    min-height: 16px;
+    line-height: 16px;
+    margin: calc(33px + (var(--month-event-lane, 0) * 18px)) 2px 0;
+    padding: 0 5px;
+    font-size: 10px;
+  }
+
+  .event-badge {
+    display: none;
+  }
+
+  .week-view,
+  .day-view {
+    height: auto;
+    min-height: 0;
+  }
+
+  .week-view .week-header {
+    grid-template-columns: 48px repeat(7, minmax(42px, 1fr));
+    min-width: 520px;
+  }
+
+  .week-hour {
+    min-width: 520px;
+  }
+
+  .week-time {
+    width: 48px;
+    font-size: 11px;
+  }
+
+  .week-view {
+    overflow-x: auto;
+  }
+
+  .event-card {
+    margin: 8px;
+    padding: 12px;
+  }
+}
+
+/* Event badges and icons */
+.event-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 4px;
+  margin-left: 4px;
+  line-height: 1;
+}
+
+.event-badge.badge-hp {
+  background: linear-gradient(135deg, rgba(52, 199, 89, 0.25), rgba(48, 209, 88, 0.15));
+  color: #34c759;
+  border: 1px solid rgba(52, 199, 89, 0.3);
+}
+
+.event-badge.badge-motivation {
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.25), rgba(10, 132, 255, 0.15));
+  color: #007aff;
+  border: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+.event-badge.badge-task {
+  background: linear-gradient(135deg, rgba(255, 149, 0, 0.25), rgba(255, 159, 10, 0.15));
+  color: #ff9500;
+  border: 1px solid rgba(255, 149, 0, 0.3);
+}
+
+.event-badge.badge-mail {
+  background: linear-gradient(135deg, rgba(175, 82, 222, 0.25), rgba(191, 90, 242, 0.15));
+  color: #af52de;
+  border: 1px solid rgba(175, 82, 222, 0.3);
+}
+
+.event-badge-icon {
+  font-size: 11px !important;
+  vertical-align: middle;
+  margin-right: 2px;
 }

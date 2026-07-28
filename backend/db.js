@@ -24,8 +24,8 @@ function convertSqlPlaceholders(sql) {
     return sql.replace(/\?/g, () => `$${index++}`);
 }
 
-// Helper functions for Promise-based operations
-const query = {
+function createQueryExecutor(execute) {
+    return {
     async run(sql, params = []) {
         const pgSql = convertSqlPlaceholders(sql);
         let executeSql = pgSql;
@@ -33,21 +33,41 @@ const query = {
         if (isInsert && !pgSql.toUpperCase().includes('RETURNING')) {
             executeSql = pgSql.trim().replace(/;?$/, ' RETURNING id');
         }
-        const res = await pgPool.query(executeSql, params);
+        const res = await execute(executeSql, params);
         const lastID = res.rows[0] ? res.rows[0].id : null;
         return { lastID, changes: res.rowCount };
     },
     async get(sql, params = []) {
         const pgSql = convertSqlPlaceholders(sql);
-        const res = await pgPool.query(pgSql, params);
+        const res = await execute(pgSql, params);
         return res.rows[0];
     },
     async all(sql, params = []) {
         const pgSql = convertSqlPlaceholders(sql);
-        const res = await pgPool.query(pgSql, params);
+        const res = await execute(pgSql, params);
         return res.rows;
     }
-};
+    };
+}
+
+// Helper functions for Promise-based operations
+const query = createQueryExecutor((sql, params) => pgPool.query(sql, params));
+
+async function withTransaction(callback) {
+    const client = await pgPool.connect();
+    const txQuery = createQueryExecutor((sql, params) => client.query(sql, params));
+    try {
+        await client.query('BEGIN');
+        const result = await callback(txQuery);
+        await client.query('COMMIT');
+        return result;
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+}
 
 // Auto-convert SQLite syntax to Postgres syntax for table creations
 async function createTable(sql) {
@@ -91,6 +111,11 @@ async function initDb() {
                 recovery_rate REAL DEFAULT 1.0,
                 warning_threshold INTEGER DEFAULT 20,
                 role TEXT DEFAULT 'user',
+                account_status TEXT DEFAULT 'active',
+                timeout_until DATETIME DEFAULT NULL,
+                restriction_reason TEXT DEFAULT NULL,
+                restricted_at DATETIME DEFAULT NULL,
+                restricted_by INTEGER DEFAULT NULL,
                 notification_settings TEXT DEFAULT '{"events":true,"tasks":true,"game":true,"email":true}',
                 last_activity_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -102,6 +127,11 @@ async function initDb() {
         await addColumnIfNotExists('users', 'recovery_rate', 'REAL DEFAULT 1.0');
         await addColumnIfNotExists('users', 'warning_threshold', 'INTEGER DEFAULT 20');
         await addColumnIfNotExists('users', 'role', "TEXT DEFAULT 'user'");
+        await addColumnIfNotExists('users', 'account_status', "TEXT DEFAULT 'active'");
+        await addColumnIfNotExists('users', 'timeout_until', 'TIMESTAMP DEFAULT NULL');
+        await addColumnIfNotExists('users', 'restriction_reason', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('users', 'restricted_at', 'TIMESTAMP DEFAULT NULL');
+        await addColumnIfNotExists('users', 'restricted_by', 'INTEGER DEFAULT NULL');
         await addColumnIfNotExists('users', 'notification_settings', "TEXT DEFAULT '{\"events\":true,\"tasks\":true,\"game\":true,\"email\":true}'");
         await addColumnIfNotExists('users', 'last_activity_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
 
@@ -126,6 +156,30 @@ async function initDb() {
                 expires_at DATETIME NOT NULL
             )
         `);
+        await addColumnIfNotExists('password_resets', 'email', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('password_resets', 'token', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('password_resets', 'expires_at', 'TIMESTAMP DEFAULT NULL');
+        await query.run('DELETE FROM password_resets WHERE email IS NULL OR token IS NULL OR expires_at IS NULL');
+
+        // 4. Create Signup Email Verification Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS signup_verifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                code TEXT NOT NULL,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await addColumnIfNotExists('signup_verifications', 'email', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('signup_verifications', 'password_hash', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('signup_verifications', 'display_name', "TEXT DEFAULT ''");
+        await addColumnIfNotExists('signup_verifications', 'code', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('signup_verifications', 'expires_at', 'TIMESTAMP DEFAULT NULL');
+        await addColumnIfNotExists('signup_verifications', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+        await query.run('DELETE FROM signup_verifications WHERE email IS NULL OR password_hash IS NULL OR code IS NULL OR expires_at IS NULL');
 
         // 4. Create Groups Table
         await createTable(`
@@ -152,7 +206,25 @@ async function initDb() {
             )
         `);
 
-        // 6. Create Calendars Table
+        // 6. Create Group Invitations Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS group_invitations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                invited_user_id INTEGER NOT NULL,
+                invited_by INTEGER,
+                role TEXT NOT NULL DEFAULT 'viewer' CHECK(role IN ('admin', 'editor', 'viewer')),
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined')),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                responded_at DATETIME DEFAULT NULL,
+                UNIQUE(group_id, invited_user_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (invited_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        // 7. Create Calendars Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS calendars (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,7 +238,7 @@ async function initDb() {
         `);
         await addColumnIfNotExists('calendars', 'group_id', 'INTEGER DEFAULT NULL');
 
-        // 7. Create Calendar Shares Table
+        // 8. Create Calendar Shares Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS calendar_shares (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -180,7 +252,7 @@ async function initDb() {
             )
         `);
 
-        // 8. Create Events Table
+        // 9. Create Events Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS events (
                 id TEXT PRIMARY KEY,
@@ -207,8 +279,19 @@ async function initDb() {
         await addColumnIfNotExists('events', 'hp_consumption', 'INTEGER DEFAULT 0');
         await addColumnIfNotExists('events', 'motivation_consumption', 'INTEGER DEFAULT 0');
         await addColumnIfNotExists('events', 'recurrence', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('events', 'event_type', "TEXT DEFAULT 'event'");
+        await addColumnIfNotExists('events', 'reminder_minutes', "TEXT DEFAULT '[]'");
+        await addColumnIfNotExists('events', 'notify_at_start', 'INTEGER DEFAULT 1');
+        await addColumnIfNotExists('events', 'task_deadline_notify', 'INTEGER DEFAULT 1');
+        await addColumnIfNotExists('events', 'mail_reminder_enabled', 'INTEGER DEFAULT 0');
+        await addColumnIfNotExists('events', 'mail_to', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('events', 'mail_subject', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('events', 'mail_remind_at', 'TEXT DEFAULT NULL');
+        await addColumnIfNotExists('events', 'mail_sent', 'INTEGER DEFAULT 0');
+        await addColumnIfNotExists('events', 'deleted_at', 'TIMESTAMP DEFAULT NULL');
+        await addColumnIfNotExists('events', 'deleted_by', 'INTEGER DEFAULT NULL');
 
-        // 9. Create Tasks Table
+        // 10. Create Tasks Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -225,7 +308,7 @@ async function initDb() {
             )
         `);
 
-        // 10. Create Household Accounts Table
+        // 11. Create Household Accounts Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS household_accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,7 +324,7 @@ async function initDb() {
             )
         `);
 
-        // 11. Create Push Subscriptions Table
+        // 12. Create Push Subscriptions Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS push_subscriptions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -253,7 +336,7 @@ async function initDb() {
             )
         `);
 
-        // 12. Create Notifications Table
+        // 13. Create Notifications Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -267,7 +350,7 @@ async function initDb() {
             )
         `);
 
-        // 13. Create Notification History Table
+        // 14. Create Notification History Table
         await createTable(`
             CREATE TABLE IF NOT EXISTS notification_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -276,11 +359,60 @@ async function initDb() {
                 message TEXT NOT NULL,
                 sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 type TEXT NOT NULL,
+                status TEXT DEFAULT 'unread' CHECK(status IN ('unread', 'read')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        `);
+        await addColumnIfNotExists('notification_history', 'status', "TEXT DEFAULT 'unread' CHECK(status IN ('unread', 'read'))");
+        await query.run("UPDATE notification_history SET status = 'unread' WHERE status IS NULL");
+
+        // 15. Create Notification Delivery Deduplication Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS notification_deliveries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                event_id TEXT DEFAULT NULL,
+                delivery_key TEXT NOT NULL,
+                channel TEXT NOT NULL CHECK(channel IN ('push', 'email')),
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                scheduled_for TEXT NOT NULL,
+                delivered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, delivery_key, channel),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         `);
 
-        // 14. Create JWT Blacklist Table (for logout token invalidation)
+        // 16. Create Admin Ads Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS admin_ads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT,
+                url TEXT,
+                image_url TEXT,
+                created_by INTEGER,
+                expires_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        // 17. Create Admin Logs Table
+        await createTable(`
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_user_id INTEGER,
+                action TEXT NOT NULL,
+                target_type TEXT,
+                target_id TEXT,
+                details TEXT,
+                ip_address TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        // 18. Create JWT Blacklist Table (for logout token invalidation)
         await createTable(`
             CREATE TABLE IF NOT EXISTS blacklisted_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -299,6 +431,7 @@ async function initDb() {
 
 module.exports = {
     query,
+    withTransaction,
     initDb,
     isPostgres: true
 };

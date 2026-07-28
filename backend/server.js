@@ -6,21 +6,28 @@ const http = require('http');
 const os = require('os');
 const { initDb } = require('./db');
 const { initWebSocket } = require('./utils/websocket');
+const { startNotificationScheduler } = require('./utils/notification-scheduler');
+const config = require('./config');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = config.port;
+const HOST = config.host;
 
 // Initialize Database
-initDb();
+const dbReady = initDb();
 
 // Middleware
 app.use(cors({
-    origin: '*', // Allows access from any Android client / PWA / localhost
+    origin(origin, callback) {
+        if (!origin || config.cors.origins.includes('*') || config.cors.origins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Serve static files from the project root (one level up)
 const projectRoot = path.join(__dirname, '..');
@@ -56,6 +63,19 @@ app.get('/api/config', (req, res) => {
     });
 });
 
+// Admin portal
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(projectRoot, 'admin.html'));
+});
+
+app.get('/admin/', (req, res) => {
+    res.sendFile(path.join(projectRoot, 'admin.html'));
+});
+
+app.get('/reset-password', (req, res) => {
+    res.sendFile(path.join(projectRoot, 'calendar.html'));
+});
+
 // Fallback: serve the main calendar frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(projectRoot, 'calendar.html'));
@@ -87,8 +107,10 @@ function getLocalIPs() {
     return ips;
 }
 
-// Start server
-server.listen(PORT, HOST, () => {
+// Start server after database migrations are ready
+dbReady.then(() => {
+    startNotificationScheduler();
+    server.listen(PORT, HOST, () => {
     const localIPs = getLocalIPs();
     console.log(`==================================================`);
     console.log(`  統合型ライフマネジメントアプリ バックエンドサーバー`);
@@ -102,4 +124,8 @@ server.listen(PORT, HOST, () => {
         });
     }
     console.log(`==================================================`);
+    });
+}).catch(err => {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
 });

@@ -9,7 +9,8 @@ import {
   getEvents, 
   formatDate, 
   isToday, 
-  showToast 
+  showToast,
+  escapeHTML
 } from './calendar-state.js';
 
 import { 
@@ -22,11 +23,119 @@ import {
 
 // We import triggerAIDailyAdvice from calendar-ai.js for the Day View banner action
 import { triggerAIDailyAdvice } from './calendar-ai.js';
+import { getJapaneseHoliday } from './calendar-holidays.js';
 
 export const monthView = document.getElementById("monthView");
 export const weekView = document.getElementById("weekView");
 export const dayView = document.getElementById("dayView");
 export const currentTitle = document.getElementById("currentTitle");
+
+function applyEventColor(element, event) {
+  const color = event.color || "#007AFF";
+  element.style.backgroundColor = color;
+  element.style.borderColor = color;
+}
+
+function appendHolidayLabel(parent, holiday, className = "holiday-name") {
+  if (!holiday) return;
+  const label = document.createElement(className === "day-holiday-name" ? "span" : "div");
+  label.className = className;
+  label.textContent = holiday.name;
+  label.title = holiday.name;
+  parent.appendChild(label);
+}
+
+function applyHolidayClass(element, holiday) {
+  if (!holiday) return;
+  element.classList.add("holiday");
+  element.title = holiday.name;
+}
+
+function getEventStartDate(event) {
+  return String(event.start || event.date || "").slice(0, 10);
+}
+
+function getEventEndDate(event) {
+  return String(event.end || event.start || event.date || "").slice(0, 10);
+}
+
+function toLocalDate(dateStr) {
+  const [year, month, day] = String(dateStr).split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function isMultiDayEvent(event) {
+  const start = getEventStartDate(event);
+  const end = getEventEndDate(event);
+  return Boolean(start && end && start !== end);
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function minDate(a, b) {
+  return a <= b ? a : b;
+}
+
+function maxDate(a, b) {
+  return a >= b ? a : b;
+}
+
+function allocateMonthEventLane(rowLanes, row, startCol, endCol) {
+  const lanes = rowLanes.get(row) || [];
+
+  for (let lane = 0; lane < lanes.length; lane += 1) {
+    const overlaps = lanes[lane].some(span => (
+      startCol < span.endCol && endCol > span.startCol
+    ));
+    if (!overlaps) {
+      lanes[lane].push({ startCol, endCol });
+      rowLanes.set(row, lanes);
+      return lane;
+    }
+  }
+
+  lanes.push([{ startCol, endCol }]);
+  rowLanes.set(row, lanes);
+  return lanes.length - 1;
+}
+
+export function openYearJumpModal() {
+  const modal = document.getElementById("yearJumpModal");
+  const yearInput = document.getElementById("jumpYearInput");
+  const monthSelect = document.getElementById("jumpMonthSelect");
+  if (!modal || !yearInput || !monthSelect) return;
+
+  yearInput.value = currentDate.getFullYear();
+  monthSelect.value = String(currentDate.getMonth() + 1);
+  modal.style.display = "flex";
+  yearInput.focus();
+}
+
+export function closeYearJumpModal() {
+  const modal = document.getElementById("yearJumpModal");
+  if (modal) modal.style.display = "none";
+}
+
+export function applyYearJump() {
+  const year = parseInt(document.getElementById("jumpYearInput")?.value, 10);
+  const month = parseInt(document.getElementById("jumpMonthSelect")?.value, 10);
+
+  if (!Number.isFinite(year) || year < 1970 || year > 2100 || !Number.isFinite(month) || month < 1 || month > 12) {
+    showToast("1970年から2100年までの年月を指定してください");
+    return false;
+  }
+
+  setCurrentDate(new Date(year, month - 1, 1));
+  closeYearJumpModal();
+  refreshCurrentView();
+  return true;
+}
+
+
 
 // Update Calendar Title
 export function updateTitle() {
@@ -92,55 +201,50 @@ export function renderMonthView() {
   const startWeek = firstDay.getDay();
   const totalDays = lastDay.getDate();
 
-  const prevMonthLastDay = new Date(year, month, 0).getDate();
   const events = getEvents();
+  const totalCells = startWeek + totalDays;
+  const weekRows = Math.ceil(totalCells / 7);
+  const targetCells = weekRows * 7;
+  const firstVisibleDate = addDays(firstDay, -startWeek);
+  const lastVisibleDate = addDays(firstVisibleDate, targetCells - 1);
+  const cellInfoByDate = new Map();
+  const cellInfos = [];
 
-  // 前月セル
-  for (let i = startWeek - 1; i >= 0; i--) {
+  for (let index = 0; index < targetCells; index += 1) {
+    const row = Math.floor(index / 7) + 1;
+    const col = (index % 7) + 1;
+    const cellDate = addDays(firstVisibleDate, index);
+    const dateStr = formatDate(cellDate);
+    const isCurrentMonth = cellDate.getMonth() === month;
     const cell = document.createElement("div");
-    cell.className = "day-cell other-month";
-    cell.innerHTML = `
-      <div class="day-number">
-        ${prevMonthLastDay - i}
-      </div>
-    `;
-    monthView.appendChild(cell);
-  }
+    cell.className = isCurrentMonth ? "day-cell" : "day-cell other-month";
+    cell.style.gridColumn = String(col);
+    cell.style.gridRow = String(row);
 
-  // 当月セル
-  for (let day = 1; day <= totalDays; day++) {
-    const cell = document.createElement("div");
-    cell.classList.add("day-cell");
-
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const weekday = new Date(year, month, day).getDay();
+    const weekday = cellDate.getDay();
+    const holiday = getJapaneseHoliday(cellDate);
 
     if (weekday === 0) cell.classList.add("sunday");
     if (weekday === 6) cell.classList.add("saturday");
+    applyHolidayClass(cell, holiday);
 
-    if (isToday(year, month, day)) {
+    if (isToday(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate())) {
       cell.classList.add("today");
     }
 
     const dayNumber = document.createElement("div");
     dayNumber.className = "day-number";
-    dayNumber.textContent = day;
+    dayNumber.textContent = cellDate.getDate();
     cell.appendChild(dayNumber);
+    appendHolidayLabel(cell, holiday);
 
-    const dayEvents = events.filter((event) => event.date === dateStr);
+    const eventContainer = document.createElement("div");
+    eventContainer.className = "month-cell-events";
+    cell.appendChild(eventContainer);
 
-    dayEvents.forEach((event) => {
-      const eventDiv = document.createElement("div");
-      eventDiv.className = `event ${event.visibility}`;
-      eventDiv.textContent = event.allDay ? "📌 " + event.title : event.title;
-
-      eventDiv.addEventListener("click", (e) => {
-        e.stopPropagation();
-        openEditEvent(event);
-      });
-
-      cell.appendChild(eventDiv);
-    });
+    const info = { cell, eventContainer, date: cellDate, dateStr, row, col, index };
+    cellInfos.push(info);
+    cellInfoByDate.set(dateStr, info);
 
     cell.addEventListener("click", () => {
       openCreateEvent(dateStr);
@@ -149,20 +253,88 @@ export function renderMonthView() {
     monthView.appendChild(cell);
   }
 
-  // 翌月セル
-  const totalCells = startWeek + totalDays;
-  const weekRows = Math.ceil(totalCells / 7);
-  const targetCells = weekRows * 7;
-  const nextDays = targetCells - totalCells;
+  const multiDayEvents = events.filter(isMultiDayEvent);
+  const rowLanes = new Map();
 
-  for (let i = 1; i <= nextDays; i++) {
-    const cell = document.createElement("div");
-    cell.className = "day-cell other-month";
-    cell.innerHTML = `
-      <div class="day-number">${i}</div>
-    `;
-    monthView.appendChild(cell);
-  }
+  multiDayEvents.forEach((event) => {
+    const eventStartDate = toLocalDate(getEventStartDate(event));
+    const eventEndDate = toLocalDate(getEventEndDate(event));
+    if (Number.isNaN(eventStartDate.getTime()) || Number.isNaN(eventEndDate.getTime())) return;
+    if (eventEndDate < firstVisibleDate || eventStartDate > lastVisibleDate) return;
+
+    let segmentStart = maxDate(eventStartDate, firstVisibleDate);
+    const visibleEnd = minDate(eventEndDate, lastVisibleDate);
+
+    while (segmentStart <= visibleEnd) {
+      const startInfo = cellInfoByDate.get(formatDate(segmentStart));
+      if (!startInfo) {
+        segmentStart = addDays(segmentStart, 1);
+        continue;
+      }
+
+      const rowEndIndex = (startInfo.row * 7) - 1;
+      const rowEndDate = cellInfos[rowEndIndex]?.date || visibleEnd;
+      const segmentEnd = minDate(visibleEnd, rowEndDate);
+      const endInfo = cellInfoByDate.get(formatDate(segmentEnd));
+      if (!endInfo) break;
+
+      const gridEndCol = endInfo.col + 1;
+      const lane = allocateMonthEventLane(rowLanes, startInfo.row, startInfo.col, gridEndCol);
+      const span = document.createElement("div");
+      span.className = `event month-event-span ${event.visibility}`;
+      span.style.gridColumn = `${startInfo.col} / ${gridEndCol}`;
+      span.style.gridRow = String(startInfo.row);
+      span.style.setProperty("--month-event-lane", String(lane));
+      applyEventColor(span, event);
+      span.textContent = `${event.allDay ? "📌 " : ""}${event.title}`;
+      span.title = `${event.title} (${getEventStartDate(event)} - ${getEventEndDate(event)})`;
+
+      span.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openEditEvent(event);
+      });
+
+      monthView.appendChild(span);
+      segmentStart = addDays(segmentEnd, 1);
+    }
+  });
+
+  cellInfos.forEach((info) => {
+    const laneCount = rowLanes.get(info.row)?.length || 0;
+    if (laneCount > 0) {
+      info.cell.classList.add("has-multiday");
+      info.eventContainer.style.marginTop = `${laneCount * 22 + 4}px`;
+    }
+
+    const dayEvents = events.filter((event) => {
+      if (isMultiDayEvent(event)) return false;
+      return event.date === info.dateStr || getEventStartDate(event) === info.dateStr;
+    });
+
+    dayEvents.forEach((event) => {
+      const eventDiv = document.createElement("div");
+      eventDiv.className = `event ${event.visibility}`;
+      applyEventColor(eventDiv, event);
+      
+      let badgeHtml = "";
+      const showHp = document.getElementById("showHpMotivation")?.checked ?? false;
+      if (showHp) {
+        if (event.hp_consumption > 0) badgeHtml += ` <span class="event-badge badge-hp">H${event.hp_consumption}</span>`;
+        if (event.motivation_consumption > 0) badgeHtml += ` <span class="event-badge badge-motivation">M${event.motivation_consumption}</span>`;
+      }
+      if (event.eventType === "task") badgeHtml += ` <span class="event-badge badge-task">📋</span>`;
+      if (event.eventType === "mail") badgeHtml += ` <span class="event-badge badge-mail">✉️</span>`;
+
+      eventDiv.innerHTML = `${event.allDay ? "📌 " : ""}${escapeHTML(event.title)}${badgeHtml}`;
+
+      eventDiv.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openEditEvent(event);
+      });
+
+      info.eventContainer.appendChild(eventDiv);
+    });
+  });
 }
 
 // ----------------------------------------------------
@@ -191,13 +363,16 @@ export function renderWeekView() {
     date.setDate(start.getDate() + i);
 
     const div = document.createElement("div");
+    const holiday = getJapaneseHoliday(date);
     div.innerHTML = `
-      ${date.getMonth() + 1}/${date.getDate()}
+      <span>${date.getMonth() + 1}/${date.getDate()}</span>
     `;
+    appendHolidayLabel(div, holiday, "week-holiday-name");
 
     const weekday = date.getDay();
     if (weekday === 0) div.classList.add("sun");
     if (weekday === 6) div.classList.add("sat");
+    applyHolidayClass(div, holiday);
 
     header.appendChild(div);
   }
@@ -237,7 +412,18 @@ export function renderWeekView() {
       dayHourEvents.forEach((event) => {
         const eventDiv = document.createElement("div");
         eventDiv.className = `event ${event.visibility}`;
-        eventDiv.textContent = event.allDay ? "📌 " + event.title : event.title;
+        applyEventColor(eventDiv, event);
+        
+        let badgeHtml = "";
+        const showHp = document.getElementById("showHpMotivation")?.checked ?? false;
+        if (showHp) {
+          if (event.hp_consumption > 0) badgeHtml += ` <span class="event-badge badge-hp">H${event.hp_consumption}</span>`;
+          if (event.motivation_consumption > 0) badgeHtml += ` <span class="event-badge badge-motivation">M${event.motivation_consumption}</span>`;
+        }
+        if (event.eventType === "task") badgeHtml += ` <span class="event-badge badge-task">📋</span>`;
+        if (event.eventType === "mail") badgeHtml += ` <span class="event-badge badge-mail">✉️</span>`;
+
+        eventDiv.innerHTML = `${event.allDay ? "📌 " : ""}${escapeHTML(event.title)}${badgeHtml}`;
         eventDiv.title = `${event.title} (${event.start.substring(11, 16)} - ${event.end.substring(11, 16)})`;
 
         eventDiv.addEventListener("click", (e) => {
@@ -268,7 +454,9 @@ export function renderDayView() {
 
   const title = document.createElement("h3");
   title.style.padding = "15px";
+  const holiday = getJapaneseHoliday(currentDate);
   title.textContent = formatDate(currentDate);
+  appendHolidayLabel(title, holiday, "day-holiday-name");
   dayView.appendChild(title);
 
   const targetDate = formatDate(currentDate);
@@ -285,20 +473,35 @@ export function renderDayView() {
   }
 
   // イベントカードの生成
-  events.forEach((event) => {
-    const card = document.createElement("div");
-    card.className = "event-card";
+    events.forEach((event) => {
+      const card = document.createElement("div");
+      card.className = "event-card";
+      card.style.borderLeft = `5px solid ${event.color || "#007AFF"}`;
 
-    let visibilityLabel = "";
-    if (event.visibility === "public") visibilityLabel = "全体公開";
-    else if (event.visibility === "group") visibilityLabel = "グループ公開";
-    else visibilityLabel = "自分のみ";
+      let visibilityLabel = "";
+      if (event.visibility === "public") visibilityLabel = "全体公開";
+      else if (event.visibility === "group") visibilityLabel = "グループ公開";
+      else visibilityLabel = "自分のみ";
 
-    card.innerHTML = `
-      <h4>${event.title}</h4>
-      <p>📅 ${event.allDay ? "終日予定" : event.start.substring(11, 16) + " 〜 " + event.end.substring(11, 16)}</p>
-      <p>👥 ${visibilityLabel}</p>
-    `;
+      let hpText = "";
+      if (event.hp_consumption > 0 || event.motivation_consumption > 0) {
+        hpText = `<p>⚡ HP消費: ${event.hp_consumption}% / やる気消費: ${event.motivation_consumption}%</p>`;
+      }
+      
+      let typeLabel = "";
+      if (event.eventType === "task") typeLabel = "📋 タスク";
+      else if (event.eventType === "mail") typeLabel = "✉️ メール送信リマインド";
+      else typeLabel = "📅 通常予定";
+
+      card.innerHTML = `
+        <h4 style="display:flex; justify-content:space-between; align-items:center;">
+          <span>${escapeHTML(event.title)}</span>
+          <span style="font-size:11px; opacity:0.7; font-weight:normal;">${typeLabel}</span>
+        </h4>
+        <p>📅 ${event.allDay ? "終日予定" : event.start.substring(11, 16) + " 〜 " + event.end.substring(11, 16)}</p>
+        <p>👥 ${visibilityLabel}</p>
+        ${hpText}
+      `;
 
     // AI準備アドバイスブロックの設置
     const adviceBlock = document.createElement("div");
@@ -370,6 +573,7 @@ export function renderScheduleList(mode) {
   events.forEach((event) => {
     const card = document.createElement("div");
     card.className = "event-card";
+    card.style.borderLeft = `5px solid ${event.color || "#007AFF"}`;
 
     let visibility = "";
     if (event.visibility === "public") {
