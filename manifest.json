@@ -1,0 +1,10 @@
+{
+  "name": "Shared Calendar",
+  "short_name": "Calendar",
+  "description": "Shared Calendar for group schedules and reminders",
+  "start_url": "/calendar.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a73e8"
+}

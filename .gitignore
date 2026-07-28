@@ -1,0 +1,17 @@
+node_modules/
+backend/node_modules/
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+logs/
+*.log
+backups/
+backend/backups/
+.DS_Store
+Thumbs.db
+*.sqlite
+*.db
+npm-debug.log*

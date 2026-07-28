@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="ja" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>iOS Calendar (Backend + AI)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        ios: {
+                            blue: '#007AFF',
+                            red: '#FF3B30',
+                            green: '#34C759',
+                            orange: '#FF9500',
+                            purple: '#AF52DE',
+                            yellow: '#FFCC00',
+                            teal: '#5AC8FA',
+                            gray: {
+                                100: '#F2F2F7',
+                                200: '#E5E5EA',
+                                300: '#D1D1D6',
+                                400: '#C7C7CC',
+                                500: '#8E8E93',
+                                600: '#3A3A3C',
+                                700: '#2C2C2E',
+                                800: '#1C1C1E',
+                                900: '#000000'
+                            }
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* iOS特有のスクロールバウンスとスムーズスクロール */
+        .ios-scroll {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .ios-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        /* 選択・長押しの無効化（アプリ感を出すため） */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        /* ハーフモーダルのアニメーション */
+        .sheet-transition {
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .sheet-hidden {
+            transform: translateY(100%);
+        }
+        .sheet-visible {
+            transform: translateY(0);
+        }
+        /* iPhoneのノッチ・ベゼルをPC表示時のみ適用するメディアクエリ */
+        @media (min-width: 480px) {
+            .iphone-frame {
+                width: 393px;
+                height: 852px;
+                border-radius: 55px;
+                box-shadow: 0 0 0 12px #1c1c1e, 0 20px 50px rgba(0,0,0,0.3);
+                position: relative;
+                overflow: hidden;
+            }
+            .iphone-notch {
+                display: block !important;
+            }
+            .iphone-home-indicator {
+                display: block !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-black h-full flex items-center justify-center overflow-hidden font-sans antialiased text-black dark:text-white transition-colors duration-300">
+
+    <!-- iPhone Mockup Container -->
+    <div class="iphone-frame w-full h-full bg-white dark:bg-ios-gray-900 flex flex-col transition-colors duration-300 relative">
+        
+        <!-- Dynamic Island / Notch (PCのみ表示) -->
+        <div class="iphone-notch hidden absolute top-3 left-1/2 -translate-x-1/2 w-[110px] h-[30px] bg-black rounded-3xl z-50 flex items-center justify-between px-3">
+            <div class="w-3.5 h-3.5 bg-neutral-900 rounded-full border border-neutral-800"></div>
+            <div class="w-2.5 h-2.5 bg-blue-950 rounded-full"></div>
+        </div>
+
+        <!-- iOS Status Bar -->
+        <div class="px-6 pt-3 pb-2 flex justify-between items-center text-xs font-semibold select-none z-40 bg-white dark:bg-ios-gray-900 transition-colors duration-300">
+            <div id="status-time">9:41</div>
+            <div class="flex items-center space-x-1.5">
+                <i data-lucide="signal" class="w-3.5 h-3.5"></i>
+                <span class="text-[10px]">5G</span>
+                <i data-lucide="battery" class="w-4 h-4 fill-current"></i>
+            </div>
+        </div>
+
+        <!-- Main App Container -->
+        <div class="flex-1 flex flex-col overflow-hidden relative">
+            
+            <!-- App Header -->
+            <header class="px-4 py-2 flex items-center justify-between bg-white dark:bg-ios-gray-900 border-b border-ios-gray-200 dark:border-ios-gray-800 transition-colors duration-300">
+                <div class="flex items-center space-x-1">
+                    <button id="prev-month-btn" class="p-2 text-ios-blue active:opacity-50">
+                        <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                    </button>
+                    <span id="current-month-label" class="text-base font-bold min-w-[90px] text-center">2026年6月</span>
+                    <button id="next-month-btn" class="p-2 text-ios-blue active:opacity-50">
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <button id="toggle-theme" class="p-2 text-ios-blue active:opacity-50" title="テーマ切替">
+                        <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                        <i data-lucide="moon" class="w-5 h-5 block dark:hidden"></i>
+                    </button>
+                    <button id="ai-trigger" class="p-2 text-ios-blue active:opacity-50" title="AIシフト自動登録">
+                        <i data-lucide="sparkles" class="w-5 h-5"></i>
+                    </button>
+                    <button id="settings-trigger" class="p-2 text-ios-blue active:opacity-50" title="共有・アカウント設定">
+                        <i data-lucide="user" class="w-5 h-5"></i>
+                    </button>
+                    <button id="today-btn" class="px-2.5 py-1 bg-ios-gray-100 dark:bg-ios-gray-800 text-ios-blue text-xs font-semibold rounded-full active:opacity-50">
+                        今日
+                    </button>
+                    <button id="add-event-trigger" class="p-2 text-ios-blue active:opacity-50">
+                        <i data-lucide="plus" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Weekday Header -->
+            <div class="grid grid-cols-7 text-center py-2 text-[11px] font-bold text-ios-gray-500 bg-white dark:bg-ios-gray-900 border-b border-ios-gray-100 dark:border-ios-gray-800">
+                <div class="text-ios-red">日</div>
+                <div>月</div>
+                <div>火</div>
+                <div>水</div>
+                <div>木</div>
+                <div>金</div>
+                <div class="text-ios-blue">土</div>
+            </div>
+
+            <!-- Calendar Grid Space (Swipe Area) -->
+            <div id="swipe-area" class="bg-white dark:bg-ios-gray-900 transition-all duration-300 relative overflow-hidden">
+                <div id="calendar-grid" class="grid grid-cols-7 text-center text-sm py-1 transition-transform duration-300 ease-out">
+                    <!-- Dynamic Days go here -->
+                </div>
+            </div>
+
+            <!-- Event List Header / Divider -->
+            <div class="px-4 py-2 bg-ios-gray-100 dark:bg-ios-gray-800 text-xs font-bold text-ios-gray-500 flex justify-between items-center">
+                <span id="selected-date-label">選択日のイベント</span>
+                <span id="event-count" class="bg-ios-gray-300 dark:bg-ios-gray-700 text-ios-gray-800 dark:text-ios-gray-200 px-2 py-0.5 rounded-full text-[10px]">0件</span>
+            </div>
+
+            <!-- Event List Container -->
+            <div class="flex-1 overflow-y-auto ios-scroll bg-ios-gray-100 dark:bg-ios-gray-800 p-4 space-y-3" id="event-list-container">
+                <!-- Dynamic Events go here -->
+            </div>
+
+        </div>
+
+        <!-- iPhone Home Indicator (PCのみ表示) -->
+        <div class="iphone-home-indicator hidden absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[140px] h-[5px] bg-black dark:bg-white rounded-full z-50"></div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- iOS Style Half-Modal: EVENT ADD / EDIT -->
+    <!-- ========================================== -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden transition-opacity duration-300 opacity-0"></div>
+    
+    <div id="event-sheet" class="fixed bottom-0 left-0 right-0 max-w-[393px] mx-auto bg-white dark:bg-ios-gray-800 rounded-t-[20px] z-50 sheet-transition sheet-hidden flex flex-col max-h-[85%] shadow-2xl">
+        <!-- Drag Handle Indicator -->
+        <div class="w-full flex justify-center py-2">
+            <div class="w-9 h-1 bg-ios-gray-300 dark:bg-ios-gray-600 rounded-full"></div>
+        </div>
+
+        <!-- Sheet Header -->
+        <div class="px-4 pb-3 flex justify-between items-center border-b border-ios-gray-100 dark:border-ios-gray-700">
+            <button id="close-sheet-btn" class="text-ios-blue text-base font-normal active:opacity-50">キャンセル</button>
+            <span id="sheet-title" class="text-lg font-semibold">新規イベント</span>
+            <button id="save-event-btn" class="text-ios-blue text-base font-semibold active:opacity-50">追加</button>
+        </div>
+
+        <!-- Sheet Content -->
+        <div class="overflow-y-auto ios-scroll p-4 space-y-4">
+            <!-- Hidden ID Input for Editing -->
+            <input type="hidden" id="event-id">
+
+            <!-- Title & Location Input Group -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl overflow-hidden px-4 py-1">
+                <input type="text" id="event-title" placeholder="タイトル" class="w-full py-3 bg-transparent border-b border-ios-gray-200 dark:border-ios-gray-600 focus:outline-none placeholder-ios-gray-400">
+                <input type="text" id="event-location" placeholder="場所またはビデオ通話" class="w-full py-3 bg-transparent focus:outline-none placeholder-ios-gray-400">
+            </div>
+
+            <!-- Calendar selection -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl px-4 py-3 flex justify-between items-center">
+                <span class="text-sm font-medium">保存先カレンダー</span>
+                <select id="event-calendar-select" class="bg-transparent text-sm text-ios-blue font-semibold focus:outline-none max-w-[200px] text-right">
+                    <!-- Dynamic -->
+                </select>
+            </div>
+
+            <!-- Date & Time Group -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl px-4 py-2 space-y-3">
+                <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium">終日</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="event-allday" class="sr-only peer">
+                        <div class="w-11 h-6 bg-ios-gray-300 rounded-full peer peer-focus:ring-0 dark:bg-ios-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-ios-green"></div>
+                    </label>
+                </div>
+                <div class="flex justify-between items-center py-1 border-t border-ios-gray-200 dark:border-ios-gray-600">
+                    <span class="text-sm font-medium">開始</span>
+                    <input type="datetime-local" id="event-start" class="bg-transparent text-sm text-ios-blue font-medium focus:outline-none">
+                </div>
+                <div class="flex justify-between items-center py-1 border-t border-ios-gray-200 dark:border-ios-gray-600">
+                    <span class="text-sm font-medium">終了</span>
+                    <input type="datetime-local" id="event-end" class="bg-transparent text-sm text-ios-blue font-medium focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Color Tag -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl px-4 py-3">
+                <div class="text-sm font-medium mb-3">カラー</div>
+                <div class="flex items-center space-x-3 justify-between">
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#007AFF" checked class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-blue border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#FF3B30" class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-red border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#34C759" class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-green border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#FF9500" class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-orange border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                    <label class="relative cursor-pointer">
+                        <input type="radio" name="event-color" value="#AF52DE" class="sr-only peer">
+                        <span class="w-8 h-8 rounded-full block bg-ios-purple border-2 border-transparent peer-checked:border-black dark:peer-checked:border-white"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Memo Field -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl px-4 py-2">
+                <textarea id="event-memo" rows="3" placeholder="メモ" class="w-full py-2 bg-transparent focus:outline-none resize-none placeholder-ios-gray-400 text-sm"></textarea>
+            </div>
+
+            <!-- Delete Button (Only visible on Edit) -->
+            <button id="delete-event-btn" class="w-full py-4 bg-ios-gray-100 dark:bg-ios-gray-700/50 text-ios-red font-semibold rounded-xl text-center active:bg-red-100 dark:active:bg-red-950/20 hidden">
+                イベントを削除
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- iOS Style Settings Sheet (Account, Calendars, Share) -->
+    <!-- ========================================== -->
+    <div id="settings-sheet" class="fixed bottom-0 left-0 right-0 max-w-[393px] mx-auto bg-white dark:bg-ios-gray-800 rounded-t-[20px] z-50 sheet-transition sheet-hidden flex flex-col max-h-[85%] shadow-2xl">
+        <div class="w-full flex justify-center py-2">
+            <div class="w-9 h-1 bg-ios-gray-300 dark:bg-ios-gray-600 rounded-full"></div>
+        </div>
+        <div class="px-4 pb-3 flex justify-between items-center border-b border-ios-gray-100 dark:border-ios-gray-700">
+            <button id="close-settings-btn" class="text-ios-blue text-base font-normal active:opacity-50">閉じる</button>
+            <span class="text-lg font-semibold">アカウント・共有設定</span>
+            <button id="logout-btn" class="text-ios-red text-base font-semibold active:opacity-50">ログアウト</button>
+        </div>
+        <div class="overflow-y-auto ios-scroll p-4 space-y-5">
+            <!-- User Profile card -->
+            <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl p-4 flex items-center space-x-3">
+                <div class="w-12 h-12 rounded-full bg-ios-blue text-white flex items-center justify-center text-lg font-bold" id="user-avatar">
+                    U
+                </div>
+                <div>
+                    <h3 class="font-bold text-base" id="user-display-name">ユーザー名</h3>
+                    <p class="text-xs text-ios-gray-500" id="user-email">email@example.com</p>
+                </div>
+            </div>
+
+            <!-- Calendars Management -->
+            <div class="space-y-2">
+                <div class="flex justify-between items-center px-1">
+                    <h4 class="text-sm font-semibold text-ios-gray-500">カレンダー一覧</h4>
+                    <button id="create-calendar-btn" class="text-xs text-ios-blue flex items-center font-semibold"><i data-lucide="plus" class="w-3.5 h-3.5 mr-0.5"></i>新規追加</button>
+                </div>
+                <div class="bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl overflow-hidden divide-y divide-ios-gray-200 dark:divide-ios-gray-700" id="settings-calendars-list">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Calendar Share Modal -->
+    <!-- ========================================== -->
+    <div id="share-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-ios-gray-800 rounded-2xl p-5 w-full max-w-[320px] space-y-4 shadow-xl border border-ios-gray-200 dark:border-ios-gray-700">
+            <h3 class="text-base font-bold text-center" id="share-modal-title">カレンダーを共有</h3>
+            <div class="space-y-3">
+                <input type="email" id="share-email" placeholder="共有先ユーザーのメールアドレス" class="w-full p-2.5 bg-ios-gray-100 dark:bg-ios-gray-700/50 border border-ios-gray-200 dark:border-ios-gray-600 rounded-xl text-sm focus:outline-none">
+                <select id="share-permission" class="w-full p-2.5 bg-ios-gray-100 dark:bg-ios-gray-700/50 border border-ios-gray-200 dark:border-ios-gray-600 rounded-xl text-sm focus:outline-none">
+                    <option value="readonly">閲覧のみ (読込専用)</option>
+                    <option value="readwrite">編集可能 (書込可能)</option>
+                </select>
+            </div>
+            <div class="flex space-x-3">
+                <button id="cancel-share-btn" class="flex-1 py-2.5 bg-ios-gray-100 dark:bg-ios-gray-700/50 text-black dark:text-white rounded-xl text-sm font-semibold">キャンセル</button>
+                <button id="confirm-share-btn" class="flex-1 py-2.5 bg-ios-blue text-white rounded-xl text-sm font-semibold">共有する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- iOS Style Half-Modal: AI Shift Assistant -->
+    <!-- ========================================== -->
+    <div id="ai-sheet" class="fixed bottom-0 left-0 right-0 max-w-[393px] mx-auto bg-white dark:bg-ios-gray-800 rounded-t-[20px] z-50 sheet-transition sheet-hidden flex flex-col max-h-[85%] shadow-2xl">
+        <div class="w-full flex justify-center py-2">
+            <div class="w-9 h-1 bg-ios-gray-300 dark:bg-ios-gray-600 rounded-full"></div>
+        </div>
+        <div class="px-4 pb-3 flex justify-between items-center border-b border-ios-gray-100 dark:border-ios-gray-700">
+            <button id="close-ai-btn" class="text-ios-blue text-base font-normal active:opacity-50">閉じる</button>
+            <span class="text-lg font-semibold flex items-center"><i data-lucide="sparkles" class="w-5 h-5 mr-1 text-ios-blue fill-current animate-pulse"></i>AIシフト登録</span>
+            <button id="import-ai-events-btn" class="text-ios-blue text-base font-semibold active:opacity-50 hidden">一括登録</button>
+            <div class="w-10 h-6" id="ai-header-placeholder"></div>
+        </div>
+        <div class="overflow-y-auto ios-scroll p-4 space-y-4 flex-1">
+            <p class="text-xs text-ios-gray-500">
+                シフト表やスケジュールのテキストを貼り付けると、AIが日付や時間を解析してカレンダーに自動登録します。
+            </p>
+            <textarea id="ai-input-text" rows="5" placeholder="【入力例】&#13;6/12 9-18時 バイト&#13;6/15 13-17時 会議&#13;6/19 終日 休み" class="w-full p-3 bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl text-sm focus:outline-none resize-none border border-ios-gray-200/50 dark:border-ios-gray-600/30 text-black dark:text-white"></textarea>
+            
+            <button id="run-ai-parse-btn" class="w-full py-3 bg-ios-blue text-white font-semibold rounded-xl text-center shadow-md active:opacity-80 transition-opacity flex items-center justify-center space-x-2">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span>シフト表をAIで解析する</span>
+            </button>
+
+            <!-- Loading Spinner -->
+            <div id="ai-loading" class="hidden flex flex-col items-center py-6 space-y-2">
+                <div class="w-8 h-8 border-4 border-ios-blue border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-xs text-ios-gray-500">Claudeが予定を解析中...</p>
+            </div>
+
+            <!-- Preview of Parsed Events -->
+            <div id="ai-preview-section" class="hidden space-y-3">
+                <h4 class="text-sm font-semibold text-ios-gray-500">解析された予定のプレビュー</h4>
+                <div id="ai-preview-list" class="space-y-2">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Fullscreen Auth Screen (Overlay) -->
+    <!-- ========================================== -->
+    <div id="auth-overlay" class="fixed inset-0 bg-ios-gray-100 dark:bg-black z-50 flex flex-col justify-center items-center px-6 transition-opacity duration-300">
+        <div class="w-full max-w-[350px] space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-16 h-16 bg-ios-blue text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                    <i data-lucide="calendar" class="w-10 h-10"></i>
+                </div>
+                <h2 class="text-2xl font-bold tracking-tight">カレンダーにサインイン</h2>
+                <p class="text-xs text-ios-gray-500">PBLカレンダー共有 ＆ AIシフト解析</p>
+            </div>
+
+            <!-- Auth Input fields -->
+            <div class="bg-white dark:bg-ios-gray-800 rounded-2xl p-4 shadow-sm border border-ios-gray-200/50 dark:border-ios-gray-700/50 space-y-3">
+                <div id="auth-display-name-container" class="hidden">
+                    <input type="text" id="auth-display-name" placeholder="お名前" class="w-full py-2 bg-transparent border-b border-ios-gray-200 dark:border-ios-gray-700 focus:outline-none text-sm text-black dark:text-white">
+                </div>
+                <input type="email" id="auth-email" placeholder="メールアドレス" class="w-full py-2 bg-transparent border-b border-ios-gray-200 dark:border-ios-gray-700 focus:outline-none text-sm text-black dark:text-white">
+                <input type="password" id="auth-password" placeholder="パスワード" class="w-full py-2 bg-transparent focus:outline-none text-sm text-black dark:text-white">
+            </div>
+
+            <button id="auth-primary-btn" class="w-full py-3 bg-ios-blue text-white font-semibold rounded-xl text-center shadow-md active:opacity-80 transition-opacity">
+                サインイン
+            </button>
+
+            <div class="text-center">
+                <button id="auth-toggle-mode" class="text-xs text-ios-blue hover:underline">
+                    新規アカウントを作成する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert / Toast Modal -->
+    <div id="toast-box" class="fixed top-12 left-1/2 -translate-x-1/2 px-4 py-2.5 bg-black/80 dark:bg-white/95 text-white dark:text-black rounded-full text-xs font-semibold shadow-lg z-50 transition-opacity duration-300 opacity-0 pointer-events-none text-center">
+        メッセージ
+    </div>
+
+    <!-- Script Block -->
+    <script>
+        // ----------------------------------------------------
+        // State & Configuration
+        // ----------------------------------------------------
+        const API_URL = ''; // Same origin requests
+        let authToken = localStorage.getItem('ios_calendar_token') || '';
+        let currentUser = JSON.parse(localStorage.getItem('ios_calendar_user')) || null;
+        
+        let currentDate = new Date(); // Month displayed
+        let selectedDate = new Date(); // Date selected
+        let events = []; // Events loaded from backend
+        let calendars = []; // Calendars user has access to
+        let aiParsedEvents = []; // Temporary holder for AI parsed events
+
+        // DOM elements
+        const calendarGrid = document.getElementById('calendar-grid');
+        const currentMonthLabel = document.getElementById('current-month-label');
+        const selectedDateLabel = document.getElementById('selected-date-label');
+        const eventCountLabel = document.getElementById('event-count');
+        const eventListContainer = document.getElementById('event-list-container');
+        
+        // Modals / Overlays
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        const eventSheet = document.getElementById('event-sheet');
+        const settingsSheet = document.getElementById('settings-sheet');
+        const aiSheet = document.getElementById('ai-sheet');
+        const authOverlay = document.getElementById('auth-overlay');
+        const shareModal = document.getElementById('share-modal');
+
+        // Buttons / Triggers
+        const addEventTrigger = document.getElementById('add-event-trigger');
+        const settingsTrigger = document.getElementById('settings-trigger');
+        const aiTrigger = document.getElementById('ai-trigger');
+        const closeSheetBtn = document.getElementById('close-sheet-btn');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+        const closeAiBtn = document.getElementById('close-ai-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const createCalendarBtn = document.getElementById('create-calendar-btn');
+        const runAiParseBtn = document.getElementById('run-ai-parse-btn');
+        const importAiEventsBtn = document.getElementById('import-ai-events-btn');
+
+        // Inputs
+        const inputId = document.getElementById('event-id');
+        const inputTitle = document.getElementById('event-title');
+        const inputLocation = document.getElementById('event-location');
+        const inputCalendarSelect = document.getElementById('event-calendar-select');
+        const inputAllday = document.getElementById('event-allday');
+        const inputStart = document.getElementById('event-start');
+        const inputEnd = document.getElementById('event-end');
+        const inputMemo = document.getElementById('event-memo');
+        const saveEventBtn = document.getElementById('save-event-btn');
+        const deleteEventBtn = document.getElementById('delete-event-btn');
+
+        // ----------------------------------------------------
+        // API Helpers
+        // ----------------------------------------------------
+        async function apiRequest(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            try {
+                const res = await fetch(endpoint, { ...options, headers });
+                if (res.status === 401 || res.status === 403) {
+                    logout();
+                    throw new Error('セッションの期限が切れました。再ログインしてください。');
+                }
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || '通信エラーが発生しました');
+                }
+                return data;
+            } catch (err) {
+                showToast(err.message);
+                throw err;
+            }
+        }
+
+        // ----------------------------------------------------
+        // Auth Logic
+        // ----------------------------------------------------
+        let isSignupMode = false;
+        const authToggleMode = document.getElementById('auth-toggle-mode');
+        const authDisplayNameContainer = document.getElementById('auth-display-name-container');
+        const authPrimaryBtn = document.getElementById('auth-primary-btn');
+        const authEmailInput = document.getElementById('auth-email');
+        const authPasswordInput = document.getElementById('auth-password');
+        const authDisplayNameInput = document.getElementById('auth-display-name');
+
+        authToggleMode.addEventListener('click', () => {
+            isSignupMode = !isSignupMode;
+            if (isSignupMode) {
+                authDisplayNameContainer.classList.remove('hidden');
+                authToggleMode.innerText = 'すでにアカウントをお持ちですか？ サインイン';
+                authPrimaryBtn.innerText = 'アカウントを作成';
+            } else {
+                authDisplayNameContainer.classList.add('hidden');
+                authToggleMode.innerText = '新規アカウントを作成する';
+                authPrimaryBtn.innerText = 'サインイン';
+            }
+        });
+
+        authPrimaryBtn.addEventListener('click', async () => {
+            const email = authEmailInput.value.trim();
+            const password = authPasswordInput.value;
+            const displayName = authDisplayNameInput.value.trim();
+
+            if (!email || !password || (isSignupMode && !displayName)) {
+                showToast('すべての項目を入力してください');
+                return;
+            }
+
+            try {
+                if (isSignupMode) {
+                    const data = await apiRequest('/api/auth/register', {
+                        method: 'POST',
+                        body: JSON.stringify({ email, password, display_name: displayName })
+                    });
+                    showToast('登録完了！サインインします。');
+                    isSignupMode = false;
+                    authDisplayNameContainer.classList.add('hidden');
+                    authToggleMode.innerText = '新規アカウントを作成する';
+                    authPrimaryBtn.innerText = 'サインイン';
+                    // Auto populate password
+                } else {
+                    const data = await apiRequest('/api/auth/login', {
+                        method: 'POST',
+                        body: JSON.stringify({ email, password })
+                    });
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('ios_calendar_token', authToken);
+                    localStorage.setItem('ios_calendar_user', JSON.stringify(currentUser));
+                    
+                    authOverlay.classList.add('opacity-0');
+                    setTimeout(() => authOverlay.classList.add('hidden'), 300);
+                    
+                    showToast(`ようこそ、${currentUser.display_name}さん！`);
+                    initializeApp();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        function checkAuth() {
+            if (authToken) {
+                authOverlay.classList.add('hidden');
+                initializeApp();
+            } else {
+                authOverlay.classList.remove('hidden');
+                authOverlay.classList.add('opacity-100');
+            }
+        }
+
+        function logout() {
+            authToken = '';
+            currentUser = null;
+            localStorage.removeItem('ios_calendar_token');
+            localStorage.removeItem('ios_calendar_user');
+            events = [];
+            calendars = [];
+            
+            // Close sheets
+            closeSheet();
+            closeSettingsSheet();
+            closeAiSheet();
+            
+            authOverlay.classList.remove('hidden');
+            setTimeout(() => authOverlay.classList.remove('opacity-0'), 10);
+            showToast('ログアウトしました');
+        }
+
+        logoutBtn.addEventListener('click', logout);
+
+        // ----------------------------------------------------
+        // Initialization & Data sync
+        // ----------------------------------------------------
+        async function initializeApp() {
+            try {
+                await Promise.all([
+                    syncCalendars(),
+                    syncEvents()
+                ]);
+                
+                // Display profile details in settings
+                document.getElementById('user-display-name').innerText = currentUser.display_name;
+                document.getElementById('user-email').innerText = currentUser.email;
+                document.getElementById('user-avatar').innerText = currentUser.display_name.charAt(0).toUpperCase();
+
+                renderCalendar();
+            } catch (err) {
+                console.error('Initialization error:', err);
+            }
+        }
+
+        async function syncCalendars() {
+            calendars = await apiRequest('/api/calendars');
+            populateCalendarDropdowns();
+            renderSettingsCalendars();
+        }
+
+        async function syncEvents() {
+            events = await apiRequest('/api/events');
+        }
+
+        function populateCalendarDropdowns() {
+            inputCalendarSelect.innerHTML = '';
+            calendars.forEach(c => {
+                // Only show writeable/owned calendars in the save destination dropdown
+                if (c.access_level === 'owner' || c.access_level === 'readwrite') {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.innerText = c.name + (c.is_shared ? ' (共有)' : '');
+                    inputCalendarSelect.appendChild(opt);
+                }
+            });
+        }
+
+        // ----------------------------------------------------
+        // Status Bar Time Updater
+        // ----------------------------------------------------
+        function updateStatusTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('status-time').innerText = `${hours}:${minutes}`;
+        }
+        setInterval(updateStatusTime, 1000);
+        updateStatusTime();
+
+        // ----------------------------------------------------
+        // Theme Toggle
+        // ----------------------------------------------------
+        const toggleThemeBtn = document.getElementById('toggle-theme');
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        toggleThemeBtn.addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+
+        // ----------------------------------------------------
+        // Calendar Grid Rendering
+        // ----------------------------------------------------
+        function renderCalendar() {
+            calendarGrid.innerHTML = '';
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            currentMonthLabel.innerText = `${year}年${month + 1}月`;
+
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+            const prevMonthTotalDays = new Date(year, month, 0).getDate();
+
+            // Previous Month Days
+            for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+                const day = prevMonthTotalDays - i;
+                const dateObj = new Date(year, month - 1, day);
+                createDayElement(day, dateObj, true);
+            }
+
+            // Current Month Days
+            for (let day = 1; day <= totalDaysInMonth; day++) {
+                const dateObj = new Date(year, month, day);
+                createDayElement(day, dateObj, false);
+            }
+
+            // Next Month Padding
+            const totalCells = firstDayOfMonth + totalDaysInMonth;
+            const nextMonthPadding = totalCells <= 35 ? 35 - totalCells : 42 - totalCells;
+            for (let day = 1; day <= nextMonthPadding; day++) {
+                const dateObj = new Date(year, month + 1, day);
+                createDayElement(day, dateObj, true);
+            }
+
+            renderEventsForSelectedDate();
+            lucide.createIcons();
+        }
+
+        function createDayElement(day, dateObj, isOverflow) {
+            const dayEl = document.createElement('div');
+            dayEl.className = 'aspect-square flex flex-col items-center justify-start py-1 relative cursor-pointer active:scale-95 transition-transform';
+
+            const numEl = document.createElement('div');
+            numEl.className = 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all relative';
+            numEl.innerText = day;
+
+            const isToday = isSameDate(dateObj, new Date());
+            const isSelected = isSameDate(dateObj, selectedDate);
+            const isSunday = dateObj.getDay() === 0;
+            const isSaturday = dateObj.getDay() === 6;
+
+            if (isOverflow) {
+                numEl.classList.add('text-ios-gray-400');
+            } else {
+                if (isSunday) numEl.classList.add('text-ios-red');
+                else if (isSaturday) numEl.classList.add('text-ios-blue');
+                else numEl.classList.add('text-black', 'dark:text-white');
+            }
+
+            if (isToday) {
+                if (isSelected) {
+                    numEl.className = 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-ios-red text-white';
+                } else {
+                    numEl.classList.add('text-ios-red', 'font-black');
+                }
+            } else if (isSelected) {
+                numEl.className = 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold bg-ios-blue text-white';
+            }
+
+            dayEl.appendChild(numEl);
+
+            // Dot Indicator
+            const dayEvents = getEventsForDate(dateObj);
+            if (dayEvents.length > 0) {
+                const dot = document.createElement('div');
+                dot.className = `w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-white' : 'bg-ios-gray-500'}`;
+                if (!isSelected) {
+                    dot.style.backgroundColor = dayEvents[0].color || '#8E8E93';
+                }
+                dayEl.appendChild(dot);
+            }
+
+            dayEl.addEventListener('click', () => {
+                selectedDate = dateObj;
+                renderCalendar();
+            });
+
+            calendarGrid.appendChild(dayEl);
+        }
+
+        function isSameDate(d1, d2) {
+            return d1.getFullYear() === d2.getFullYear() &&
+                   d1.getMonth() === d2.getMonth() &&
+                   d1.getDate() === d2.getDate();
+        }
+
+        function getEventsForDate(date) {
+            return events.filter(e => {
+                const startDate = new Date(e.start);
+                return isSameDate(startDate, date);
+            });
+        }
+
+        // ----------------------------------------------------
+        // Events Listing
+        // ----------------------------------------------------
+        function renderEventsForSelectedDate() {
+            const formattedDateStr = `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日`;
+            selectedDateLabel.innerText = formattedDateStr;
+
+            const dayEvents = getEventsForDate(selectedDate);
+            eventCountLabel.innerText = `${dayEvents.length}件`;
+
+            eventListContainer.innerHTML = '';
+
+            if (dayEvents.length === 0) {
+                eventListContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-12 text-ios-gray-500 space-y-2">
+                        <i data-lucide="calendar-check" class="w-12 h-12 stroke-1"></i>
+                        <span class="text-sm">本日の予定はありません</span>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            dayEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+
+            dayEvents.forEach(e => {
+                const card = document.createElement('div');
+                card.className = 'bg-white dark:bg-ios-gray-700/80 p-4 rounded-2xl flex items-center justify-between shadow-sm border border-ios-gray-200/50 dark:border-ios-gray-600/30 active:scale-[0.98] transition-transform duration-100 cursor-pointer';
+                
+                const startObj = new Date(e.start);
+                const endObj = new Date(e.end);
+                const startTime = e.allday ? '終日' : `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`;
+                const endTime = e.allday ? '' : `${String(endObj.getHours()).padStart(2, '0')}:${String(endObj.getMinutes()).padStart(2, '0')}`;
+
+                const isReadonly = e.user_access === 'readonly';
+
+                card.innerHTML = `
+                    <div class="flex items-start space-x-3">
+                        <div class="w-1.5 h-10 rounded-full" style="background-color: ${e.color || '#007AFF'}"></div>
+                        <div>
+                            <h4 class="font-bold text-base text-black dark:text-white leading-tight flex items-center">
+                                ${escapeHTML(e.title)}
+                                ${isReadonly ? `<i data-lucide="lock" class="w-3.5 h-3.5 ml-1.5 text-ios-gray-400"></i>` : ''}
+                            </h4>
+                            <div class="flex items-center space-x-2 text-xs text-ios-gray-500 mt-1">
+                                <i data-lucide="clock" class="w-3 h-3"></i>
+                                <span>${startTime} ${endTime ? ' - ' + endTime : ''}</span>
+                                <span>•</span>
+                                <span class="bg-ios-gray-200 dark:bg-ios-gray-600 px-1.5 py-0.5 rounded text-[10px] font-semibold">${escapeHTML(e.calendar_name)}</span>
+                                ${e.location ? `<span>•</span> <i data-lucide="map-pin" class="w-3 h-3"></i> <span>${escapeHTML(e.location)}</span>` : ''}
+                            </div>
+                            ${e.memo ? `<p class="text-xs text-ios-gray-400 dark:text-ios-gray-400 mt-1.5 line-clamp-1">${escapeHTML(e.memo)}</p>` : ''}
+                        </div>
+                    </div>
+                    <i data-lucide="chevron-right" class="w-5 h-5 text-ios-gray-400"></i>
+                `;
+
+                card.addEventListener('click', () => {
+                    openEditSheet(e);
+                });
+
+                eventListContainer.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // ----------------------------------------------------
+        // Calendar Navigation
+        // ----------------------------------------------------
+        document.getElementById('prev-month-btn').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar();
+        });
+
+        document.getElementById('next-month-btn').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar();
+        });
+
+        document.getElementById('today-btn').addEventListener('click', () => {
+            currentDate = new Date();
+            selectedDate = new Date();
+            renderCalendar();
+            showToast('今日に戻りました 📅');
+        });
+
+        // Swiping
+        let touchstartX = 0;
+        let touchendX = 0;
+        const swipeArea = document.getElementById('swipe-area');
+
+        swipeArea.addEventListener('touchstart', e => {
+            touchstartX = e.changedTouches[0].screenX;
+        }, {passive: true});
+
+        swipeArea.addEventListener('touchend', e => {
+            touchendX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, {passive: true});
+
+        function handleSwipe() {
+            const threshold = 50;
+            if (touchendX < touchstartX - threshold) {
+                currentDate.setMonth(currentDate.getMonth() + 1);
+                renderCalendar();
+            }
+            if (touchendX > touchstartX + threshold) {
+                currentDate.setMonth(currentDate.getMonth() - 1);
+                renderCalendar();
+            }
+        }
+
+        // ----------------------------------------------------
+        // Event Add / Edit Sheet Controls
+        // ----------------------------------------------------
+        addEventTrigger.addEventListener('click', openAddSheet);
+        closeSheetBtn.addEventListener('click', closeSheet);
+        modalBackdrop.addEventListener('click', () => {
+            closeSheet();
+            closeSettingsSheet();
+            closeAiSheet();
+        });
+
+        function openAddSheet() {
+            if (calendars.length === 0) {
+                showToast('カレンダーがありません。先にカレンダーを作成してください。');
+                return;
+            }
+            inputId.value = '';
+            inputTitle.value = '';
+            inputLocation.value = '';
+            inputAllday.checked = false;
+            inputMemo.value = '';
+
+            // Unlock inputs
+            setEventFormDisabled(false);
+
+            const baseDate = new Date(selectedDate);
+            const now = new Date();
+            baseDate.setHours(now.getHours(), 0, 0, 0);
+            
+            inputStart.value = formatToDatetimeLocal(baseDate);
+            inputEnd.value = formatToDatetimeLocal(new Date(baseDate.getTime() + 60 * 60 * 1000));
+
+            sheetTitle.innerText = '新規イベント';
+            saveEventBtn.innerText = '追加';
+            saveEventBtn.classList.remove('hidden');
+            deleteEventBtn.classList.add('hidden');
+
+            document.querySelector('input[name="event-color"][value="#007AFF"]').checked = true;
+
+            showSheet(eventSheet);
+        }
+
+        function openEditSheet(event) {
+            inputId.value = event.id;
+            inputTitle.value = event.title;
+            inputLocation.value = event.location || '';
+            inputAllday.checked = event.allday || false;
+            inputStart.value = formatToDatetimeLocal(new Date(event.start));
+            inputEnd.value = formatToDatetimeLocal(new Date(event.end));
+            inputMemo.value = event.memo || '';
+            inputCalendarSelect.value = event.calendar_id;
+
+            const colorRadio = document.querySelector(`input[name="event-color"][value="${event.color}"]`);
+            if (colorRadio) colorRadio.checked = true;
+
+            sheetTitle.innerText = 'イベントの編集';
+            
+            const isReadonly = event.user_access === 'readonly';
+            setEventFormDisabled(isReadonly);
+
+            if (isReadonly) {
+                sheetTitle.innerText = 'イベント詳細 (閲覧のみ)';
+                saveEventBtn.classList.add('hidden');
+                deleteEventBtn.classList.add('hidden');
+            } else {
+                saveEventBtn.innerText = '保存';
+                saveEventBtn.classList.remove('hidden');
+                deleteEventBtn.classList.remove('hidden');
+            }
+
+            showSheet(eventSheet);
+        }
+
+        function setEventFormDisabled(disabled) {
+            inputTitle.disabled = disabled;
+            inputLocation.disabled = disabled;
+            inputCalendarSelect.disabled = disabled;
+            inputAllday.disabled = disabled;
+            inputStart.disabled = disabled;
+            inputEnd.disabled = disabled;
+            inputMemo.disabled = disabled;
+            
+            // Radios
+            document.querySelectorAll('input[name="event-color"]').forEach(r => r.disabled = disabled);
+        }
+
+        function showSheet(sheet) {
+            modalBackdrop.classList.remove('hidden');
+            setTimeout(() => {
+                modalBackdrop.classList.add('opacity-100');
+                sheet.classList.remove('sheet-hidden');
+                sheet.classList.add('sheet-visible');
+            }, 10);
+        }
+
+        function closeSheet() {
+            eventSheet.classList.remove('sheet-visible');
+            eventSheet.classList.add('sheet-hidden');
+            modalBackdrop.classList.remove('opacity-100');
+            setTimeout(() => {
+                if (eventSheet.classList.contains('sheet-hidden') && 
+                    settingsSheet.classList.contains('sheet-hidden') &&
+                    aiSheet.classList.contains('sheet-hidden')) {
+                    modalBackdrop.classList.add('hidden');
+                }
+            }, 300);
+        }
+
+        function formatToDatetimeLocal(date) {
+            const tzOffset = date.getTimezoneOffset() * 60000;
+            return (new Date(date - tzOffset)).toISOString().slice(0, 16);
+        }
+
+        // ----------------------------------------------------
+        // Save & Delete Event API calls
+        // ----------------------------------------------------
+        saveEventBtn.addEventListener('click', async () => {
+            const title = inputTitle.value.trim();
+            if (!title) {
+                showToast('タイトルを入力してください ⚠️');
+                return;
+            }
+
+            const id = inputId.value;
+            const location = inputLocation.value.trim();
+            const calendar_id = parseInt(inputCalendarSelect.value);
+            const allday = inputAllday.checked;
+            const start = inputStart.value;
+            const end = inputEnd.value;
+            const color = document.querySelector('input[name="event-color"]:checked').value;
+            const memo = inputMemo.value.trim();
+
+            if (new Date(start) > new Date(end)) {
+                showToast('開始時刻が終了時刻より後になっています ⚠️');
+                return;
+            }
+
+            const eventData = {
+                id: id || undefined,
+                calendar_id,
+                title,
+                location,
+                allday,
+                start,
+                end,
+                color,
+                memo
+            };
+
+            try {
+                if (id) {
+                    await apiRequest(`/api/events/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(eventData)
+                    });
+                    showToast('予定を更新しました ✅');
+                } else {
+                    await apiRequest('/api/events', {
+                        method: 'POST',
+                        body: JSON.stringify(eventData)
+                    });
+                    showToast('予定を追加しました ✨');
+                }
+                await syncEvents();
+                renderCalendar();
+                closeSheet();
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        deleteEventBtn.addEventListener('click', async () => {
+            const id = inputId.value;
+            if (!id) return;
+
+            if (confirm('この予定を削除してもよろしいですか？')) {
+                try {
+                    await apiRequest(`/api/events/${id}`, {
+                        method: 'DELETE'
+                    });
+                    showToast('予定を削除しました 🗑️');
+                    await syncEvents();
+                    renderCalendar();
+                    closeSheet();
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        });
+
+        // ----------------------------------------------------
+        // Account & Calendars Settings Panel
+        // ----------------------------------------------------
+        settingsTrigger.addEventListener('click', () => {
+            renderSettingsCalendars();
+            showSheet(settingsSheet);
+        });
+
+        closeSettingsBtn.addEventListener('click', closeSettingsSheet);
+
+        function closeSettingsSheet() {
+            settingsSheet.classList.remove('sheet-visible');
+            settingsSheet.classList.add('sheet-hidden');
+            modalBackdrop.classList.remove('opacity-100');
+            setTimeout(() => {
+                if (eventSheet.classList.contains('sheet-hidden') && 
+                    settingsSheet.classList.contains('sheet-hidden') &&
+                    aiSheet.classList.contains('sheet-hidden')) {
+                    modalBackdrop.classList.add('hidden');
+                }
+            }, 300);
+        }
+
+        // Render calendars with actions in settings
+        function renderSettingsCalendars() {
+            const listContainer = document.getElementById('settings-calendars-list');
+            listContainer.innerHTML = '';
+
+            if (calendars.length === 0) {
+                listContainer.innerHTML = '<p class="p-4 text-sm text-ios-gray-500 text-center">表示できるカレンダーがありません</p>';
+                return;
+            }
+
+            calendars.forEach(c => {
+                const item = document.createElement('div');
+                item.className = 'px-4 py-3 flex items-center justify-between bg-white dark:bg-ios-gray-800';
+
+                const isOwner = c.access_level === 'owner';
+
+                item.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <span class="w-3 h-3 rounded-full bg-ios-blue" style="background-color: ${isOwner ? '#007AFF' : '#AF52DE'}"></span>
+                        <div class="text-sm font-semibold">${escapeHTML(c.name)}</div>
+                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-ios-gray-200 dark:bg-ios-gray-700 text-ios-gray-600 dark:text-ios-gray-300 font-medium">
+                            ${isOwner ? 'マイ' : `共有元: ${escapeHTML(c.owner_name || '他ユーザー')}`}
+                        </span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        ${isOwner ? `
+                            <button class="share-cal-btn text-xs text-ios-blue bg-ios-blue/10 px-2.5 py-1 rounded-full font-semibold active:opacity-50" data-id="${c.id}" data-name="${escapeHTML(c.name)}">
+                                共有
+                            </button>
+                            <button class="delete-cal-btn text-xs text-ios-red bg-ios-red/10 px-2.5 py-1 rounded-full font-semibold active:opacity-50" data-id="${c.id}">
+                                削除
+                            </button>
+                        ` : `
+                            <span class="text-xs text-ios-gray-400 font-medium">${c.access_level === 'readwrite' ? '編集可' : '閲覧のみ'}</span>
+                        `}
+                    </div>
+                `;
+
+                // Share button click
+                const shareBtn = item.querySelector('.share-cal-btn');
+                if (shareBtn) {
+                    shareBtn.addEventListener('click', () => openShareModal(c.id, c.name));
+                }
+
+                // Delete button click
+                const deleteBtn = item.querySelector('.delete-cal-btn');
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', () => deleteCalendar(c.id));
+                }
+
+                listContainer.appendChild(item);
+            });
+        }
+
+        // Create new Calendar
+        createCalendarBtn.addEventListener('click', async () => {
+            const name = prompt('新しいカレンダー名を入力してください:');
+            if (name && name.trim()) {
+                try {
+                    await apiRequest('/api/calendars', {
+                        method: 'POST',
+                        body: JSON.stringify({ name: name.trim() })
+                    });
+                    showToast('カレンダーを作成しました');
+                    await syncCalendars();
+                    renderSettingsCalendars();
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        });
+
+        // Delete Calendar
+        async function deleteCalendar(id) {
+            if (confirm('カレンダーと紐付くすべてのイベントが削除されます。本当によろしいですか？')) {
+                try {
+                    await apiRequest(`/api/calendars/${id}`, {
+                        method: 'DELETE'
+                    });
+                    showToast('カレンダーを削除しました');
+                    await syncCalendars();
+                    await syncEvents();
+                    renderSettingsCalendars();
+                    renderCalendar();
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        }
+
+        // ----------------------------------------------------
+        // Calendar Sharing Modal Dialog
+        // ----------------------------------------------------
+        let shareTargetCalendarId = null;
+
+        function openShareModal(id, name) {
+            shareTargetCalendarId = id;
+            document.getElementById('share-modal-title').innerText = `「${name}」を共有`;
+            document.getElementById('share-email').value = '';
+            document.getElementById('share-permission').value = 'readonly';
+            shareModal.classList.remove('hidden');
+        }
+
+        document.getElementById('cancel-share-btn').addEventListener('click', () => {
+            shareModal.classList.add('hidden');
+            shareTargetCalendarId = null;
+        });
+
+        document.getElementById('confirm-share-btn').addEventListener('click', async () => {
+            const email = document.getElementById('share-email').value.trim();
+            const permission = document.getElementById('share-permission').value;
+
+            if (!email) {
+                showToast('メールアドレスを入力してください');
+                return;
+            }
+
+            try {
+                const data = await apiRequest(`/api/calendars/${shareTargetCalendarId}/share`, {
+                    method: 'POST',
+                    body: JSON.stringify({ email, access_level: permission })
+                });
+                showToast(data.message);
+                shareModal.classList.add('hidden');
+                shareTargetCalendarId = null;
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        // ----------------------------------------------------
+        // AI Shift Sheet Controls
+        // ----------------------------------------------------
+        aiTrigger.addEventListener('click', () => {
+            document.getElementById('ai-input-text').value = '';
+            document.getElementById('ai-preview-section').classList.add('hidden');
+            importAiEventsBtn.classList.add('hidden');
+            aiParsedEvents = [];
+            showSheet(aiSheet);
+        });
+
+        closeAiBtn.addEventListener('click', closeAiSheet);
+
+        function closeAiSheet() {
+            aiSheet.classList.remove('sheet-visible');
+            aiSheet.classList.add('sheet-hidden');
+            modalBackdrop.classList.remove('opacity-100');
+            setTimeout(() => {
+                if (eventSheet.classList.contains('sheet-hidden') && 
+                    settingsSheet.classList.contains('sheet-hidden') &&
+                    aiSheet.classList.contains('sheet-hidden')) {
+                    modalBackdrop.classList.add('hidden');
+                }
+            }, 300);
+        }
+
+        // Parse Shift with AI
+        runAiParseBtn.addEventListener('click', async () => {
+            const text = document.getElementById('ai-input-text').value.trim();
+            if (!text) {
+                showToast('解析するシフト表のテキストを入力してください');
+                return;
+            }
+
+            const loading = document.getElementById('ai-loading');
+            const previewSection = document.getElementById('ai-preview-section');
+            const previewList = document.getElementById('ai-preview-list');
+
+            loading.classList.remove('hidden');
+            previewSection.classList.add('hidden');
+            runAiParseBtn.disabled = true;
+            runAiParseBtn.classList.add('opacity-50');
+
+            try {
+                const data = await apiRequest('/api/ai/parse-shift', {
+                    method: 'POST',
+                    body: JSON.stringify({ text })
+                });
+
+                if (data.isMock) {
+                    showToast('⚠️ AIキー未設定のためデモ解析を実行しました');
+                } else {
+                    showToast('解析完了！プレビューを確認してください。');
+                }
+
+                aiParsedEvents = data.events;
+                previewList.innerHTML = '';
+
+                if (aiParsedEvents.length === 0) {
+                    previewList.innerHTML = '<p class="text-xs text-ios-gray-500 text-center py-4">抽出された予定はありませんでした</p>';
+                    importAiEventsBtn.classList.add('hidden');
+                } else {
+                    aiParsedEvents.forEach(e => {
+                        const start = new Date(e.start);
+                        const end = new Date(e.end);
+                        const dateStr = `${start.getMonth() + 1}/${start.getDate()}`;
+                        const timeStr = e.allday ? '終日' : `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')} - ${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+
+                        const item = document.createElement('div');
+                        item.className = 'p-3 bg-ios-gray-100 dark:bg-ios-gray-700/50 rounded-xl flex items-center justify-between border-l-4 border-ios-blue';
+                        item.innerHTML = `
+                            <div>
+                                <h5 class="text-sm font-bold text-black dark:text-white">${escapeHTML(e.title)}</h5>
+                                <div class="text-[11px] text-ios-gray-500 mt-0.5">
+                                    <span>${dateStr} (${timeStr})</span>
+                                    ${e.memo ? `<span class="block text-[10px] text-ios-gray-400 mt-0.5">${escapeHTML(e.memo)}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                        previewList.appendChild(item);
+                    });
+                    importAiEventsBtn.classList.remove('hidden');
+                }
+
+                previewSection.classList.remove('hidden');
+            } catch (err) {
+                console.error(err);
+            } finally {
+                loading.classList.add('hidden');
+                runAiParseBtn.disabled = false;
+                runAiParseBtn.classList.remove('opacity-50');
+            }
+        });
+
+        // Batch Import parsed events
+        importAiEventsBtn.addEventListener('click', async () => {
+            if (aiParsedEvents.length === 0) return;
+
+            // Target user's default calendar (first writable one in the list)
+            const targetCal = calendars.find(c => c.access_level === 'owner' || c.access_level === 'readwrite');
+            if (!targetCal) {
+                showToast('書き込み可能なカレンダーがありません');
+                return;
+            }
+
+            importAiEventsBtn.disabled = true;
+            importAiEventsBtn.innerText = '登録中...';
+
+            let successCount = 0;
+
+            try {
+                for (const event of aiParsedEvents) {
+                    await apiRequest('/api/events', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            calendar_id: targetCal.id,
+                            title: event.title,
+                            location: event.location,
+                            allday: event.allday,
+                            start: event.start,
+                            end: event.end,
+                            color: event.color || '#007AFF',
+                            memo: event.memo
+                        })
+                    });
+                    successCount++;
+                }
+
+                showToast(`${successCount}件の予定を一括登録しました！ 🎉`);
+                await syncEvents();
+                renderCalendar();
+                closeAiSheet();
+            } catch (err) {
+                console.error(err);
+                showToast('一部のイベント登録に失敗した可能性があります');
+            } finally {
+                importAiEventsBtn.disabled = false;
+                importAiEventsBtn.innerText = '一括登録';
+            }
+        });
+
+        // ----------------------------------------------------
+        // Toast UI Helper
+        // ----------------------------------------------------
+        let toastTimeout;
+        function showToast(msg) {
+            const toast = document.getElementById('toast-box');
+            toast.innerText = msg;
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 3000);
+        }
+
+        // Start
+        checkAuth();
+    </script>
+</body>
+</html>
