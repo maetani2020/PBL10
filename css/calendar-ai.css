@@ -348,6 +348,13 @@ body.dark .example-box {
 .ai-proposal-header.add { color: #af52de; }
 .ai-proposal-header.del { color: #ea4335; }
 .ai-proposal-header.list { color: #1a73e8; }
+.ai-proposal-note {
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #8e8e93;
+}
+
 
 .ai-proposal-card {
   background: var(--surface);
@@ -406,6 +413,10 @@ body.dark .ai-proposal-card {
   transition: opacity 0.2s ease;
 }
 .ai-proposal-btn.add { background: #af52de; }
+.ai-proposal-batch-btn {
+  margin-top: 2px;
+  min-height: 34px;
+}
 .ai-proposal-btn.del { background: #ea4335; }
 .ai-proposal-btn.list { background: #1a73e8; }
 .ai-proposal-btn:disabled {

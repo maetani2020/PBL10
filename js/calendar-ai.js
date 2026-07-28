@@ -50,6 +50,8 @@ export const aiChatHistory = document.getElementById("aiChatHistory");
 export const aiSummaryContainer = document.getElementById("aiSummaryContainer");
 export const aiSummaryText = document.getElementById("aiSummaryText");
 
+const aiProposalBatches = new Map();
+
 // ----------------------------------------------------
 // UI Sheet Controls
 // ----------------------------------------------------
@@ -327,6 +329,7 @@ Use these exact JSON keys inside each event object:
 Default values when the user does not specify details:
 - visibility: use the current calendar mode. public for main calendar, group for group calendar, private for personal calendar.
 - eventType: "event"
+- For shift table photos, timetable photos, or any image that contains multiple rows/classes/shifts, extract every readable schedule item as a separate event in events. Do not ask the user to register each item one by one; return all candidate events at once so the app can confirm and batch-register them.
 - hp_consumption: 0
 - motivation_consumption: 0
 - reminderMinutes: []
@@ -508,18 +511,25 @@ export function handleAIResponseAction(botBubbleId, aiResponse, sourcePromptText
     `;
 
   } else if (action === 'ADD_EVENTS' && responseEvents.length > 0) {
-    interactiveHTML += `<div class="ai-proposal-section">`;
-    interactiveHTML += `<p class="ai-proposal-header add">✨ 提案予定 (${responseEvents.length}件)</p>`;
+    const batchId = `batch_${botBubbleId}_${Date.now()}`;
+    const proposalEvents = responseEvents.map(p => ({
+      ...p,
+      __sourcePromptText: sourcePromptText
+    }));
+    aiProposalBatches.set(batchId, proposalEvents);
+
+    interactiveHTML += `<div class="ai-proposal-section" id="${batchId}-section">`;
+    interactiveHTML += `<p class="ai-proposal-header add">✨ 一括登録候補 (${responseEvents.length}件)</p>`;
+    interactiveHTML += `<p class="ai-proposal-note">内容を確認してから、下のボタンでまとめて登録できます。</p>`;
 
     responseEvents.forEach((p, idx) => {
-      const proposalEvent = {
-        ...p,
-        __sourcePromptText: sourcePromptText
-      };
-      const uniquePropId = `add_${botBubbleId}_${idx}`;
+      const uniquePropId = `add_${batchId}_${idx}`;
       const startObj = new Date(p.start);
+      const endObj = new Date(p.end);
       const displayDate = isNaN(startObj.getTime()) ? '日付不明' : `${startObj.getFullYear()}年${startObj.getMonth() + 1}月${startObj.getDate()}日`;
-      const displayTime = isNaN(startObj.getTime()) ? '' : (p.allday ? '終日' : `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`);
+      const displayStart = isNaN(startObj.getTime()) ? '' : `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`;
+      const displayEnd = isNaN(endObj.getTime()) ? '' : ` - ${String(endObj.getHours()).padStart(2, '0')}:${String(endObj.getMinutes()).padStart(2, '0')}`;
+      const displayTime = p.allday ? '終日' : `${displayStart}${displayEnd}`;
 
       interactiveHTML += `
         <div class="ai-proposal-card" id="${uniquePropId}-card">
@@ -530,14 +540,17 @@ export function handleAIResponseAction(botBubbleId, aiResponse, sourcePromptText
               <span class="ai-proposal-time">${displayDate} ${displayTime}</span>
             </div>
           </div>
-          <button onclick="registerProposalEvent('${encodeURIComponent(JSON.stringify(proposalEvent))}', '${uniquePropId}')" 
-                  id="${uniquePropId}-btn"
-                  class="ai-proposal-btn add">
-            カレンダーに追加
-          </button>
         </div>
       `;
     });
+
+    interactiveHTML += `
+      <button onclick="registerProposalEventBatch('${batchId}')"
+              id="${batchId}-btn"
+              class="ai-proposal-btn add ai-proposal-batch-btn">
+        この${responseEvents.length}件を一括登録
+      </button>
+    `;
     interactiveHTML += `</div>`;
 
   } else if (action === 'DELETE_EVENTS' && targetIds.length > 0) {
@@ -917,6 +930,114 @@ function saveAiEventToCache(savedEvent) {
   };
   saveEvents([...allEvents, normalizedEvent]);
 }
+
+function createAiEventId(index = 0) {
+  return `event_ai_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function formatAiEventForConfirm(eventData, index) {
+  const title = String(eventData.title || "Untitled event").trim();
+  const start = normalizeAiLocalDateTime(eventData.start, formatDate(new Date()), "09:00");
+  const end = normalizeAiLocalDateTime(eventData.end, start.substring(0, 10), "10:00");
+  const date = start.substring(0, 10);
+  const time = eventData.allday ? "終日" : `${start.substring(11, 16)}-${end.substring(11, 16)}`;
+  return `${index + 1}. ${date} ${time} ${title}`;
+}
+
+window.registerProposalEventBatch = async function(batchId) {
+  if (isReadOnlyCalendarMode()) {
+    showToast("カレンダー画面は閲覧専用です。予定の追加は「個人予定」または「グループ予定」から行ってください。");
+    return;
+  }
+
+  const proposalEvents = aiProposalBatches.get(batchId) || [];
+  if (!proposalEvents.length) {
+    showToast("登録する予定候補が見つかりません");
+    return;
+  }
+
+  const previewLines = proposalEvents.slice(0, 12).map(formatAiEventForConfirm);
+  const extraLine = proposalEvents.length > 12 ? `\n...ほか${proposalEvents.length - 12}件` : "";
+  const confirmed = confirm(`AIが作成した予定${proposalEvents.length}件を一括登録しますか？\n\n${previewLines.join("\n")}${extraLine}`);
+  if (!confirmed) return;
+
+  const btn = document.getElementById(`${batchId}-btn`);
+  const section = document.getElementById(`${batchId}-section`);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = `一括登録中... 0/${proposalEvents.length}`;
+  }
+
+  const savedEvents = [];
+  const failedEvents = [];
+
+  for (let index = 0; index < proposalEvents.length; index += 1) {
+    const eventData = proposalEvents[index];
+    const card = document.getElementById(`add_${batchId}_${index}-card`);
+
+    try {
+      const payload = await buildAiEventPayload(eventData);
+      payload.id = createAiEventId(index);
+
+      const data = await apiRequest('/api/events', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      const newEvent = {
+        ...payload,
+        ...(data.event || {}),
+        allDay: payload.allday,
+        date: payload.start.substring(0, 10)
+      };
+
+      saveAiEventToCache(newEvent);
+      savedEvents.push(newEvent);
+
+      if (card) {
+        card.style.borderColor = "#34a853";
+        card.style.background = "rgba(52, 168, 83, 0.05)";
+      }
+    } catch (err) {
+      console.error("Failed to add proposal event in batch", err);
+      failedEvents.push({ eventData, error: err });
+      if (card) {
+        card.style.borderColor = "#ea4335";
+        card.style.background = "rgba(234, 67, 53, 0.06)";
+      }
+    }
+
+    if (btn) {
+      btn.textContent = `一括登録中... ${index + 1}/${proposalEvents.length}`;
+    }
+  }
+
+  if (savedEvents.length > 0) {
+    const firstStart = new Date(savedEvents[0].start);
+    if (!isNaN(firstStart.getTime())) {
+      setCurrentDate(firstStart);
+    }
+    refreshCalendar();
+    await showHpMotivationRecalculation(savedEvents[0].start?.substring(0, 10), "AI予定一括追加");
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.style.backgroundColor = failedEvents.length ? "#fbbc04" : "#34a853";
+    btn.textContent = failedEvents.length
+      ? `${savedEvents.length}件登録 / ${failedEvents.length}件失敗`
+      : `${savedEvents.length}件を登録しました`;
+  }
+
+  if (section) {
+    section.dataset.registered = "true";
+  }
+  aiProposalBatches.delete(batchId);
+
+  showToast(failedEvents.length
+    ? `${savedEvents.length}件登録、${failedEvents.length}件失敗しました`
+    : `${savedEvents.length}件を一括登録しました ✨`);
+};
 
 window.registerProposalEvent = async function(encodedEvent, uniquePropId) {
   if (isReadOnlyCalendarMode()) {
